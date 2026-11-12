@@ -8,7 +8,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 
 | Lot | Titre | Dépend de | Statut |
 |---|---|---|---|
-| 0 | Socle du monorepo | — | à faire |
+| 0 | Socle du monorepo | — | `livré` (2026-11-13, `baebfc7`) |
 | 1 | Tracer : composition IA en ligne de commande | 0 | à faire |
 | 2 | Conservation, équilibre et quantités | 1 | à faire |
 | 3 | Équipement et planning de session | 1 | à faire |
@@ -21,18 +21,32 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 
 ## Lot 0 : socle du monorepo
 
+**Statut** : `livré` le 2026-11-13, commit `baebfc7` (branche `lot-0-socle`), CI GitHub verte.
+
 **Objectif** : un dépôt où chaque lot suivant ajoute du code sans toucher à l'outillage.
 
 **Contenu**
-- Monorepo pnpm : `packages/core`, `apps/desktop`.
+- Monorepo pnpm : `packages/core`, `apps/desktop`. Versions figées : Node 24.22.3 (`.node-version`), pnpm 12.18.0 (`packageManager`), Rust 1.100.0 (`rust-toolchain.toml`).
 - TypeScript strict, ESLint, Prettier, Vitest dans `core`.
+- Une garde ESLint du code pur de `core` (pas de Node, de Tauri, de React, d'horloge ni de globales hors liste dans le code pur) ; le code Node vit dans `packages/core/src/node/`. Les règles d'écriture sont dans `docs/conventions-core.md`.
 - `apps/desktop` : Tauri 2 + React + Vite, qui ouvre une fenêtre affichant une valeur importée de `core` (preuve que le lien entre les deux marche).
-- Scripts racine : `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`.
-- Une CI GitHub Actions qui lance ces quatre scripts, si un remote est configuré.
+- Scripts racine : `pnpm lint`, `pnpm format:check`, `pnpm typecheck`, `pnpm test`, `pnpm build`. `pnpm build` ne lance aucun Rust (`tsc` puis Vite).
+- Une CI GitHub Actions (Ubuntu, sans Rust) qui lance ces scripts, sur le remote https://github.com/bfigliuzzi/family-meals-helper.
 
-**Livrable vérifiable** : `pnpm lint && pnpm typecheck && pnpm test && pnpm build` passe ; `pnpm --filter desktop tauri dev` ouvre la fenêtre.
+**Livrable vérifiable** : `pnpm install --frozen-lockfile && pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build` passe ; `pnpm --filter desktop tauri dev` ouvre la fenêtre.
+
+**Bilan de validation du livrable**
+- Vérifié : `pnpm --filter desktop tauri dev` a ouvert la fenêtre « Family Meals Helper », avec le texte venu de `core`. Une capture de la fenêtre seule a été regardée par l'exécutant puis par un relecteur. La capture n'est pas conservée dans le dépôt.
+- Construit mais non vérifié : `pnpm --filter desktop tauri build --bundles app` a produit un `.app`. Il n'est pas signé et n'a jamais été ouvert.
 
 **Ce que ça ne fera PAS (visible)** : aucune fonction métier ; la fenêtre n'affiche qu'un texte de contrôle.
+
+**Reliquats du lot 0** (dettes connues, chacune reprise dans le lot qui doit la traiter) :
+- **CSP désactivée** (`"csp": null` dans `apps/desktop/src-tauri/tauri.conf.json`) et **permissions `core:default` trop larges** (`capabilities/default.json`) : à traiter au lot 5, qui réécrit les permissions pour SQLite, le trousseau et HTTP.
+- **Pas de vérification Rust en CI** : décision de cadrage, le Rust ne contient que de la configuration. À revoir au lot 5, quand le Rust fera plus que cela.
+- **Arrêt de `tauri dev`** : pnpm 12 place chaque script dans son propre groupe de processus, donc arrêter `pnpm --filter desktop tauri dev` peut laisser Vite ou l'app tourner. Les plans des lots qui relancent `tauri dev` (5 et 6) vérifient après l'arrêt que le port 1420 est libre (`lsof -nP -iTCP:1420 -sTCP:LISTEN`) et que l'app ne tourne plus.
+- **Types Node visibles dans tout `core`** : `tsconfig.json` les charge explicitement, ce qui anticipe le SDK Anthropic du lot 1. La frontière du code pur tient par ESLint seulement, pas par TypeScript. Un second programme TypeScript sans types Node avait été essayé puis supprimé (voir `docs/conventions-core.md`, §7).
+- **Contournements délibérés non couverts** (`as`, `Reflect.get`, dépendance qui accède à l'extérieur) et lectures implicites résiduelles (`Math.random()`, fuseau par défaut d'`Intl`, `format(at)` avec `at` à `undefined`) : dette assumée, jugée en relecture. Le principe d'arrêt est dans `docs/conventions-core.md`, §6.
 
 ## Lot 1 : tracer, composition IA en ligne de commande
 
@@ -40,12 +54,12 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 
 **Contenu** (conception §2, §5.1, §5.2, §6.5, §7)
 - `domain/` : schémas Zod de Menu, Plat, Ingrédient (avec forme), Constat.
-- `ports/` : `HttpClient`, `Clock`, `SecretStore`. Une implémentation Node pour la ligne de commande.
+- `ports/` : `HttpClient`, `Clock`, `SecretStore`. Une implémentation Node pour la ligne de commande, dans `packages/core/src/node/`.
 - `ingredients/` : référentiel de départ (une centaine d'ingrédients courants) avec synonymes, catégorie détaillée, rayon, forme, drapeau `placard`.
 - `season/` : table de saison France par mois (§6.5 : vérifier d'abord l'API ADEME).
 - `rules/` : contrôle des exclusions et de la saison, qui produit des constats.
 - `ai/` : client Claude via le port HTTP, prompt système avec le texte des règles cuisine-addict de composition (§6.1) en prompt caching, sortie structurée validée par Zod, cycle proposer → vérifier → corriger (3 essais).
-- Une commande de développement : `pnpm --filter core compose "<demande>" [--exclude courgette] [--month 11]`, qui affiche le menu et ses constats.
+- Une commande de développement, dans `packages/core/src/node/` et déclarée dans le `package.json` de `core` : `pnpm --filter core compose "<demande>" [--exclude courgette] [--month 11]`, qui affiche le menu et ses constats.
 
 **Livrable vérifiable**
 - Tests Vitest des contrôles exclusions et saison, sans appel réseau.
@@ -53,6 +67,8 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 - Une démonstration réelle : `compose "un bœuf bourguignon, 5 dîners" --exclude courgette` renvoie un menu sans courgette et sans légume hors saison.
 
 **Ce que ça ne fera PAS (visible)** : pas de conservation, d'équilibre ni de planning ; pas de recettes détaillées ; pas d'interface ; pas de modification du menu courant (une demande = une composition).
+
+**Contrat de code** : le lot 1 suit `docs/conventions-core.md` (code Node dans `src/node/`, accès extérieurs par les ports (le SDK reçoit un `fetch` adapté de `HttpClient`, les fonctions métier une date fournie par `Clock`), pas de `globalThis` ni de `console` dans le code pur, `Parameters<typeof globalThis.fetch>[1]` pour les types de requête, pas de `format()` sans argument, `z.prettifyError` pour les erreurs zod). Le SDK Anthropic vit dans `packages/core/src/ai/`.
 
 **Pour le décideur** : la clé d'API Claude est lue depuis la variable d'environnement `ANTHROPIC_API_KEY` dans l'implémentation Node de `SecretStore`.
 
@@ -107,6 +123,8 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 - Stockage des réglages : exclusions avec raison, équipement disponible, modèle Claude.
 - Écran Réglages et navigation entre les quatre écrans (vides pour Nouvelle session, Ingrédients, Historique).
 - Une interface sobre et soignée ; le choix du système de composants est à trancher avant ce lot (voir « Questions ouvertes »).
+- Reliquats du lot 0 à traiter ici : CSP (`"csp": null`) et permissions `core:default` remplacées par des permissions minimales ; décider d'une vérification Rust en CI (lot 0, « Reliquats »).
+- Si le plan relance `tauri dev` : vérifier après l'arrêt que le port 1420 est libre et que l'app ne tourne plus (pnpm 12, un groupe de processus par script).
 
 **Livrable vérifiable** : tests des implémentations de ports qui le permettent ; l'app lancée enregistre une exclusion et la clé, puis les retrouve après redémarrage.
 
@@ -122,6 +140,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 - Validation, détail, export du PDF.
 - Écran Ingrédients : liste par rayon avec cases à cocher (l'état coché est conservé).
 - Historique des 5 derniers menus, transmis à l'IA, avec réouverture du PDF.
+- Si le plan relance `tauri dev` : vérifier après l'arrêt que le port 1420 est libre et que l'app ne tourne plus (pnpm 12, un groupe de processus par script).
 
 **Livrable vérifiable** : tests de la modification du menu courant avec un faux client IA ; dans l'app, l'utilisateur compose, modifie un plat, valide et obtient le PDF ; le menu apparaît dans l'historique.
 
@@ -143,5 +162,5 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 
 ## Questions ouvertes (à trancher avant le lot concerné)
 
-- **Avant le lot 0** : le remote git et la branche de travail ; le profil Codex du projet (`~/.codex/family-meals-helper.config.toml` n'existe pas).
+- ~~**Avant le lot 0** : le remote git et la branche de travail ; le profil Codex du projet.~~ Tranché : remote GitHub public https://github.com/bfigliuzzi/family-meals-helper, une branche par lot (`lot-0-socle`) ; profil Codex `~/.codex/family-meals-helper.config.toml` en gpt-6.1-sol, effort high.
 - **Avant le lot 5** : nico-build-plan suppose un Storybook (`packages/design-system`) et une procédure Claude Design pour tout composant d'interface. Ce projet n'en a pas : décider s'il en crée un, ou si les lots UI utilisent une bibliothèque de composants existante.

@@ -242,7 +242,7 @@ Il n'existe pas d'API publique de prix pour les enseignes françaises, et les CG
 
 **Organisation du code** :
 ```
-packages/core/
+packages/core/src/
   domain/        types et schémas Zod : Menu, Dish, Ingredient, Step, Schedule, Finding (constat), ShoppingList
   ai/            client Claude, prompts, cycle proposer → vérifier → corriger, modification du menu courant
   rules/         tables et contrôles : conservation, équilibre, quantités, exclusions
@@ -253,10 +253,11 @@ packages/core/
   pricing/       sources de prix et estimation
   pdf/           génération du PDF d'un menu validé
   ports/         interfaces : stockage, HTTP, horloge, secrets
+  node/          implémentations Node des ports et commandes de développement (seul dossier, avec les tests, où Node est permis)
 apps/desktop/    Tauri + React : écrans et implémentations des ports
 docs/research/   sources des règles (cuisine-addict, mangerbouger, prix)
 ```
-Chaque module de `core` se teste seul. Les identifiants de code sont en anglais ; les textes affichés, le PDF et les docs sont en français.
+Les règles d'écriture de `core` (frontière du code pur, globales permises, heure par le port `Clock`) sont dans `docs/conventions-core.md`. Chaque module de `core` se teste seul. Les identifiants de code sont en anglais ; les textes affichés, le PDF et les docs sont en français.
 
 ## 11. Laissé au builder
 - Le découpage des prompts et le format exact des sorties structurées.
