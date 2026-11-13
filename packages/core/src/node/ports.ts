@@ -1,0 +1,21 @@
+import type { Clock } from "../ports/clock.ts";
+import type { HttpClient } from "../ports/http-client.ts";
+import type { SecretStore } from "../ports/secret-store.ts";
+
+export const nodeHttpClient: HttpClient = {
+  send: (request) => fetch(request),
+};
+
+export const nodeClock: Clock = {
+  now: () => new Date(),
+};
+
+// La clé vient de ANTHROPIC_API_KEY ; une chaîne vide vaut « absente ».
+export function createEnvSecretStore(env: NodeJS.ProcessEnv): SecretStore {
+  return {
+    get(key) {
+      const value = key === "anthropic-api-key" ? env["ANTHROPIC_API_KEY"] : undefined;
+      return Promise.resolve(value === undefined || value === "" ? null : value);
+    },
+  };
+}

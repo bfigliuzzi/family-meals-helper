@@ -1,0 +1,68 @@
+{
+  "data": [
+    {
+      "name": "Courgette",
+      "slug": "courgette",
+      "months": [5, 6, 7, 8, 9, 10],
+      "ecv": 0.49850700000000003,
+      "category": "légumes"
+    },
+    {
+      "name": "Tomate",
+      "slug": "tomate",
+      "months": [6, 7, 8, 9],
+      "ecv": 0.6256,
+      "category": "légumes"
+    },
+    {
+      "name": "Chou",
+      "slug": "chou",
+      "months": [1, 2, 3, 10, 11, 12],
+      "ecv": 0.8476329999999999,
+      "category": "légumes"
+    },
+    {
+      "name": "Céleri",
+      "slug": "celeri",
+      "months": [1, 2, 3, 10, 11, 12],
+      "ecv": 0.7157324,
+      "category": "légumes"
+    },
+    {
+      "name": "Courge",
+      "slug": "courge",
+      "months": [1, 9, 10, 11, 12],
+      "ecv": 0.6382,
+      "category": "légumes"
+    },
+    {
+      "name": "Chou de Bruxelles",
+      "slug": "choudebruxelles",
+      "months": [1, 2, 3, 10, 11, 12],
+      "ecv": 0.562147,
+      "category": "légumes"
+    },
+    {
+      "name": "Haricot vert (cru)",
+      "slug": "haricotvert",
+      "months": [6, 7, 8, 9, 10],
+      "ecv": 0.44645700000000005,
+      "category": "légumes"
+    },
+    {
+      "name": "Petit pois",
+      "slug": "petitpois",
+      "months": [5, 6, 7],
+      "ecv": 0.701761,
+      "category": "légumes"
+    },
+    {
+      "name": "Champignon (morille crue)",
+      "slug": "champignonmorille",
+      "months": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+      "ecv": 6.175009000000001,
+      "category": "légumes"
+    }
+  ],
+  "warning": "La requete n'est pas authentifiée. Nous nous reservons le droit de couper cette API aux utilisateurs anonymes, veuillez nous contacter à impactco2@ademe.fr pour obtenir une clé d'API gratuite."
+}

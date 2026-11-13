@@ -53,7 +53,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 **Objectif** : prouver la chaîne demande → IA → vérification → correction sur un vrai appel à Claude, avec les règles bloquantes les plus simples.
 
 **Contenu** (conception §2, §5.1, §5.2, §6.5, §7)
-- `domain/` : schémas Zod de Menu, Plat, Ingrédient (avec forme), Constat.
+- `domain/` : schémas Zod de Menu, Plat, Ingrédient (avec forme) ; le Constat est une interface TypeScript sans schéma Zod, car il n'est jamais lu depuis l'extérieur.
 - `ports/` : `HttpClient`, `Clock`, `SecretStore`. Une implémentation Node pour la ligne de commande, dans `packages/core/src/node/`.
 - `ingredients/` : référentiel de départ (une centaine d'ingrédients courants) avec synonymes, catégorie détaillée, rayon, forme, drapeau `placard`.
 - `season/` : table de saison France par mois (§6.5 : vérifier d'abord l'API ADEME).
@@ -71,6 +71,35 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 **Contrat de code** : le lot 1 suit `docs/conventions-core.md` (code Node dans `src/node/`, accès extérieurs par les ports (le SDK reçoit un `fetch` adapté de `HttpClient`, les fonctions métier une date fournie par `Clock`), pas de `globalThis` ni de `console` dans le code pur, `Parameters<typeof globalThis.fetch>[1]` pour les types de requête, pas de `format()` sans argument, `z.prettifyError` pour les erreurs zod). Le SDK Anthropic vit dans `packages/core/src/ai/`.
 
 **Pour le décideur** : la clé d'API Claude est lue depuis la variable d'environnement `ANTHROPIC_API_KEY` dans l'implémentation Node de `SecretStore`.
+
+**Bilan de validation du livrable**
+- Vérifié sans appel réel : tests Vitest des contrôles (exclusions avec groupes et ingrédients inconnus, saison avec les négations de la demande, forme du menu), du cycle de correction avec un faux client IA (premier menu fautif, puis menu correct ; réponse coupée, refus, erreur réseau qui garde le premier menu), du client Anthropic avec un faux `HttpClient` (URL, en-tête `Authorization: Bearer`, corps, une seule requête sur une erreur 500). `compose --dry-run` affiche les prompts sans réseau ni clé ; sans clé, `compose` s'arrête avec le code 2 avant tout appel.
+- Négation et repérage (invariants N et E2 des corrections du cycle 4) : la négation ne sert qu'à décider si un ingrédient est « demandé » (exemption de saison), avec une portée qui va du premier marqueur négatif jusqu'à la fin de la phrase, parenthèses comprises ; le nom du plat est contrôlé en entier, sans analyse de négation.
+- À remplir par l'orchestrateur après accord de l'utilisateur : sonde du fournisseur, fumée (`smoke`), démo réelle `compose "un bœuf bourguignon, 5 dîners" --exclude courgette` (sortie complète sans la clé, jetons consommés).
+
+**Reliquats du lot 1** (dettes connues, chacune reprise dans le lot qui doit la traiter) :
+- **`ai/` n'est pas réexporté par `src/index.ts`** : l'app desktop n'a pas besoin du SDK dans son bundle. Le lot 5 ou 6 décidera comment l'app y accède.
+- **Dette `ANTHROPIC_CUSTOM_HEADERS`** : le constructeur du SDK Anthropic lit toujours cette variable, aucune option ne l'empêche (voir `docs/conventions-core.md`, §2).
+- **`FMH_DISABLE`** (`format`, `effort`, `cache`) : prévu pour un proxy qui refuse une de ces fonctions. À noter ici quelle valeur la démo réelle a imposé, s'il y en a une.
+- **Pas de repli automatique** sur un autre modèle en cas de refus (`fallbacks`).
+- **Contrôle de saison partiel** : `champignon de Paris` et `patate douce` n'ont pas de ligne dans la table (voir `docs/research/saison-fruits-legumes.md`) ; un ingrédient absent du référentiel est contrôlé à travers les fruits et légumes connus que cite son nom ; s'il n'en cite aucun, il est listé « non vérifié ». La sortie de `compose` le dit.
+- **Condiments de saison** : aucune exemption pour l'ail, l'oignon, l'échalote et le citron ; question posée à l'utilisateur (conception §6.5).
+- **Choix du fournisseur** : la documentation de Mammouth ne décrit qu'une API compatible OpenAI ; si la sonde ne trouve pas `/v1/messages`, l'utilisateur choisit entre une clé Anthropic directe, un second client dans `ai/` (écart à la conception §10) ou un autre proxy.
+- **Corrections du cycle 1 de relecture** appliquées : clé expurgée des erreurs ; `ANTHROPIC_BASE_URL` en `https://` obligatoire ; exclusions par groupe de catégorie (`CATEGORY_GROUPS`), par mot-groupe et sur le nom du plat ; saison contrôlée sur la forme reçue et sur les fruits et légumes cités dans un nom inconnu ; nombre de dîners : le plus grand nombre de « dîners » cité ; plafond de 3 essais dans le moteur ; compteur d'appels en échec ; endive corrigée à la main (mangerbouger), alias du céleri branche retiré.
+- **Rejeté ou reporté** :
+  - Objets Zod stricts (rejeté) : avec le format imposé, le schéma JSON interdit déjà les champs en trop ; sans lui, un champ en trop est ignoré et jamais affiché.
+  - Faux rattachements de la normalisation (reporté au lot 2) : « maïs » et le mot « mais » donnent la même clé ; `find("pâté")` renvoie `pâtes` ; `--exclude pâtes` exclut « pâte à pizza ». Effet actuel : un « mais » dans la demande compte comme une demande de maïs, ce qui l'exempte du contrôle de saison.
+  - Groupes reconnus dans la demande (reporté) : « une soupe de courge » ne vaut pas demande pour le potiron ; « un plat pas cher avec des courgettes » coupe la demande (choix prudent : au pire un constat de trop).
+  - Exclure une variante exclut toute l'entrée (`--exclude "tomate cerise"` exclut toutes les tomates) : voulu, dans le sens prudent.
+  - Faux rattachements de la normalisation et noms de plats (reporté au lot 2) : avec le contrôle du nom du plat, `--exclude pâtes` signale aussi « Pâté chinois ». Il reste reporté avec « mais » / maïs et « pâté » / pâtes.
+  - Noms composés frais (accepté) : « sauce tomate » et « jus de citron », reçus en `fresh` en novembre, déclenchent le contrôle de saison sur l'ingrédient qu'ils contiennent. L'IA corrige en passant à `canned`, au prix d'un essai ; sens prudent. À revoir avec la question des condiments (citron).
+  - `redact` masque un mot ordinaire long après « Bearer » (« Bearer authentication failed » devient « Bearer [clé masquée] failed ») : le texte perd un mot, rien ne fuit. Comportement prudent gardé ; à revoir si un vrai message de proxy le montre.
+  - Nom du plat (faux positif voulu) : « Chili sans viande » avec `--exclude viande` donne un constat, car la négation n'est plus analysée dans les noms de plats. Le prompt demande à l'IA de ne pas écrire ce genre de nom ; au pire, un essai de plus.
+  - Exemption de saison : un ingrédient voulu qui suit une négation dans la même phrase (« sans tomate, avec des courgettes ») n'est pas compté comme demandé. C'est le sens prudent : au pire un constat de saison, que l'IA corrige.
+  - `redact` : un jeton partiel sous une forme rare (`Bearer \"…\"` échappé en JSON, `Bearer: …`, `Bearer%20…`) n'est pas masqué. La clé exacte, elle, l'est toujours. À revoir si un vrai message d'un proxy montre une de ces formes.
+  - Plafond de 2 $ par mois : hors du code ; suivi par `GET https://api.mammouth.ai/key/info` (orchestrateur).
+  - Autres valeurs de saison de l'ADEME (oignon en juillet et août, échalote, orange en décembre) : liées à la question des condiments, pas corrigées au cas par cas.
+- **`pnpm --filter core compose` renvoie le code 1 quand la commande échoue** : pnpm remplace le code de sortie de `node` (2) par 1. Le code 0/1/2 de la conception du lot vaut pour `node src/node/compose.ts` lancé directement.
 
 ## Lot 2 : conservation, équilibre et quantités
 

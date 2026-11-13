@@ -14,10 +14,31 @@ Ce fichier dit comment écrire du code dans `packages/core` sans casser la front
   - une syntaxe TypeScript effaçable (`erasableSyntaxOnly` : pas d'`enum` ni de `namespace`) ;
   - des imports de types écrits `import type { X } from "./module.ts"`. Le type d'import `import("./module.ts").X` est refusé dans le code pur (sélecteur `TSImportType`), à ne pas confondre avec l'import dynamique, aussi refusé.
 - Un script de `core` se déclare dans `packages/core/package.json`, sans toucher à ESLint ni aux tsconfig. Par exemple `compose` : `node src/node/compose.ts`.
+- Scripts du lot 1 : `compose` (composition par l'IA), `smoke` (un seul appel de test de connexion) et `season:import` (régénère `src/season/season-table.ts` depuis l'API ADEME ; voir `docs/research/saison-fruits-legumes.md`). Le script d'import est le seul code qui fait un appel réseau hors de l'IA.
 
 ## 2. SDK Anthropic
 
 Il vit dans `packages/core/src/ai/`, comme la conception le demande. Il reçoit une fonction `fetch` construite à partir du port `HttpClient`, avec `Request` et `Response`. Le SDK ne fait donc aucun appel réseau par lui-même.
+
+Le client est construit dans `src/ai/anthropic-client.ts` avec des options toutes explicites, pour qu'il ne lise de l'environnement que ce qu'on ne peut pas éviter :
+
+- `apiKey` : la clé reçue du `SecretStore` (le SDK l'envoie en `Authorization: Bearer`, ce qu'attend aussi Mammouth). On ne passe pas `authToken`, exclusif d'`apiKey`.
+- `baseURL` : donnée par le code Node (le SDK ajoute `/v1/messages`).
+- `fetch` : adapté du port `HttpClient`.
+- `webhookKey: null` : sans cela, le SDK lit `ANTHROPIC_WEBHOOK_SIGNING_KEY`.
+- `openTelemetry: false` : sans cela, il lit les variables `ANTHROPIC_OPEN_TELEMETRY*`.
+- `maxRetries: 0` : aucun nouvel essai caché qui facturerait deux fois.
+- `logLevel: "warn"` et `logger` : le journal vient du code Node (le code pur n'a pas `console`).
+
+**Dette nommée** : le constructeur du SDK lit toujours `ANTHROPIC_CUSTOM_HEADERS`, aucune option ne l'empêche. C'est un code venu d'une dépendance qui accède lui-même à l'extérieur (§6, point 1) : accepté.
+
+Autre dette du même ordre : pour un modèle déprécié, le SDK écrit directement dans `console.warn`, même avec un `logger` fourni.
+
+Les erreurs du client ne sortent jamais telles quelles : `complete` les traduit en français (`describeApiError`) et en retire la clé et toute suite `Bearer …` (`redact`). Le cycle de composition ne dépend donc pas du SDK.
+
+Le `throw` qui suit ce `catch` porte `// eslint-disable-next-line preserve-caught-error` : on ne joint pas l'erreur d'origine (`cause`), parce qu'elle peut contenir la clé et que Node l'afficherait en entier.
+
+**Règle** : l'environnement (`ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_MODEL`, `FMH_DISABLE`) n'est lu que dans `packages/core/src/node/`.
 
 ## 3. Globales
 

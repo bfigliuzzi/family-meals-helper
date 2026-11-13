@@ -1,0 +1,56 @@
+// Fichier généré par `pnpm --filter core season:import`, ne pas modifier à la main.
+// Source et date : `docs/research/saison-fruits-legumes.md`.
+import type { SeasonRow } from "./months.ts";
+
+export const SEASON_TABLE: Readonly<Record<string, SeasonRow>> = {
+  ail: { months: [7, 8, 9, 10, 11, 12], source: "ademe" },
+  artichaut: { months: [5, 6, 7, 8, 9], source: "ademe" },
+  asperge: { months: [4, 5, 6], source: "ademe" },
+  aubergine: { months: [6, 7, 8, 9], source: "ademe" },
+  betterave: { months: [1, 2, 3, 10, 11, 12], source: "ademe" },
+  blette: { months: [6, 7, 8, 9, 10, 11], source: "ademe" },
+  brocoli: { months: [9, 10, 11], source: "ademe" },
+  butternut: { months: [1, 9, 10, 11, 12], source: "ademe" },
+  carotte: { months: [1, 2, 3, 9, 10, 11, 12], source: "ademe" },
+  "chou de Bruxelles": { months: [1, 2, 3, 10, 11, 12], source: "ademe" },
+  "chou rouge": { months: [1, 2, 3, 10, 11, 12], source: "ademe" },
+  "chou vert": { months: [1, 2, 3, 10, 11, 12], source: "ademe" },
+  "chou-fleur": { months: [1, 2, 3, 9, 10, 11, 12], source: "ademe" },
+  citron: { months: [1, 2], source: "ademe" },
+  clémentine: { months: [1, 2, 11, 12], source: "ademe" },
+  concombre: { months: [5, 6, 7, 8, 9, 10], source: "ademe" },
+  courgette: { months: [5, 6, 7, 8, 9, 10], source: "ademe" },
+  "céleri-rave": { months: [1, 2, 3, 10, 11, 12], source: "ademe" },
+  endive: {
+    months: [1, 2, 3, 4, 10, 11, 12],
+    source:
+      "https://www.mangerbouger.fr/manger-mieux/bien-manger-sans-se-ruiner/calendrier-de-saison/fruits-et-legumes/endive",
+  },
+  fenouil: { months: [4, 6, 7, 8, 9, 10, 11], source: "ademe" },
+  figue: { months: [7, 8, 9, 10], source: "ademe" },
+  "haricot vert": { months: [6, 7, 8, 9, 10], source: "ademe" },
+  laitue: { months: [5, 6, 7, 8, 9], source: "ademe" },
+  maïs: { months: [7, 8, 9], source: "ademe" },
+  mâche: { months: [1, 2, 10, 11, 12], source: "ademe" },
+  navet: { months: [1, 2, 3, 4, 5, 10, 11, 12], source: "ademe" },
+  oignon: { months: [1, 2, 3, 4, 9, 10, 11, 12], source: "ademe" },
+  orange: { months: [1, 2, 3], source: "ademe" },
+  panais: { months: [1, 2, 3, 10, 11, 12], source: "ademe" },
+  "petit pois": { months: [5, 6, 7], source: "ademe" },
+  poire: { months: [1, 2, 3, 8, 9, 10, 11, 12], source: "ademe" },
+  poireau: { months: [1, 2, 3, 4, 9, 10, 11, 12], source: "ademe" },
+  poivron: { months: [6, 7, 8, 9], source: "ademe" },
+  pomme: { months: [1, 2, 3, 4, 8, 9, 10, 11, 12], source: "ademe" },
+  potimarron: {
+    months: [10, 11, 12],
+    source:
+      "https://www.mangerbouger.fr/manger-mieux/bien-manger-sans-se-ruiner/calendrier-de-saison/fruits-et-legumes/potimarron",
+  },
+  potiron: { months: [1, 9, 10, 11, 12], source: "ademe" },
+  radis: { months: [3, 4, 5, 6], source: "ademe" },
+  raisin: { months: [9, 10], source: "ademe" },
+  tomate: { months: [6, 7, 8, 9], source: "ademe" },
+  topinambour: { months: [1, 2, 11, 12], source: "ademe" },
+  échalote: { months: [10, 11, 12], source: "ademe" },
+  épinard: { months: [1, 2, 3, 4, 5, 9, 10, 11, 12], source: "ademe" },
+};
