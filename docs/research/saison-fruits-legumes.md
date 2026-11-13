@@ -37,7 +37,7 @@ Conception §6.5 : « à défaut : une table saisie à partir d'un calendrier of
 
 La table couvre tous les fruits et légumes du référentiel, quelle que soit leur forme par défaut (par exemple `maïs`, ADEME juillet à septembre) : le contrôle porte sur la forme reçue de l'IA.
 
-Le citron reste à janvier et février : l'ADEME et mangerbouger.fr concordent. C'est la question des condiments ci-dessous.
+Le citron reste à janvier et février : l'ADEME et mangerbouger.fr concordent. Le citron est de toute façon exempté du contrôle (voir ci-dessous).
 
 ## Rapport du script (2026-11-13)
 
@@ -92,9 +92,11 @@ Le citron reste à janvier et février : l'ADEME et mangerbouger.fr concordent. 
 
 Pas d'ingrédients exotiques dans le référentiel (avocat, mangue, ananas, banane) : l'ADEME les donne « de saison » toute l'année parce qu'importés.
 
-## Aucune exemption
+## Exemptions
 
-Le contrôle suit la conception §6.5 à la lettre : la seule exception est un ingrédient nommé dans la demande. Il n'y a pas d'exemption pour l'ail, l'oignon, l'échalote et le citron : l'oignon est refusé de mai à août, l'ail de janvier à juin, l'échalote de janvier à septembre, le citron de mars à décembre (d'après la table). Question posée à l'utilisateur : faut-il exempter ces quatre condiments (avec éventuellement un plafond de quantité, à écrire dans la conception §6.5) ? Sans effet sur la démo de novembre, sauf le citron.
+Décision de l'utilisateur (2026-11-13, conception §6.5) : l'ail, l'oignon, l'échalote et le citron sont exemptés du contrôle de saison, sans plafond de quantité. Ce sont presque des produits du quotidien, qu'on trouve tout le temps en magasin. Ces entrées portent `seasonExempt: true` dans le référentiel ; l'exemption vaut aussi pour leurs variantes (« oignon rouge ») et quand un nom inconnu les cite (« gousse d'ail », « jus de citron »). La liste « de saison » envoyée à l'IA les donne tous les mois. Leurs lignes restent dans la table, telles que l'ADEME les donne, mais le contrôle ne les lit pas.
+
+L'autre exemption est un ingrédient nommé dans la demande.
 
 ## Régénérer
 

@@ -199,6 +199,7 @@ describe("checkExclusions : mots-groupes par intersection", () => {
       aisle: "produce",
       defaultForm: "fresh",
       pantry: false,
+      seasonExempt: false,
     });
     const ctx: CheckContext = {
       ...ctxFor("fruit d'hiver"),

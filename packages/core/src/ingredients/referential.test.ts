@@ -54,6 +54,11 @@ describe("référentiel", () => {
     }
   });
 
+  it("exempte du contrôle de saison exactement l'ail, l'oignon, l'échalote et le citron", () => {
+    const exempt = REFERENTIAL.filter((ref) => ref.seasonExempt).map((ref) => ref.name);
+    expect(exempt.sort()).toEqual(["ail", "citron", "oignon", "échalote"]);
+  });
+
   it("marque placard exactement la liste attendue", () => {
     const pantry = REFERENTIAL.filter((ref) => ref.pantry).map((ref) => ref.name);
     expect(pantry.sort()).toEqual([...EXPECTED_PANTRY].sort());

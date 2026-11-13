@@ -100,5 +100,7 @@ export const IngredientRefSchema = z.object({
   aisle: z.enum(AISLES),
   defaultForm: z.enum(FORMS),
   pantry: z.boolean(),
+  // Ni contrôlé ni restreint par la table de saison : on le trouve toute l'année (conception §6.5).
+  seasonExempt: z.boolean(),
 });
 export type IngredientRef = z.infer<typeof IngredientRefSchema>;

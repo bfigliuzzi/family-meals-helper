@@ -4,6 +4,7 @@ interface Extra {
   synonyms?: string[];
   variants?: string[];
   groups?: string[];
+  seasonExempt?: boolean;
 }
 interface Defaults {
   category: Category;
@@ -26,6 +27,7 @@ function group(defaults: Defaults): Maker {
       aisle: d.aisle,
       defaultForm: d.form,
       pantry: d.pantry,
+      seasonExempt: extra.seasonExempt ?? false,
     };
   };
 }
@@ -54,9 +56,13 @@ const starch = group({
 // `groups` : termes d'exclusion plus larges que le nom (--exclude poulet).
 export const REFERENTIAL: readonly IngredientRef[] = [
   // Légumes frais
-  veg("ail"),
-  veg("oignon", { variants: ["oignon jaune", "oignon rouge", "oignon blanc"] }),
-  veg("échalote"),
+  // ail, oignon, échalote, citron : en magasin toute l'année, exemptés de saison (conception §6.5)
+  veg("ail", { seasonExempt: true }),
+  veg("oignon", {
+    variants: ["oignon jaune", "oignon rouge", "oignon blanc"],
+    seasonExempt: true,
+  }),
+  veg("échalote", { seasonExempt: true }),
   veg("carotte"),
   veg("poireau"),
   veg("courgette", { variants: ["courgette jaune", "courgette ronde"] }),
@@ -96,7 +102,7 @@ export const REFERENTIAL: readonly IngredientRef[] = [
   veg("patate douce"),
   veg("maïs", {}, { form: "canned", aisle: "savory-grocery" }),
   // Fruits frais
-  fruit("citron"),
+  fruit("citron", { seasonExempt: true }),
   fruit("pomme"),
   fruit("poire"),
   fruit("orange"),

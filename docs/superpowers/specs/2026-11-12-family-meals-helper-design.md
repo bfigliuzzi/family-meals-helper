@@ -147,6 +147,7 @@ Un menu sans poisson donne un constat `warning`.
   - Source à vérifier en premier : l'API « fruits et légumes de saison » de l'ADEME (impactco2.fr).
   - À défaut : une table saisie à partir d'un calendrier officiel.
   - Le contrôle porte sur les fruits et légumes de forme `frais` (§7). Un ingrédient hors saison passe s'il est nommé dans la demande.
+  - L'ail, l'oignon, l'échalote et le citron sont exemptés du contrôle et proposés toute l'année : ce sont presque des produits du quotidien, qu'on trouve tout le temps en magasin (décision de l'utilisateur, 2026-11-13).
 - **Exclusions** : le contrôle compare les noms normalisés du référentiel, synonymes et variantes compris. Par exemple, « courgette » exclut aussi « courgette jaune ».
 
 ### 6.6 Quantités (règles souples) et budget

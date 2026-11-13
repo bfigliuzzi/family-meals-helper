@@ -56,8 +56,26 @@ describe("checkSeason", () => {
     expect(checkSeason(menuOf("tomate concassée"), ctx(11)).findings).toEqual([]);
     expect(checkSeason(menuOf("tomate", "canned"), ctx(11)).findings).toEqual([]);
   });
-  it("n'exempte pas l'oignon (décision documentée)", () => {
-    expect(checkSeason(menuOf("oignon"), ctx(7)).findings).toHaveLength(1);
+  it("exempte l'ail, l'oignon, l'échalote et le citron (conception §6.5)", () => {
+    expect(checkSeason(menuOf("oignon"), ctx(7)).findings).toEqual([]);
+    expect(checkSeason(menuOf("oignon rouge"), ctx(7)).findings).toEqual([]);
+    expect(checkSeason(menuOf("citron"), ctx(11)).findings).toEqual([]);
+    expect(checkSeason(menuOf("échalote"), ctx(6)).findings).toEqual([]);
+    expect(checkSeason(menuOf("ail"), ctx(6)).findings).toEqual([]);
+  });
+  it("exempte aussi ces produits cités dans un nom inconnu", () => {
+    for (const [name, month] of [
+      ["gousse d'ail", 6],
+      ["jus de citron", 11],
+    ] as const) {
+      const result = checkSeason(menuOf(name, "fresh", "vegetable"), ctx(month));
+      expect(result.findings, name).toEqual([]);
+      expect(result.unchecked, name).toEqual([]);
+    }
+  });
+  it("contrôle toujours un autre légume cité à côté d'un produit exempté", () => {
+    const result = checkSeason(menuOf("oignons et courgettes", "fresh", "vegetable"), ctx(11));
+    expect(result.findings).toHaveLength(1);
   });
   it("ne contrôle pas la pomme de terre", () => {
     expect(checkSeason(menuOf("pomme de terre"), ctx(11)).findings).toEqual([]);
@@ -127,5 +145,13 @@ describe("inSeasonNames", () => {
     expect(names).toContain("potimarron");
     expect(names).not.toContain("courgette");
     expect(names).toEqual([...names].sort());
+  });
+  it("liste toute l'année les produits exemptés du contrôle", () => {
+    for (const month of [1, 6, 7, 11] as const) {
+      const names = inSeasonNames(month, REFERENTIAL, SEASON_TABLE);
+      for (const name of ["ail", "oignon", "échalote", "citron"]) {
+        expect(names, `${name} en ${month}`).toContain(name);
+      }
+    }
   });
 });

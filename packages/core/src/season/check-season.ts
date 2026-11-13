@@ -19,8 +19,9 @@ function byCodeUnit(a: string, b: string): number {
 }
 
 // Contrôle partiel : un fruit ou légume frais sans ligne dans la table, ou absent du référentiel
-// et sans entrée reconnue dans son nom, n'est pas contrôlé ; son nom est rendu dans `unchecked`. Aucune exemption (conception §6.5) :
-// seul un ingrédient nommé dans la demande échappe au constat.
+// et sans entrée reconnue dans son nom, n'est pas contrôlé ; son nom est rendu dans `unchecked`.
+// Deux exemptions (conception §6.5) : une entrée `seasonExempt` (ail, oignon, échalote, citron),
+// même citée dans un nom inconnu, et un ingrédient nommé dans la demande.
 export function checkSeason(
   menu: Menu,
   ctx: CheckContext,
@@ -31,6 +32,7 @@ export function checkSeason(
 
   // Contrôle d'une entrée du référentiel ; `shown` est le nom reçu de l'IA, cité dans le constat.
   const checkRef = (ref: IngredientRef, shown: string, dishIndex: number): void => {
+    if (ref.seasonExempt) return;
     const row = ctx.seasonTable[ref.name];
     if (row === undefined) {
       unchecked.add(ref.name);
@@ -67,14 +69,19 @@ export function checkSeason(
   return { findings, unchecked: [...unchecked].sort(byCodeUnit) };
 }
 
-// Fruits et légumes frais de saison ce mois-ci, pour le prompt.
+// Fruits et légumes frais de saison ce mois-ci, pour le prompt. Les produits exemptés y sont
+// toute l'année : la liste dit ce que l'IA peut utiliser, et le contrôle ne les refuse jamais.
 export function inSeasonNames(
   month: Month,
   refs: readonly IngredientRef[],
   table: Readonly<Record<string, SeasonRow>>,
 ): string[] {
   return refs
-    .filter((ref) => isFreshByDefault(ref) && table[ref.name]?.months.includes(month) === true)
+    .filter(
+      (ref) =>
+        isFreshByDefault(ref) &&
+        (ref.seasonExempt || table[ref.name]?.months.includes(month) === true),
+    )
     .map((ref) => ref.name)
     .sort(byCodeUnit);
 }
