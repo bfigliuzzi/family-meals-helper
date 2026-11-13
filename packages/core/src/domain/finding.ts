@@ -15,7 +15,11 @@ export type RuleId =
   | "cured-meat"
   | "same-protein"
   | "whole-starch"
-  | "quantity";
+  | "quantity"
+  | "phases"
+  | "equipment"
+  | "extra-appliance"
+  | "session-length";
 
 export interface Finding {
   level: FindingLevel;

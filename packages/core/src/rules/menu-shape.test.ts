@@ -27,7 +27,7 @@ const ingredient: MenuIngredient = {
 };
 
 function dish(day: Day, ingredients: MenuIngredient[] = [ingredient], name = "Plat") {
-  return { name, day, ingredients };
+  return { name, day, ingredients, phases: [] };
 }
 
 const goodMenu: Menu = { dishes: DAYS.map((day) => dish(day)) };

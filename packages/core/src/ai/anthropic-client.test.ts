@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { APPLIANCES } from "../domain/menu.ts";
 import type { HttpClient } from "../ports/http-client.ts";
 import { createAnthropicMenuModel, describeApiError, redact } from "./anthropic-client.ts";
 import type { AnthropicOptions } from "./anthropic-client.ts";
@@ -58,7 +59,7 @@ describe("createAnthropicMenuModel", () => {
     await createAnthropicMenuModel(options(http)).complete(prompt);
     const body = await bodyOf(requests[0]);
     expect(body["model"]).toBe("claude-sonnet-5-5");
-    expect(body["max_tokens"]).toBe(4000);
+    expect(body["max_tokens"]).toBe(8000);
     const system = body["system"] as { text: string; cache_control?: { type: string } }[];
     expect(system[0]?.text).toBe("Système");
     expect(system[0]?.cache_control).toEqual({ type: "ephemeral" });
@@ -66,6 +67,33 @@ describe("createAnthropicMenuModel", () => {
     expect(config.effort).toBe("low");
     expect(config.format?.type).toBe("json_schema");
     expect(body["messages"]).toEqual([{ role: "user", content: "Utilisateur" }]);
+  });
+
+  it("envoie un schéma où chaque plat a des phases à six champs, appareil en enum", async () => {
+    const { http, requests } = fakeHttp(200, fixture("messages-ok.json"));
+    await createAnthropicMenuModel(options(http)).complete(prompt);
+    const body = await bodyOf(requests[0]);
+    interface JsonSchema {
+      type?: string;
+      enum?: unknown[];
+      minimum?: number;
+      maximum?: number;
+      required?: string[];
+      properties?: Record<string, JsonSchema>;
+      items?: JsonSchema;
+    }
+    const config = body["output_config"] as { format: { schema: JsonSchema } };
+    const dish = config.format.schema.properties?.["dishes"]?.items;
+    expect(dish?.required).toContain("phases");
+    const phase = dish?.properties?.["phases"]?.items;
+    expect([...(phase?.required ?? [])].sort()).toEqual(
+      ["after", "appliance", "attended", "description", "id", "minutes"].sort(),
+    );
+    expect(phase?.properties?.["appliance"]?.enum).toEqual([...APPLIANCES]);
+    const minutes = phase?.properties?.["minutes"];
+    expect(minutes?.type).toBe("number");
+    expect(minutes?.minimum).toBeUndefined();
+    expect(minutes?.maximum).toBeUndefined();
   });
 
   it("retire chaque fonction désactivée, les autres restant présentes", async () => {

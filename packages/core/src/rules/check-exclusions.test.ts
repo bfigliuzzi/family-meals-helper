@@ -37,6 +37,7 @@ function menuWith(ingredient: string, options: Options): Menu {
         ingredients: [
           { name: ingredient, qty: 1, unit: "piece", form: "fresh", category, sameDay },
         ],
+        phases: [],
       },
     ],
   };

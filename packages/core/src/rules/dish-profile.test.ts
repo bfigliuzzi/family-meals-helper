@@ -11,7 +11,7 @@ function item(name: string, qty: number, over: Partial<MenuIngredient> = {}): Me
 }
 
 function dishOf(...ingredients: MenuIngredient[]): Dish {
-  return { name: "Plat", day: "mon", ingredients };
+  return { name: "Plat", day: "mon", ingredients, phases: [] };
 }
 
 describe("categoryOf", () => {

@@ -36,6 +36,7 @@ function menuWith(extra: MenuIngredient[]): Menu {
       name: `Plat ${i}`,
       day,
       ingredients: i === 0 ? [carrot, ...extra] : [carrot],
+      phases: [],
     })),
   };
 }
@@ -59,6 +60,16 @@ describe("checkMenu", () => {
     expect(result.keeping).toHaveLength(5);
     expect(result.keeping[4]?.toFreeze).toBe(true);
     expect(result.keeping[0]?.fridgeDays).toBe(4);
+    expect(result.session?.minutes).toBe(135);
+  });
+
+  it("place le constat d'un plat sans phase après les constats de quantité", () => {
+    const menu = balancedMenu();
+    menu.dishes[2]!.ingredients[0]!.qty = 1200;
+    menu.dishes[4]!.phases = [];
+    const result = checkMenu(menu, cleanCtx);
+    expect(result.findings.map((finding) => finding.rule)).toEqual(["quantity", "phases"]);
+    expect(result.session).toBeNull();
   });
 
   it("concatène forme, exclusion, saison et catégorie manquante", () => {

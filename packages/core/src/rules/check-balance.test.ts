@@ -41,6 +41,7 @@ function menuOf(...dishes: DishSpec[]): Menu {
       name: dish.name ?? `Plat ${i + 1}`,
       day: dish.day ?? DAYS[i]!,
       ingredients: dish.ingredients,
+      phases: [],
     })),
   };
 }

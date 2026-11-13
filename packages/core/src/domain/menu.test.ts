@@ -39,6 +39,24 @@ const validMenu = {
           sameDay: true,
         },
       ],
+      phases: [
+        {
+          id: "a1",
+          description: "Faire revenir les oignons",
+          minutes: 15,
+          appliance: "induction",
+          attended: true,
+          after: [],
+        },
+        {
+          id: "a2",
+          description: "Mijoter",
+          minutes: 120,
+          appliance: "oven",
+          attended: false,
+          after: ["a1"],
+        },
+      ],
     },
   ],
 };
@@ -58,6 +76,29 @@ describe("MenuSchema", () => {
     const menu = structuredClone(validMenu);
     menu.dishes[0]!.ingredients[0]!.unit = "kg";
     expect(MenuSchema.safeParse(menu).success).toBe(false);
+  });
+
+  it("accepte un plat avec des phases", () => {
+    const parsed = MenuSchema.safeParse(validMenu);
+    expect(parsed.success && parsed.data.dishes[0]?.phases).toHaveLength(2);
+  });
+
+  it("refuse un appareil hors de la liste", () => {
+    const menu = structuredClone(validMenu);
+    menu.dishes[0]!.phases[0]!.appliance = "microwave";
+    expect(MenuSchema.safeParse(menu).success).toBe(false);
+  });
+
+  it("refuse un plat sans phases", () => {
+    const dish: Partial<(typeof validMenu.dishes)[number]> = structuredClone(validMenu.dishes[0]!);
+    delete dish.phases;
+    expect(MenuSchema.safeParse({ dishes: [dish] }).success).toBe(false);
+  });
+
+  it("accepte une durée décimale : la borne est dans le contrôle métier", () => {
+    const menu = structuredClone(validMenu);
+    menu.dishes[0]!.phases[0]!.minutes = 2.5;
+    expect(MenuSchema.safeParse(menu).success).toBe(true);
   });
 
   it("refuse une catégorie hors liste", () => {

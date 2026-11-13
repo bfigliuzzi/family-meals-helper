@@ -29,6 +29,7 @@ function menuOf(name: string, form: Form = "fresh", category: Category | null = 
         name: "Plat",
         day: "mon",
         ingredients: [{ name, qty: 1, unit: "piece", form, category, sameDay: false }],
+        phases: [],
       },
     ],
   };

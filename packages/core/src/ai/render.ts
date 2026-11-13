@@ -1,14 +1,17 @@
 import { CATEGORY_LABELS } from "../domain/ingredient.ts";
 import type { Finding, RuleId } from "../domain/finding.ts";
 import { DAY_LABELS, SESSION_DAY_LABELS, dishLetter } from "../domain/menu.ts";
-import type { Menu, MenuIngredient } from "../domain/menu.ts";
+import type { Menu, MenuIngredient, Phase } from "../domain/menu.ts";
 import { FORM_LABELS } from "../domain/ingredient.ts";
+import { APPLIANCE_LABELS } from "../equipment/household.ts";
 import { buildIngredientIndex } from "../ingredients/index-lookup.ts";
 import { REFERENTIAL } from "../ingredients/referential.ts";
 import { THAW_INSTRUCTION_FR } from "../rules/check-conservation.ts";
 import type { DishKeeping } from "../rules/check-conservation.ts";
 import { FRESH_FISH_CATEGORIES } from "../rules/conservation-table.ts";
 import { categoryOf } from "../rules/dish-profile.ts";
+import { MAX_SESSION_MINUTES, clockText, durationText } from "../scheduling/plan-session.ts";
+import type { SessionPlan } from "../scheduling/plan-session.ts";
 import { monthName } from "../season/months.ts";
 import type { ComposeInput, ComposeResult, StopCause } from "./compose.ts";
 
@@ -31,6 +34,10 @@ const RULE_LABELS: Record<RuleId, string> = {
   "same-protein": "même protéine",
   "whole-starch": "féculent complet",
   quantity: "quantité",
+  phases: "phases",
+  equipment: "équipement",
+  "extra-appliance": "appareil d'appoint",
+  "session-length": "durée de session",
 };
 
 const STOP_MESSAGES: Partial<Record<StopCause, string>> = {
@@ -108,6 +115,37 @@ function describeTokens(result: ComposeResult): string {
   );
 }
 
+function describeUse(phase: Phase): string {
+  if (phase.appliance === "none") return phase.attended ? APPLIANCE_LABELS.none : "attente";
+  return `${APPLIANCE_LABELS[phase.appliance]}${phase.attended ? "" : ", tourne seul"}`;
+}
+
+function describeSession(session: SessionPlan | null): string[] {
+  if (session === null) {
+    return ["Session : durée non calculée, phases à corriger (voir les constats)."];
+  }
+  const extras =
+    session.extras.length === 0
+      ? "aucun"
+      : session.extras.map((id) => APPLIANCE_LABELS[id]).join(", ");
+  return [
+    `Session calculée : ${durationText(session.minutes)} (objectif 2 h à 2 h 30, ${durationText(MAX_SESSION_MINUTES)} au plus) · appareil d'appoint : ${extras}`,
+    "Planning :",
+    ...session.phases.map(
+      ({ dish, phase, start, end }) =>
+        `   ${clockText(start)}–${clockText(end)} · ${dishLetter(dish)}. ${phase.description} · ${describeUse(phase)}`,
+    ),
+  ];
+}
+
+// Les noms, descriptions et constats viennent de l'IA : pas de caractère de contrôle dans le terminal.
+function printable(line: string): string {
+  return Array.from(line, (char) => {
+    const code = char.codePointAt(0)!;
+    return code <= 0x1f || (code >= 0x7f && code <= 0x9f) ? " " : char;
+  }).join("");
+}
+
 export function renderComposeResult(result: ComposeResult, input: ComposeInput): string {
   const lines: string[] = [];
   const { best } = result;
@@ -119,6 +157,8 @@ export function renderComposeResult(result: ComposeResult, input: ComposeInput):
       `Menu pour ${monthName(input.month)}, session le ${SESSION_DAY_LABELS[input.sessionDay]} (essai ${best.number} sur ${input.maxAttempts})`,
       "",
       ...describeMenu(menu, best.check.keeping),
+      "",
+      ...describeSession(best.check.session),
       "",
     );
     const { findings, seasonUnchecked, toConfirm } = best.check;
@@ -145,5 +185,5 @@ export function renderComposeResult(result: ComposeResult, input: ComposeInput):
   if (stopMessage !== undefined) lines.push(stopMessage);
   if (result.technicalError !== null) lines.push(`Erreur technique : ${result.technicalError}`);
   lines.push(describeTokens(result));
-  return lines.join("\n");
+  return lines.map(printable).join("\n");
 }

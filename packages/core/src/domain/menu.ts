@@ -18,10 +18,36 @@ export const MenuIngredientSchema = z.object({
 });
 export type MenuIngredient = z.infer<typeof MenuIngredientSchema>;
 
+// `none` = travail à la main ou attente (découpe, marinade, repos).
+export const APPLIANCES = [
+  "none",
+  "oven",
+  "induction",
+  "thermomix",
+  "kenwood",
+  "cookeo",
+  "steamer",
+  "airfryer",
+] as const;
+export type ApplianceId = (typeof APPLIANCES)[number];
+
+// Les durées (entier de 1 à 600) sont validées par le contrôle métier (scheduling/check-session.ts),
+// pour renvoyer à l'IA un constat `phases` lisible plutôt qu'une réponse illisible.
+export const PhaseSchema = z.object({
+  id: z.string(),
+  description: z.string(),
+  minutes: z.number(),
+  appliance: z.enum(APPLIANCES),
+  attended: z.boolean(),
+  after: z.array(z.string()),
+});
+export type Phase = z.infer<typeof PhaseSchema>;
+
 export const DishSchema = z.object({
   name: z.string(),
   day: z.enum(DAYS),
   ingredients: z.array(MenuIngredientSchema),
+  phases: z.array(PhaseSchema),
 });
 export type Dish = z.infer<typeof DishSchema>;
 

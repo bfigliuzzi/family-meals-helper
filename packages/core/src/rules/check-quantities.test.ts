@@ -22,7 +22,7 @@ function item(name: string, qty: number, over: Partial<MenuIngredient> = {}): Me
 }
 
 function oneDish(...ingredients: MenuIngredient[]): Menu {
-  return { dishes: [{ name: "Plat", day: "mon", ingredients }] };
+  return { dishes: [{ name: "Plat", day: "mon", ingredients, phases: [] }] };
 }
 
 describe("checkQuantities", () => {

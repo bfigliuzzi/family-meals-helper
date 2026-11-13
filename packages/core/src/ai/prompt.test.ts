@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Finding } from "../domain/finding.ts";
 import type { Menu } from "../domain/menu.ts";
+import { HOUSEHOLD_EQUIPMENT, equipmentPromptLines } from "../equipment/household.ts";
 import { REFERENTIAL } from "../ingredients/referential.ts";
 import { KEEPING_BY_NAME } from "../rules/conservation-table.ts";
 import { MONTH_NAMES_FR } from "../season/months.ts";
@@ -32,6 +33,32 @@ describe("buildSystemPrompt", () => {
     expect(system).toContain(
       "Le nom d'un plat ne cite jamais un ingrédient exclu, même précédé de « sans ».",
     );
+  });
+});
+
+describe("buildSystemPrompt : équipement et phases", () => {
+  const system = buildSystemPrompt(REFERENTIAL);
+  it("contient les lignes d'équipement générées depuis la constante", () => {
+    for (const line of equipmentPromptLines(HOUSEHOLD_EQUIPMENT)) expect(system).toContain(line);
+    expect(system).toContain("Vise 2 h à 2 h 30");
+    expect(system).toContain("au-delà de 3 h");
+  });
+  it("demande les phases : ligne JSON, appareils, préchauffage commun", () => {
+    expect(system).toContain(
+      '"phases":[{"id","description","minutes","appliance","attended","after"}]',
+    );
+    expect(system).toContain(
+      "`appliance` : none (à la main, ou attente comme une marinade), oven, induction, thermomix, kenwood, cookeo, steamer, airfryer.",
+    );
+    expect(system).toContain("Pas plus de 60 phases pour tout le menu.");
+    expect(system).toContain("Au plus 60 id.");
+    expect(system).toContain("nombre entier de minutes, de 1 à 600");
+    expect(system).toContain("« Préchauffer le four »");
+    expect(system).toContain("trois casseroles sur la plaque font trois phases");
+  });
+  it("ne pousse plus à utiliser tous les appareils", () => {
+    expect(system).not.toContain("Répartis les modes de cuisson");
+    expect(system).toContain("Tu n'as pas à utiliser tous les appareils.");
   });
 });
 
@@ -114,7 +141,7 @@ describe("buildUserPrompt", () => {
   });
   it("renvoie le menu précédent et chaque constat dans une correction", () => {
     const menu: Menu = {
-      dishes: [{ name: "Gratin", day: "mon", ingredients: [] }],
+      dishes: [{ name: "Gratin", day: "mon", ingredients: [], phases: [] }],
     };
     const findings: Finding[] = [
       {

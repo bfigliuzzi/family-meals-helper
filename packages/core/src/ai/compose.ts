@@ -62,7 +62,7 @@ function unreadable(message: string): MenuCheck {
     ingredient: null,
     message,
   };
-  return { findings: [finding], keeping: [], seasonUnchecked: [], toConfirm: [] };
+  return { findings: [finding], keeping: [], seasonUnchecked: [], toConfirm: [], session: null };
 }
 
 // Moins d'error, puis moins de warning ; à égalité, l'essai le plus récent.
@@ -166,7 +166,7 @@ export async function composeMenu(
         number,
         reply,
         menu: null,
-        check: { findings: [], keeping: [], seasonUnchecked: [], toConfirm: [] },
+        check: { findings: [], keeping: [], seasonUnchecked: [], toConfirm: [], session: null },
       };
       attempts.push(attempt);
       notify(attempt);

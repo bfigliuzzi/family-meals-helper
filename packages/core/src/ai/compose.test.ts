@@ -101,6 +101,56 @@ describe("composeMenu", () => {
     expect(result.stop).toBe("valid");
   });
 
+  it("renvoie une session de plus de 3 h à l'IA, puis s'arrête sur un menu valide", async () => {
+    const tooLong = variant((menu) => {
+      menu.dishes[2]!.phases.find((phase) => phase.id === "c3")!.minutes = 200;
+    });
+    const { model, prompts } = fakeModel([reply(tooLong), reply(menuOf())]);
+    const result = await composeMenu(input, deps(model));
+    expect(prompts).toHaveLength(2);
+    expect(prompts[1]?.user).toContain("- [error] [session-length]");
+    expect(result.stop).toBe("valid");
+    expect(result.best?.check.session?.minutes).toBe(135);
+  });
+
+  it("résout sur un menu de 3000 phases en chaîne, avec un constat `phases` (3000 + les 11 phases des autres plats)", async () => {
+    const huge = variant((menu) => {
+      menu.dishes[0]!.phases = Array.from({ length: 3000 }, (_, i) => ({
+        id: `x${i}`,
+        description: "étape",
+        minutes: 1,
+        appliance: "none" as const,
+        attended: false,
+        after: i === 0 ? [] : [`x${i - 1}`],
+      }));
+    });
+    const { model } = fakeModel([reply(huge)]);
+    const result = await composeMenu({ ...input, maxAttempts: 1 }, deps(model));
+    const messages = result.attempts[0]?.check.findings.map((finding) => finding.message);
+    expect(messages?.some((message) => message.includes("3011 phases ; 60 au plus"))).toBe(true);
+    expect(result.best?.check.session).toBeNull();
+  });
+
+  it("résout sur une phase de 150000 dépendances inconnues, avec un seul constat", async () => {
+    const huge = variant((menu) => {
+      menu.dishes[0]!.phases[0]!.after = Array.from({ length: 150000 }, (_, i) => `z${i}`);
+    });
+    const { model } = fakeModel([reply(huge)]);
+    const result = await composeMenu({ ...input, maxAttempts: 1 }, deps(model));
+    const phases = result.attempts[0]?.check.findings.filter(
+      (finding) => finding.rule === "phases",
+    );
+    expect(phases).toHaveLength(1);
+    expect(phases?.[0]?.message).toContain("150000 dépendances distinctes ; 60 au plus");
+    expect(result.best?.check.session).toBeNull();
+  });
+
+  it("n'a pas de planning pour une réponse illisible", async () => {
+    const { model } = fakeModel([reply("Voici votre menu !")]);
+    const result = await composeMenu({ ...input, maxAttempts: 1 }, deps(model));
+    expect(result.attempts[0]?.check.session).toBeNull();
+  });
+
   it("refuse un menu vide", async () => {
     const { model } = fakeModel([reply('{"dishes":[]}')]);
     const result = await composeMenu({ ...input, maxAttempts: 1 }, deps(model));
@@ -305,6 +355,7 @@ describe("composeMenu : constats souples", () => {
         name: "Bœuf bourguignon",
         day: "tue",
         ingredients: [item("bœuf à braiser", { qty: 1200 }), item("carotte", { qty: 500 })],
+        phases: menu.dishes[1]!.phases,
       };
       menu.dishes[2]!.ingredients[0]!.qty = 1200;
     });

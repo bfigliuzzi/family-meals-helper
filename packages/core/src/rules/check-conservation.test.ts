@@ -24,7 +24,7 @@ function item(name: string, over: Partial<MenuIngredient> = {}): MenuIngredient 
 
 // Un menu d'un seul plat, servi le jour donné.
 function oneDish(day: Day, ...ingredients: MenuIngredient[]): Menu {
-  return { dishes: [{ name: "Plat", day, ingredients }] };
+  return { dishes: [{ name: "Plat", day, ingredients, phases: [] }] };
 }
 
 function rules(menu: Menu, rule: string, level?: string): string[] {
@@ -93,7 +93,7 @@ describe("conservation : un aliment qui se congèle mal", () => {
 
 describe("conservation : lasagnes, tomate et salade", () => {
   const dishNamed = (name: string, day: Day, ...ingredients: MenuIngredient[]): Menu => ({
-    dishes: [{ name, day, ingredients }],
+    dishes: [{ name, day, ingredients, phases: [] }],
   });
   it("congèle des lasagnes le jeudi avec un avertissement et sans erreur", () => {
     const menu = dishNamed(
@@ -290,7 +290,7 @@ describe("poisson", () => {
 describe("réchauffage", () => {
   const pasta = item("pâtes");
   const dishNamed = (name: string, ...ingredients: MenuIngredient[]): Menu => ({
-    dishes: [{ name, day: "mon", ingredients }],
+    dishes: [{ name, day: "mon", ingredients, phases: [] }],
   });
   it("avertit pour des pâtes préparées d'avance dans « Pâtes à la bolognaise »", () => {
     expect(rules(dishNamed("Pâtes à la bolognaise", pasta), "reheat", "warning")).toHaveLength(1);
@@ -314,7 +314,7 @@ describe("réchauffage", () => {
   it("ne prend pas un légume dont le nom cite des pâtes pour des pâtes", () => {
     const squash = item("courge spaghetti", { category: "vegetable" });
     const thursday: Menu = {
-      dishes: [{ name: "Courge rôtie", day: "thu", ingredients: [squash] }],
+      dishes: [{ name: "Courge rôtie", day: "thu", ingredients: [squash], phases: [] }],
     };
     expect(rules(thursday, "reheat")).toEqual([]);
     const zoodles = item("spaghetti de courgette", { category: "vegetable" });
@@ -326,7 +326,14 @@ describe("réchauffage", () => {
   it("garde la congélation d'un légume dont le nom cite des pâtes, même dans un gratin", () => {
     const zoodles = item("spaghetti de courgette", { category: "vegetable" });
     const menu: Menu = {
-      dishes: [{ name: "Gratin de spaghetti de courgette", day: "fri", ingredients: [zoodles] }],
+      dishes: [
+        {
+          name: "Gratin de spaghetti de courgette",
+          day: "fri",
+          ingredients: [zoodles],
+          phases: [],
+        },
+      ],
     };
     expect(checkConservation(menu, ctx).keeping[0]?.toFreeze).toBe(true);
     expect(rules(menu, "conservation")).toEqual([]);
@@ -338,6 +345,7 @@ describe("réchauffage", () => {
           name: "Cannelloni ricotta épinards",
           day: "thu",
           ingredients: [item("cannelloni", { category: "refined-starch" })],
+          phases: [],
         },
       ],
     };
@@ -378,12 +386,13 @@ describe("ordre des jours", () => {
   it("met le plat de 1 j le lundi quand des plats de 3 j et 4 j le précèdent", () => {
     const menu: Menu = {
       dishes: [
-        { name: "Poulet", day: "mon", ingredients: [item("cuisse de poulet")] },
-        { name: "Poireaux", day: "wed", ingredients: [item("poireau")] },
+        { name: "Poulet", day: "mon", ingredients: [item("cuisse de poulet")], phases: [] },
+        { name: "Poireaux", day: "wed", ingredients: [item("poireau")], phases: [] },
         {
           name: "Champignons",
           day: "thu",
           ingredients: [item("champignon de Paris")],
+          phases: [],
         },
       ],
     };
@@ -394,22 +403,25 @@ describe("ordre des jours", () => {
   it("met le chou non congelable le jeudi et les légumes le vendredi, jamais le chou le vendredi", () => {
     const menu: Menu = {
       dishes: [
-        { name: "Légumes", day: "fri", ingredients: [item("carotte")] },
-        { name: "Chou", day: "mon", ingredients: [item("chou vert")] },
+        { name: "Légumes", day: "fri", ingredients: [item("carotte")], phases: [] },
+        { name: "Chou", day: "mon", ingredients: [item("chou vert")], phases: [] },
         {
           name: "Champignons 1",
           day: "tue",
           ingredients: [item("champignon de Paris")],
+          phases: [],
         },
         {
           name: "Champignons 2",
           day: "wed",
           ingredients: [item("champignon de Paris")],
+          phases: [],
         },
         {
           name: "Champignons 3",
           day: "thu",
           ingredients: [item("champignon de Paris")],
+          phases: [],
         },
       ],
     };
@@ -425,17 +437,20 @@ describe("ordre des jours", () => {
           name: "Poulet un",
           day: "mon",
           ingredients: [item("cuisse de poulet")],
+          phases: [],
         },
-        { name: "Légumes", day: "tue", ingredients: [item("carotte")] },
+        { name: "Légumes", day: "tue", ingredients: [item("carotte")], phases: [] },
         {
           name: "Poulet deux",
           day: "wed",
           ingredients: [item("blanc de poulet")],
+          phases: [],
         },
         {
           name: "Champignons",
           day: "thu",
           ingredients: [item("champignon de Paris")],
+          phases: [],
         },
       ],
     };
@@ -444,7 +459,7 @@ describe("ordre des jours", () => {
     // la même proposition est émise quand les deux plats ne sont pas du même poulet
     const other: Menu = {
       dishes: menu.dishes.map((dish, i) =>
-        i === 2 ? { ...dish, ingredients: [item("bœuf haché")] } : dish,
+        i === 2 ? { ...dish, ingredients: [item("bœuf haché")], phases: [] } : dish,
       ),
     };
     expect(rules(other, "day-order")).toHaveLength(1);
@@ -454,6 +469,7 @@ describe("ordre des jours", () => {
       name,
       day,
       ingredients,
+      phases: [],
     });
     const chicken = item("cuisse de poulet");
     const eggs = item("œuf", { qty: 4, unit: "piece" });

@@ -41,7 +41,7 @@ export function createAnthropicMenuModel(opts: AnthropicOptions): MenuModel {
       try {
         message = await client.messages.create({
           model: opts.model,
-          max_tokens: opts.maxTokens ?? 4000,
+          max_tokens: opts.maxTokens ?? 8000,
           system: [
             {
               type: "text",

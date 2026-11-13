@@ -1,6 +1,9 @@
 import type { Category } from "../domain/ingredient.ts";
 import type { Finding } from "../domain/finding.ts";
 import type { Menu } from "../domain/menu.ts";
+import { HOUSEHOLD_EQUIPMENT } from "../equipment/household.ts";
+import { checkSession } from "../scheduling/check-session.ts";
+import type { SessionPlan } from "../scheduling/plan-session.ts";
 import { checkSeason } from "../season/check-season.ts";
 import { checkBalance } from "./check-balance.ts";
 import { checkConservation } from "./check-conservation.ts";
@@ -16,6 +19,8 @@ export interface MenuCheck {
   keeping: DishKeeping[];
   seasonUnchecked: string[];
   toConfirm: { name: string; category: Category }[];
+  // Planning de la session ; null quand les phases sont fausses ou qu'il n'y a pas de menu lisible.
+  session: SessionPlan | null;
 }
 
 export function checkMenu(menu: Menu, ctx: CheckContext): MenuCheck {
@@ -48,10 +53,14 @@ export function checkMenu(menu: Menu, ctx: CheckContext): MenuCheck {
     ...checkBalance(menu, ctx),
     ...checkQuantities(menu, ctx),
   );
+  const session = checkSession(menu, HOUSEHOLD_EQUIPMENT);
+  // Pas de spread : un tableau de constats ne doit jamais devenir une liste d'arguments.
+  for (const finding of session.findings) findings.push(finding);
   return {
     findings,
     keeping: conservation.keeping,
     seasonUnchecked: season.unchecked,
     toConfirm,
+    session: session.plan,
   };
 }
