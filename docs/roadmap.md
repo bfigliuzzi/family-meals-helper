@@ -11,7 +11,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 | 0 | Socle du monorepo | — | `livré` (2026-11-13, `baebfc7`) |
 | 1 | Tracer : composition IA en ligne de commande | 0 | `livré` (2026-11-13, `7dc9b43` et `ebe6cd1`) |
 | 2 | Conservation, équilibre et quantités | 1 | `livré` (2026-11-13, `908c016` et `52960c8`) |
-| 3 | Équipement et planning de session | 1 | à faire |
+| 3 | Équipement et planning de session | 1 | `livré` (2026-11-13, `5b98d7b`) |
 | 4 | Détail, liste de courses et PDF | 2, 3 | à faire |
 | 5 | App desktop : coquille, réglages, persistance | 4 | à faire |
 | 6 | App desktop : session, ingrédients, historique | 5 | à faire |
@@ -68,7 +68,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 - Un test du cycle de correction avec un faux client IA qui renvoie d'abord un menu fautif.
 - Une démonstration réelle : `compose "un bœuf bourguignon, 5 dîners" --exclude courgette` renvoie un menu sans courgette et sans légume hors saison.
 
-**Ce que ça ne fera PAS (visible)** : pas de conservation, d'équilibre ni de planning ; pas de recettes détaillées ; pas d'interface ; pas de modification du menu courant (une demande = une composition).
+**Ce que ça ne fera PAS (visible)** : pas de conservation, d'équilibre ni de planning (ces lots sont livrés depuis, voir les lots 2 et 3) ; pas de recettes détaillées ; pas d'interface ; pas de modification du menu courant (une demande = une composition).
 
 **Contrat de code** : le lot 1 suit `docs/conventions-core.md` (code Node dans `src/node/`, accès extérieurs par les ports (le SDK reçoit un `fetch` adapté de `HttpClient`, les fonctions métier une date fournie par `Clock`), pas de `globalThis` ni de `console` dans le code pur, `Parameters<typeof globalThis.fetch>[1]` pour les types de requête, pas de `format()` sans argument, `z.prettifyError` pour les erreurs zod). Le SDK Anthropic vit dans `packages/core/src/ai/`.
 
@@ -165,11 +165,11 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 - **Aucune démonstration réelle avec l'IA dans ce lot**, par décision. On ne sait donc pas encore si le modèle respecte les nouvelles consignes du prompt (grammes obligatoires pour la viande, le poisson et la charcuterie ; poisson surgelé ; `sameDay`) ni combien d'essais il faut. Le prompt système est plus long (il reste en cache). La première démonstration réelle viendra avec un lot suivant.
 
 **Ce que ça ne fera PAS (visible)**
-- Pas de planning ni de durée de session (lot 3).
+- Pas de planning ni de durée de session (lot 3). **Livré au lot 3 (2026-11-13)** : ne vaut plus.
 - Pas de plafond de budget : reporté au lot 7.
 - Pas de constat « menu sans poisson » ni de poisson gras demandé : décision de l'utilisateur.
 - Sardine et maquereau ne sont pas exclus par `core` : il faut `--exclude sardine --exclude maquereau` (réglages d'exclusions au lot 5).
-- Pas de contrôle de la durée de cuisson du poisson (« 15 minutes au plus ») : pas de durées avant le lot 3. Le prompt la demande.
+- Pas de contrôle de la durée de cuisson du poisson (« 15 minutes au plus ») : pas de durées avant le lot 3. Le prompt la demande. **Depuis le lot 3 (2026-11-13), il y a des durées de phases, mais ce contrôle n'existe toujours pas** (voir « Ce que ça ne fera PAS » du lot 3).
 - Pas de mode de cuisson : une omelette ou des pommes de terre à l'eau marquées « préparées d'avance » sont traitées comme une préparation aux œufs ou une purée ; seul le prompt les envoie au soir même.
 - Pas de consignes de sécurité complètes (2 h à température ambiante, refroidir avant le frigo) dans `compose` : elles iront dans le PDF (lot 4). La consigne de congélation dit « après refroidissement rapide » et « ne pas recongeler ».
 - Pas de durée par type de plat (soupe 5 j, quiche) : la durée vient des catégories des ingrédients.
@@ -196,6 +196,8 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 
 ## Lot 3 : équipement et planning de session
 
+**Statut** : `livré` le 2026-11-13, commit `5b98d7b` (branche `lot-3-equipement-planning`), CI GitHub verte.
+
 **Objectif** : calculer la durée réelle d'une session et refuser ce qui ne tient pas dans la cuisine ou dans 3 h.
 
 **Contenu** (conception §3.2, §6.4)
@@ -203,9 +205,38 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 - `scheduling/` : construction du planning à partir d'étapes (dépendances, appareil, présence de l'utilisateur), contrôle des emplacements par appareil, une tâche manuelle à la fois, un appareil d'appoint au plus, 3 h au maximum.
 - L'IA fournit les grandes phases de chaque plat dès la proposition ; `compose` affiche la durée calculée.
 
+**Ce qui a changé en cours de lot** (décisions de l'utilisateur, 2026-11-13 ; le contenu ci-dessus est le contenu prévu)
+- **Capacités** au plus : four 2, plaque 4, Thermomix 1, Kenwood 1, chaque appareil d'appoint 1 ; un seul appareil d'appoint par session.
+- **Des maximums, pas un idéal** : le prompt le dit, pour que l'IA n'utilise pas tous les appareils par principe.
+- **Plus de 3 h = `error`** ; **2 h 30 : objectif demandé dans le prompt et rappelé dans l'affichage, sans constat** : entre 2 h 30 et 3 h, aucun constat.
+- **Équipement constant, sans option de ligne de commande** : `HOUSEHOLD_EQUIPMENT` (`equipment/household.ts`) jusqu'au lot 5. Pas un fichier par appareil, contrairement à ce que prévoyait « Contenu » (note datée dans la conception, §3.2).
+- **Plats entièrement `sameDay` hors planning** : ils se font le soir.
+- **Plafond de jetons par défaut passé de 4000 à 8000** (`max_tokens` dans `anthropic-client.ts`, une option `maxTokens` peut le remplacer) : la réponse porte maintenant les phases de chaque plat.
+- **Planificateur à deux ordres** (révision après relecture) : glouton par insertion, il essaie deux ordres et garde le plus court. La première version n'en essayait qu'un.
+
 **Livrable vérifiable** : tests du planificateur sur des cas construits à la main (four saturé, deux appareils d'appoint, dépassement de 3 h, cas qui tient en 2 h 15) ; `compose` affiche une durée de session.
 
-**Ce que ça ne fera PAS (visible)** : pas d'étapes détaillées, seulement les grandes phases.
+**Bilan de validation du livrable**
+- Vérifié sans appel réel : 434 tests Vitest (26 fichiers).
+  - Les quatre cas du livrable sont testés : four saturé, deux appareils d'appoint, plus de 3 h, et 2 h 15, qui est le `balancedMenu()` des fixtures.
+  - Quatre nouveaux constats `error` : `phases` (forme des phases), `equipment` (appareil absent), `extra-appliance` (plus d'un appareil d'appoint), `session-length` (le message nomme le plat qui finit le plus tard).
+  - `compose` affiche la durée de session, l'appareil d'appoint et le planning ; `compose --dry-run` a été vérifié.
+- **Aucune démonstration réelle avec l'IA dans ce lot.** On ne sait pas si Mammouth accepte le nouveau schéma (le champ `phases`), ni combien d'essais il faut. À faire à la première occasion.
+
+**Ce que ça ne fera PAS (visible)**
+- Pas d'étapes détaillées, seulement les grandes phases.
+- Les durées de l'IA sont crues sur parole.
+- Un préchauffage ou une dépendance oubliés peuvent sous-estimer la durée, sans constat. Le prompt demande un préchauffage de 15 minutes ; son effet sur la durée dépend du planning (des phases qui se chevauchent peuvent l'absorber).
+- « Une phase = une place d'un appareil », le préchauffage commun, et l'exclusion du refroidissement et de la vaisselle sont demandés à l'IA par le prompt ; le code ne les vérifie pas.
+- Le planificateur n'est pas optimal. Mesure faite en relecture : 300 tirages de menus chargés en travail à la main, 5 à 7 phases, comparés à tous les ordres d'insertion compatibles. 7 cas sur 300 sont plus longs que le meilleur ordre, jusqu'à 60 min de plus. Aucun ne fait passer un menu faisable au-dessus de 180 min dans cet échantillon. Un faux refus reste possible ; sa fréquence n'est pas mesurée.
+- Tout plat qui n'est pas entièrement `sameDay` doit recevoir au moins une phase, même si sa préparation est partagée avec un autre plat ; sinon constat `phases`. Un plat entièrement `sameDay` doit avoir `phases` vide.
+- Pas de contrôle « une seule cuisson longue », ni « poisson en 15 minutes » : le prompt le demande, le code ne le vérifie pas.
+- Après 3 essais, le menu retenu peut s'afficher sans durée (« durée non calculée »), si ses phases restent fausses.
+- Les séparateurs Unicode et les caractères de direction ne sont pas neutralisés dans la sortie de `compose`.
+
+**Reliquats du lot 3** (dettes connues, chacune reprise dans le lot qui doit la traiter) :
+- **Validation d'un équipement modifiable** (capacités entières ≥ 1, `id` uniques) : reportée au lot 5, qui rend l'équipement modifiable (ajoutée à son contenu).
+- **Démonstration réelle** : à faire avec la clé Mammouth (appels rares), à la première occasion.
 
 ## Lot 4 : détail, liste de courses et PDF
 
@@ -228,6 +259,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 **Contenu** (conception §3, §9 Réglages, §10)
 - Implémentations Tauri des ports : SQLite (plugin officiel), trousseau macOS pour la clé d'API, plugin HTTP.
 - Stockage des réglages : exclusions avec raison, équipement disponible, modèle Claude.
+- Validation de l'équipement modifiable (reportée du lot 3) : capacités entières ≥ 1, `id` uniques.
 - Écran Réglages et navigation entre les quatre écrans (vides pour Nouvelle session, Ingrédients, Historique).
 - Une interface sobre et soignée ; le choix du système de composants est à trancher avant ce lot (voir « Questions ouvertes »).
 - Reliquats du lot 0 à traiter ici : CSP (`"csp": null`) et permissions `core:default` remplacées par des permissions minimales ; décider d'une vérification Rust en CI (lot 0, « Reliquats »).

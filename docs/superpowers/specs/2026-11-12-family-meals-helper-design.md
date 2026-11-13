@@ -2,7 +2,7 @@
 
 Statut : validée par l'utilisateur le 12/11/2026. Ce document est la source de vérité du produit. Le découpage en lots est dans `docs/roadmap.md`.
 
-Mise à jour du 13/11/2026, après le lot 2 : des notes datées en §3.1, §5.1, §6.2, §6.3, §6.5, §6.6, §7 et §8 disent ce qui a changé depuis la validation, et pourquoi. Le texte qui ne vaut plus est gardé, marqué « ne vaut plus depuis ».
+Mise à jour du 13/11/2026, après les lots 2 et 3 : des notes datées en §3.1, §3.2, §5.1, §6.2, §6.3, §6.4, §6.5, §6.6, §7 et §8 disent ce qui a changé depuis la validation, et pourquoi. Le texte qui ne vaut plus est gardé, marqué « ne vaut plus depuis ».
 
 ## 1. Intention
 
@@ -44,6 +44,8 @@ Le partage du travail entre l'IA et le code :
   - un airfryer, petit modèle, pour de petites quantités.
 - L'outil choisit un appareil d'appoint seulement quand il fait gagner du temps, et il le nomme. Une session sans appareil d'appoint est normale : la place en cuisine est limitée.
 - L'équipement est stocké dans les réglages et modifiable. Chaque appareil est décrit par un fichier de données : nom, nombre de cuissons simultanées, usages, toujours disponible ou d'appoint. Ajouter un appareil revient à ajouter un fichier.
+
+> **Note du 2026-11-13 (lot 3)** : jusqu'au lot 5, l'équipement est la constante gelée `HOUSEHOLD_EQUIPMENT` (`packages/core/src/equipment/household.ts`), sans option de ligne de commande. L'écart avec ce qui précède : il n'y a pas un fichier par appareil, mais une seule table. Les capacités sont des maximums, pas un objectif : four 2 plats, plaque 4 feux, Thermomix 1, Kenwood 1, et 1 pour chaque appareil d'appoint. Une session n'utilise qu'un seul appareil d'appoint. Les réglages modifiables arrivent au lot 5.
 
 ## 4. Périmètre
 
@@ -147,7 +149,7 @@ Deux consignes vont seulement dans le prompt : la viande en quantité moindre qu
 - le poisson et les fruits de mer sont facultatifs et peu fréquents ;
 - ils sont **seulement surgelés ou en conserve, jamais frais** : une autre forme donne un constat `error` (règle `fish`) ;
 - **aucun constat pour un menu sans poisson**, et aucun poisson gras demandé ;
-- un poisson préparé d'avance suit les règles normales (1 jour au frigo, se congèle). Le prompt conseille de cuire le poisson surgelé le soir même, en 15 minutes au plus ; cette durée n'est pas contrôlée, car il n'y a pas de durées avant le lot 3 ;
+- un poisson préparé d'avance suit les règles normales (1 jour au frigo, se congèle). Le prompt conseille de cuire le poisson surgelé le soir même, en 15 minutes au plus ; cette durée n'est pas contrôlée, car il n'y a pas de durées avant le lot 3 ; **depuis le lot 3 (2026-11-13), il y a des durées de phases, mais ce contrôle n'existe toujours pas** ;
 - les fruits de mer ne se réchauffent pas : ils sont ajoutés le soir même (`sameDay`), sinon constat `error` (règle `reheat`) ;
 - le thon en conserve est accepté ; la sardine et le maquereau, que le foyer n'aime pas, ne sont pas interdits dans le code : ils passent par la liste d'exclusions (`--exclude sardine --exclude maquereau` en ligne de commande).
 
@@ -162,6 +164,13 @@ Deux consignes vont seulement dans le prompt : la viande en quantité moindre qu
   - qu'il y a au plus un appareil d'appoint ;
   - que la durée totale tient en 3 h ou moins.
 - La durée affichée est toujours celle calculée par le code.
+
+> **Précisions du lot 3 (2026-11-13)** : ce qui est livré, en code.
+> - **Forme d'une phase** : `id`, `description`, `minutes` (entier de 1 à 600), `appliance` (liste fermée : `none`, `oven`, `induction`, `thermomix`, `kenwood`, `cookeo`, `steamer`, `airfryer`), `attended` (l'utilisateur est mobilisé), `after` (au plus 60 `id` distincts). Un menu a 60 phases au plus.
+> - **Une phase occupe une place d'un appareil** : c'est le modèle du calcul. Les consignes suivantes sont demandées à l'IA par le prompt, et le code ne les vérifie pas : le préchauffage du four est une phase commune dont dépendent toutes les cuissons au four ; le refroidissement et la vaisselle ne sont pas des phases ; une phase correspond à une seule occupation physique d'un appareil.
+> - **Calcul** : les plats dont tous les ingrédients sont `sameDay` sont hors planning (ils se font le soir, avec `phases` vide ; un plat qui n'est pas entièrement `sameDay` doit avoir au moins une phase). Le planificateur compte toutes les phases fournies. C'est un glouton par insertion : il essaie deux ordres et garde le planning le plus court. La durée affichée est celle du planning construit.
+> - **Seuils** : plus de 3 h (180 minutes) donne un constat `error` (`session-length`, dont le message nomme le plat qui finit le plus tard). L'objectif de 2 h à 2 h 30 ne déclenche aucun constat : il est demandé dans le prompt et rappelé dans l'affichage et dans le message `session-length`.
+> - **Constats ajoutés** : `phases` (forme des phases), `equipment` (appareil absent de l'équipement), `extra-appliance` (plus d'un appareil d'appoint), `session-length`.
 
 ### 6.5 Saison et exclusions (règles bloquantes)
 - **Saison** : une table des fruits et légumes de saison en France, mois par mois, stockée dans le dépôt.
