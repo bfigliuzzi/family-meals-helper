@@ -1,6 +1,6 @@
-import type { Finding } from "../domain/finding.ts";
+import type { Finding, RuleId } from "../domain/finding.ts";
 import type { IngredientRef } from "../domain/ingredient.ts";
-import type { Menu } from "../domain/menu.ts";
+import type { Menu, SessionDay } from "../domain/menu.ts";
 import { buildIngredientIndex } from "../ingredients/index-lookup.ts";
 import { checkMenu } from "../rules/check-menu.ts";
 import type { MenuCheck } from "../rules/check-menu.ts";
@@ -16,6 +16,7 @@ export interface ComposeInput {
   request: string;
   exclusions: readonly string[];
   month: Month;
+  sessionDay: SessionDay;
   maxAttempts: 1 | 2 | 3;
 }
 
@@ -49,6 +50,10 @@ function countErrors(check: MenuCheck): number {
   return check.findings.filter((finding) => finding.level === "error").length;
 }
 
+function countWarnings(check: MenuCheck): number {
+  return check.findings.filter((finding) => finding.level === "warning").length;
+}
+
 function unreadable(message: string): MenuCheck {
   const finding: Finding = {
     level: "error",
@@ -57,16 +62,32 @@ function unreadable(message: string): MenuCheck {
     ingredient: null,
     message,
   };
-  return { findings: [finding], seasonUnchecked: [], toConfirm: [] };
+  return { findings: [finding], keeping: [], seasonUnchecked: [], toConfirm: [] };
 }
 
+// Moins d'error, puis moins de warning ; à égalité, l'essai le plus récent.
 function bestOf(attempts: readonly Attempt[]): Attempt | null {
   let best: Attempt | null = null;
   for (const attempt of attempts) {
     if (attempt.menu === null) continue;
-    if (best === null || countErrors(attempt.check) <= countErrors(best.check)) best = attempt;
+    if (best === null || !isWorse(attempt.check, best.check)) best = attempt;
   }
   return best;
+}
+
+function isWorse(candidate: MenuCheck, best: MenuCheck): boolean {
+  const left = [countErrors(candidate), countWarnings(candidate)];
+  const right = [countErrors(best), countWarnings(best)];
+  for (const [i, value] of left.entries()) {
+    if (value !== right[i]) return value > right[i]!;
+  }
+  return false;
+}
+
+// Constats à renvoyer à l'IA : tout `error`, et chaque règle `warning` une seule fois (un seul essai de
+// correction par règle souple, conception §2).
+function findingsToSend(check: MenuCheck, sent: ReadonlySet<RuleId>): Finding[] {
+  return check.findings.filter((finding) => finding.level === "error" || !sent.has(finding.rule));
 }
 
 // Ne rejette jamais : une erreur du modèle devient stop "technical-error", les essais déjà payés restent.
@@ -83,6 +104,7 @@ export async function composeMenu(
     request: input.request,
     exclusions: input.exclusions,
     month: input.month,
+    sessionDay: input.sessionDay,
     dinners: expectedDinners(input.request),
     index: buildIngredientIndex(deps.refs),
     seasonTable: deps.seasonTable,
@@ -94,6 +116,9 @@ export async function composeMenu(
   let technicalError: string | null = null;
   let calls = 0;
   let failedCalls = 0;
+  // Constats du dernier essai à renvoyer, et règles `warning` déjà renvoyées.
+  let pending: Finding[] = [];
+  const sent = new Set<RuleId>();
   // Plafond dans le moteur : jamais plus de 3 essais, quelle que soit la valeur reçue.
   const maxAttempts = Math.min(3, Math.max(1, Math.trunc(input.maxAttempts)));
   // Un journal qui lève ne doit pas faire perdre une composition déjà payée.
@@ -111,6 +136,7 @@ export async function composeMenu(
       request: input.request,
       exclusions: input.exclusions,
       month: input.month,
+      sessionDay: input.sessionDay,
       dinners: ctx.dinners,
       inSeason,
       ...(previous === undefined
@@ -119,7 +145,7 @@ export async function composeMenu(
             previous: {
               menu: previous.menu,
               rawText: previous.reply.text,
-              findings: previous.check.findings,
+              findings: pending,
             },
           }),
     });
@@ -140,7 +166,7 @@ export async function composeMenu(
         number,
         reply,
         menu: null,
-        check: { findings: [], seasonUnchecked: [], toConfirm: [] },
+        check: { findings: [], keeping: [], seasonUnchecked: [], toConfirm: [] },
       };
       attempts.push(attempt);
       notify(attempt);
@@ -155,11 +181,14 @@ export async function composeMenu(
     attempts.push(attempt);
     notify(attempt);
 
-    // Un menu lisible et sans erreur est accepté, même si la réponse est marquée coupée.
-    if (attempt.menu !== null && countErrors(attempt.check) === 0) {
+    // Un menu lisible sans constat à renvoyer est accepté, même si la réponse est marquée coupée ;
+    // des warning peuvent rester.
+    pending = attempt.menu === null ? attempt.check.findings : findingsToSend(attempt.check, sent);
+    if (attempt.menu !== null && pending.length === 0) {
       stop = "valid";
       break;
     }
+    for (const finding of pending) if (finding.level === "warning") sent.add(finding.rule);
     if (reply.stopReason === "max_tokens" || reply.stopReason === "model_context_window_exceeded") {
       stop = "truncated";
       break;

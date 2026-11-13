@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { Day, Menu, MenuIngredient } from "../domain/menu.ts";
-import { DAYS } from "../domain/menu.ts";
+import type { Menu, MenuIngredient } from "../domain/menu.ts";
 import { REFERENTIAL } from "../ingredients/referential.ts";
+import { balancedMenu } from "../rules/fixtures/menus.ts";
 import { SEASON_TABLE } from "../season/season-table.ts";
 import { composeMenu, exitCodeOf } from "./compose.ts";
 import type { ComposeInput } from "./compose.ts";
@@ -31,21 +31,32 @@ function item(name: string, over: Partial<MenuIngredient> = {}): MenuIngredient 
   return { name, qty: 400, unit: "g", form: "fresh", category: null, sameDay: false, ...over };
 }
 
+// Part de balancedMenu() : `extra` s'ajoute au plat a, `qty` est la quantité de carottes du plat b.
 function menuOf(extra: MenuIngredient[] = [], qty = 400): string {
-  const menu: Menu = {
-    dishes: DAYS.map((day: Day, i) => ({
-      name: `Plat ${i + 1}`,
-      day,
-      ingredients: i === 0 ? [item("carotte", { qty }), ...extra] : [item("carotte", { qty })],
-    })),
-  };
+  const menu = balancedMenu();
+  menu.dishes[0]!.ingredients.push(...extra);
+  menu.dishes[1]!.ingredients[1] = item("carotte", { qty });
   return JSON.stringify(menu);
 }
+
+// balancedMenu() modifié par `change`, sérialisé.
+function variant(change: (menu: Menu) => void): string {
+  const menu = balancedMenu();
+  change(menu);
+  return JSON.stringify(menu);
+}
+
+const withoutPulses = (menu: Menu): void => {
+  menu.dishes[3]!.ingredients = menu.dishes[3]!.ingredients.filter(
+    (ingredient) => ingredient.name !== "lentilles corail",
+  );
+};
 
 const input: ComposeInput = {
   request: "un bœuf bourguignon, 5 dîners",
   exclusions: ["courgette"],
   month: 11,
+  sessionDay: "sun",
   maxAttempts: 3,
 };
 const deps = (model: MenuModel) => ({ model, refs: REFERENTIAL, seasonTable: SEASON_TABLE });
@@ -69,9 +80,9 @@ describe("composeMenu", () => {
   });
 
   it("s'arrête après 3 essais fautifs et garde le plus récent à égalité", async () => {
-    const exclusion = { ...input, exclusions: ["poulet"] };
+    const exclusion = { ...input, exclusions: ["dinde"] };
     const { model, prompts } = fakeModel([
-      reply(menuOf([item("blanc de poulet"), item("tomate")])),
+      reply(menuOf([item("dinde"), item("tomate")])),
       reply(menuOf([item("tomate")])),
       reply(menuOf([item("tomate")], 500)),
     ]);
@@ -131,7 +142,9 @@ describe("composeMenu", () => {
     expect(result.stop).toBe("technical-error");
     expect(exitCodeOf(result)).toBe(1);
     const text = renderComposeResult(result, input);
-    expect(text).toContain("a. Plat 1 (lundi)");
+    expect(text).toContain(
+      "a. Cabillaud, fondue de poireaux et riz complet (lundi · se garde 2 j au frigo)",
+    );
     expect(text).toContain("tomate n'est pas de saison");
     expect(text).toContain("jetons de sortie : 50");
     expect(text).toContain("Erreur technique : réseau coupé");
@@ -232,5 +245,96 @@ describe("composeMenu", () => {
       onAttempt: (attempt) => seen.push(attempt.number),
     });
     expect(seen).toEqual([1, 2]);
+  });
+});
+
+describe("composeMenu : constats souples", () => {
+  const rulesOf = (result: Awaited<ReturnType<typeof composeMenu>>) =>
+    result.best?.check.findings.map((finding) => `${finding.level}:${finding.rule}`);
+
+  it("renvoie un warning une seule fois : le même menu deux fois donne 2 appels", async () => {
+    const noPulses = variant(withoutPulses);
+    const { model, prompts } = fakeModel([reply(noPulses), reply(noPulses)]);
+    const result = await composeMenu(input, deps(model));
+    expect(prompts).toHaveLength(2);
+    expect(prompts[1]?.user).toContain("- [warning] [pulses]");
+    expect(prompts[1]?.user).toContain("Corrige tous les [error].");
+    expect(result.stop).toBe("valid");
+    expect(rulesOf(result)).toEqual(["warning:pulses"]);
+    expect(exitCodeOf(result)).toBe(0);
+  });
+
+  it("ne relance pas d'essai pour un warning d'une règle déjà renvoyée, même si son texte change", async () => {
+    const bigBeef = (qty: number) =>
+      variant((menu) => {
+        menu.dishes[2]!.ingredients[0]!.qty = qty;
+      });
+    const { model, prompts } = fakeModel([reply(bigBeef(1200)), reply(bigBeef(1400))]);
+    const result = await composeMenu(input, deps(model));
+    expect(prompts).toHaveLength(2);
+    expect(result.stop).toBe("valid");
+    expect(result.best?.check.findings[0]?.message).toContain("350 g par adulte");
+    expect(prompts[1]?.user).toContain("300 g par adulte");
+  });
+
+  it("envoie le warning avec l'error, puis ne le renvoie plus", async () => {
+    const noPulses = (extra: MenuIngredient[], qty = 400) =>
+      variant((menu) => {
+        withoutPulses(menu);
+        menu.dishes[0]!.ingredients.push(...extra);
+        menu.dishes[1]!.ingredients[1] = item("carotte", { qty });
+      });
+    const { model, prompts } = fakeModel([
+      reply(noPulses([item("tomate")])),
+      reply(noPulses([item("tomate")], 500)),
+      reply(noPulses([])),
+    ]);
+    const result = await composeMenu(input, deps(model));
+    expect(prompts).toHaveLength(3);
+    expect(prompts[1]?.user).toContain("- [error] [season]");
+    expect(prompts[1]?.user).toContain("- [warning] [pulses]");
+    expect(prompts[2]?.user).toContain("- [error] [season]");
+    expect(prompts[2]?.user).not.toContain("- [warning]");
+    expect(result.stop).toBe("valid");
+    expect(rulesOf(result)).toEqual(["warning:pulses"]);
+  });
+
+  it("le plat demandé ne masque pas le plafond : renvoyé une fois, avec la consigne de la demande", async () => {
+    const twoBeef = variant((menu) => {
+      menu.dishes[1] = {
+        name: "Bœuf bourguignon",
+        day: "tue",
+        ingredients: [item("bœuf à braiser", { qty: 1200 }), item("carotte", { qty: 500 })],
+      };
+      menu.dishes[2]!.ingredients[0]!.qty = 1200;
+    });
+    const { model, prompts } = fakeModel([reply(twoBeef), reply(twoBeef)]);
+    const result = await composeMenu(
+      { ...input, request: "un bœuf bourguignon, 5 dîners" },
+      deps(model),
+    );
+    expect(prompts).toHaveLength(2);
+    const meatLine = prompts[1]?.user
+      .split("\n")
+      .find((line) => line.startsWith("- [warning] [meat]"));
+    expect(meatLine).toContain("« Bœuf bourguignon »");
+    expect(meatLine).toContain("« Bœuf braisé aux carottes »");
+    expect(meatLine).toContain("garde-le et ajuste les autres");
+    expect(prompts[1]?.user).toContain("sans retirer un plat que la demande nomme");
+    expect(result.stop).toBe("valid");
+    expect(exitCodeOf(result)).toBe(0);
+  });
+
+  it("à erreurs égales, garde l'essai qui a le moins de warning", async () => {
+    const faulty = menuOf([item("tomate")]);
+    const faultyNoPulses = variant((menu) => {
+      withoutPulses(menu);
+      menu.dishes[0]!.ingredients.push(item("tomate"));
+      menu.dishes[1]!.ingredients[1] = item("carotte", { qty: 500 });
+    });
+    const { model } = fakeModel([reply(faulty), reply(faultyNoPulses)]);
+    const result = await composeMenu({ ...input, maxAttempts: 2 }, deps(model));
+    expect(result.attempts).toHaveLength(2);
+    expect(result.best?.number).toBe(1);
   });
 });

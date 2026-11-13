@@ -1,8 +1,10 @@
 import type { Finding } from "../domain/finding.ts";
+import type { Category } from "../domain/ingredient.ts";
 import { DAY_LABELS } from "../domain/menu.ts";
 import type { Menu } from "../domain/menu.ts";
 import { lightNormalize } from "../ingredients/normalize.ts";
 import type { CheckContext } from "./context.ts";
+import { categoryOf } from "./dish-profile.ts";
 
 const NUMBER_WORDS: Record<string, number> = { un: 1, deux: 2, trois: 3, quatre: 4, cinq: 5 };
 
@@ -22,6 +24,17 @@ export function expectedDinners(request: string): number {
   else if (matches.length === 1 && matches[0] !== undefined) count = valueOf(matches[0]);
   return count !== undefined && count >= 1 && count <= 5 ? count : 5;
 }
+
+// Catégories dont les plafonds et les quantités se calculent en grammes (conception §6.3, §6.6).
+const GRAMS_ONLY_CATEGORIES: readonly Category[] = [
+  "red-meat",
+  "pork",
+  "cured-meat",
+  "poultry",
+  "fish",
+  "oily-fish",
+  "seafood",
+];
 
 function error(dish: number | null, ingredient: string | null, message: string): Finding {
   return { level: "error", rule: "menu-shape", dish, ingredient, message };
@@ -64,6 +77,22 @@ export function checkMenuShape(menu: Menu, ctx: CheckContext): Finding[] {
             index,
             ingredient.name,
             `La quantité de « ${ingredient.name} » doit être strictement positive.`,
+          ),
+        );
+      }
+      // Sans grammes, les plafonds ne se calculent pas : un poids inconnu ne vaut pas « pas de dépassement ».
+      const category = categoryOf(ingredient, ctx.index);
+      if (
+        ingredient.name.trim() !== "" &&
+        ingredient.unit !== "g" &&
+        category !== null &&
+        GRAMS_ONLY_CATEGORIES.includes(category)
+      ) {
+        findings.push(
+          error(
+            index,
+            ingredient.name,
+            `Donne « ${ingredient.name} » en g : les plafonds de viande et les quantités se calculent en grammes.`,
           ),
         );
       }

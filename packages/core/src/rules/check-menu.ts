@@ -2,12 +2,18 @@ import type { Category } from "../domain/ingredient.ts";
 import type { Finding } from "../domain/finding.ts";
 import type { Menu } from "../domain/menu.ts";
 import { checkSeason } from "../season/check-season.ts";
+import { checkBalance } from "./check-balance.ts";
+import { checkConservation } from "./check-conservation.ts";
+import type { DishKeeping } from "./check-conservation.ts";
 import { checkExclusions } from "./check-exclusions.ts";
+import { checkQuantities } from "./check-quantities.ts";
 import { checkMenuShape } from "./menu-shape.ts";
 import type { CheckContext } from "./context.ts";
 
 export interface MenuCheck {
   findings: Finding[];
+  // Conservation de chaque plat, dans l'ordre du menu (vide quand il n'y a pas de menu lisible).
+  keeping: DishKeeping[];
   seasonUnchecked: string[];
   toConfirm: { name: string; category: Category }[];
 }
@@ -36,5 +42,16 @@ export function checkMenu(menu: Menu, ctx: CheckContext): MenuCheck {
       }
     }
   }
-  return { findings, seasonUnchecked: season.unchecked, toConfirm };
+  const conservation = checkConservation(menu, ctx);
+  findings.push(
+    ...conservation.findings,
+    ...checkBalance(menu, ctx),
+    ...checkQuantities(menu, ctx),
+  );
+  return {
+    findings,
+    keeping: conservation.keeping,
+    seasonUnchecked: season.unchecked,
+    toConfirm,
+  };
 }

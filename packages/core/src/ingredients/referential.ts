@@ -44,6 +44,7 @@ const shelf = group({
 });
 const canned = group({ category: "other", aisle: "savory-grocery", form: "canned", pantry: false });
 const meat = group({ category: "red-meat", aisle: "meat-fish", form: "fresh", pantry: false });
+const fish = group({ category: "fish", aisle: "frozen", form: "frozen", pantry: false });
 const dairy = group({ category: "dairy", aisle: "dairy", form: "fresh", pantry: false });
 const starch = group({
   category: "refined-starch",
@@ -192,18 +193,22 @@ export const REFERENTIAL: readonly IngredientRef[] = [
     { category: "pork" },
   ),
   meat("filet mignon de porc", { groups: ["porc", "viande"] }, { category: "pork" }),
+  // Charcuterie : « Les saucisses de porc ou de volaille […] font partie de la charcuterie »
+  // https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-l-alimentation-l-activite-physique-et-la-sedentarite/reduire/reduire-la-charcuterie
   meat(
     "saucisse",
     { variants: ["saucisse de Toulouse", "chipolata"], groups: ["porc", "viande"] },
-    { category: "pork" },
+    { category: "cured-meat" },
   ),
   meat("lardons", { groups: ["porc", "viande"] }, { category: "cured-meat" }),
   meat("jambon blanc", { groups: ["porc", "viande"] }, { category: "cured-meat" }),
   meat("chorizo", { groups: ["porc", "viande"] }, { category: "cured-meat" }),
-  meat("saumon", { groups: ["poisson"] }, { category: "oily-fish" }),
-  meat("maquereau", { groups: ["poisson"] }, { category: "oily-fish" }),
-  meat("cabillaud", { synonyms: ["dos de cabillaud"], groups: ["poisson"] }, { category: "fish" }),
-  meat("colin", { groups: ["poisson"] }, { category: "fish" }),
+  // Poisson : le foyer n'achète que du surgelé (ou de la conserve), jamais du frais (conception §6.3,
+  // décision de l'utilisateur) ; le rayon servira à la liste de courses.
+  fish("saumon", { groups: ["poisson"] }, { category: "oily-fish" }),
+  fish("maquereau", { groups: ["poisson"] }, { category: "oily-fish" }),
+  fish("cabillaud", { synonyms: ["dos de cabillaud"], groups: ["poisson"] }),
+  fish("colin", { groups: ["poisson"] }),
   // Œufs et crèmerie
   dairy("œuf", {}, { category: "egg" }),
   dairy("lait"),

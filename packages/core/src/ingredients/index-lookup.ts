@@ -23,6 +23,12 @@ const NEGATIVE_MARKERS = new Set([
   "jamais",
 ]);
 
+// Retire le mot « mais » (la conjonction) sans toucher à « maïs » : « mais pas de tomate » ne doit
+// pas faire lire « mais » comme du maïs. Limite : « mais » écrit pour « maïs » n'exempte plus le maïs.
+function withoutBut(sentence: string): string {
+  return sentence.replace(/(^|[^\p{L}])mais(?=$|[^\p{L}])/giu, "$1 ");
+}
+
 // Invariant N (roadmap, bilan du lot 1). Sert seulement à `requestedIn` : prendre à tort un
 // ingrédient pour demandé l'exempterait du contrôle de saison, donc on coupe large.
 // On découpe en phrases, seulement sur . ; ! ? et le retour à la ligne : ni virgule, ni
@@ -32,7 +38,7 @@ const NEGATIVE_MARKERS = new Set([
 function requestedParts(text: string): string[] {
   const parts: string[] = [];
   for (const sentence of text.split(/[.;!?\n]/)) {
-    const words = lightNormalize(sentence)
+    const words = lightNormalize(withoutBut(sentence))
       .split(" ")
       .filter((word) => word !== "");
     const marker = words.findIndex((word) => NEGATIVE_MARKERS.has(word));

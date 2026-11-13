@@ -14,6 +14,7 @@ function ctxFor(exclusion: string): CheckContext {
     request: "un plat",
     exclusions: [exclusion],
     month: 7,
+    sessionDay: "sun",
     dinners: 1,
     index,
     seasonTable: SEASON_TABLE,
@@ -88,6 +89,19 @@ describe("checkExclusions : ingrédients connus", () => {
   });
   it("exclut aussi un accompagnement du soir même", () => {
     expect(excluded("courgette", "courgette", { sameDay: true })).toBe(true);
+  });
+});
+
+describe("checkExclusions : pâtes, sardine et maquereau", () => {
+  it("n'exclut pas un pâté chinois ni une pâte à pizza avec --exclude pâtes", () => {
+    expect(excluded("pâtes", "carotte", { dish: "Pâté chinois" })).toBe(false);
+    expect(excluded("pâtes", "pâte à pizza", { category: "refined-starch" })).toBe(false);
+    expect(excluded("pâtes", "spaghetti")).toBe(true);
+  });
+  it("exclut sardine et maquereau avec --exclude", () => {
+    expect(excluded("sardine", "sardine")).toBe(true);
+    expect(excluded("maquereau", "maquereau")).toBe(true);
+    expect(excluded("sardine", "maquereau")).toBe(false);
   });
 });
 

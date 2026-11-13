@@ -7,13 +7,25 @@ export const SEASON_TABLE: Readonly<Record<string, SeasonRow>> = {
   artichaut: { months: [5, 6, 7, 8, 9], source: "ademe" },
   asperge: { months: [4, 5, 6], source: "ademe" },
   aubergine: { months: [6, 7, 8, 9], source: "ademe" },
-  betterave: { months: [1, 2, 3, 10, 11, 12], source: "ademe" },
+  betterave: {
+    months: [1, 2, 3, 4, 10, 11, 12],
+    source:
+      "ademe + https://www.mangerbouger.fr/manger-mieux/bien-manger-sans-se-ruiner/calendrier-de-saison",
+  },
   blette: { months: [6, 7, 8, 9, 10, 11], source: "ademe" },
   brocoli: { months: [9, 10, 11], source: "ademe" },
   butternut: { months: [1, 9, 10, 11, 12], source: "ademe" },
-  carotte: { months: [1, 2, 3, 9, 10, 11, 12], source: "ademe" },
+  carotte: {
+    months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    source:
+      "ademe + https://www.mangerbouger.fr/manger-mieux/bien-manger-sans-se-ruiner/calendrier-de-saison",
+  },
   "chou de Bruxelles": { months: [1, 2, 3, 10, 11, 12], source: "ademe" },
-  "chou rouge": { months: [1, 2, 3, 10, 11, 12], source: "ademe" },
+  "chou rouge": {
+    months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    source:
+      "ademe + https://www.mangerbouger.fr/manger-mieux/bien-manger-sans-se-ruiner/calendrier-de-saison",
+  },
   "chou vert": { months: [1, 2, 3, 10, 11, 12], source: "ademe" },
   "chou-fleur": { months: [1, 2, 3, 9, 10, 11, 12], source: "ademe" },
   citron: { months: [1, 2], source: "ademe" },
@@ -22,14 +34,22 @@ export const SEASON_TABLE: Readonly<Record<string, SeasonRow>> = {
   courgette: { months: [5, 6, 7, 8, 9, 10], source: "ademe" },
   "céleri-rave": { months: [1, 2, 3, 10, 11, 12], source: "ademe" },
   endive: {
-    months: [1, 2, 3, 4, 10, 11, 12],
+    months: [1, 2, 3, 4, 5, 10, 11, 12],
     source:
-      "https://www.mangerbouger.fr/manger-mieux/bien-manger-sans-se-ruiner/calendrier-de-saison/fruits-et-legumes/endive",
+      "ademe + https://www.mangerbouger.fr/manger-mieux/bien-manger-sans-se-ruiner/calendrier-de-saison/fruits-et-legumes/endive",
   },
-  fenouil: { months: [4, 6, 7, 8, 9, 10, 11], source: "ademe" },
+  fenouil: {
+    months: [4, 5, 6, 7, 8, 9, 10, 11],
+    source:
+      "ademe + https://www.mangerbouger.fr/manger-mieux/bien-manger-sans-se-ruiner/calendrier-de-saison",
+  },
   figue: { months: [7, 8, 9, 10], source: "ademe" },
   "haricot vert": { months: [6, 7, 8, 9, 10], source: "ademe" },
-  laitue: { months: [5, 6, 7, 8, 9], source: "ademe" },
+  laitue: {
+    months: [4, 5, 6, 7, 8, 9, 10],
+    source:
+      "ademe + https://www.mangerbouger.fr/manger-mieux/bien-manger-sans-se-ruiner/calendrier-de-saison",
+  },
   maïs: { months: [7, 8, 9], source: "ademe" },
   mâche: { months: [1, 2, 10, 11, 12], source: "ademe" },
   navet: { months: [1, 2, 3, 4, 5, 10, 11, 12], source: "ademe" },
@@ -47,7 +67,11 @@ export const SEASON_TABLE: Readonly<Record<string, SeasonRow>> = {
       "https://www.mangerbouger.fr/manger-mieux/bien-manger-sans-se-ruiner/calendrier-de-saison/fruits-et-legumes/potimarron",
   },
   potiron: { months: [1, 9, 10, 11, 12], source: "ademe" },
-  radis: { months: [3, 4, 5, 6], source: "ademe" },
+  radis: {
+    months: [3, 4, 5, 6, 7],
+    source:
+      "ademe + https://www.mangerbouger.fr/manger-mieux/bien-manger-sans-se-ruiner/calendrier-de-saison",
+  },
   raisin: { months: [9, 10], source: "ademe" },
   tomate: { months: [6, 7, 8, 9], source: "ademe" },
   topinambour: { months: [1, 2, 11, 12], source: "ademe" },

@@ -80,9 +80,15 @@ export function buildSeasonTable(input: {
     } else {
       product = byName.get(normalizeName(ref.name));
     }
-    // Une ligne manuelle l'emporte sur l'ADEME : c'est une correction sourcée et voulue.
+    // La table est l'union des mois ADEME et des mois du calendrier mangerbouger (lignes `manual`) :
+    // une ligne manuelle complète l'ADEME, elle ne lui retire aucun mois.
     const fromManual = manual[ref.name];
-    if (fromManual !== undefined) {
+    if (fromManual !== undefined && product !== undefined) {
+      table[ref.name] = {
+        months: sortedMonths([...product.months, ...fromManual.months]),
+        source: `ademe + ${fromManual.source}`,
+      };
+    } else if (fromManual !== undefined) {
       table[ref.name] = { months: sortedMonths(fromManual.months), source: fromManual.source };
     } else if (product !== undefined) {
       table[ref.name] = { months: sortedMonths(product.months), source: "ademe" };

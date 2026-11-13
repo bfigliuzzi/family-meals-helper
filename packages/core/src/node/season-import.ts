@@ -9,8 +9,8 @@ import {
   renderSeasonTableModule,
 } from "../season/build-table.ts";
 import type { AdemeProduct } from "../season/build-table.ts";
+import { MANGERBOUGER_ROWS } from "../season/manual-months.ts";
 import { describeMonths } from "../season/months.ts";
-import type { SeasonRow } from "../season/months.ts";
 
 const API = "https://impactco2.fr/api/v1/fruitsetlegumes";
 
@@ -21,21 +21,6 @@ const ALIASES: Readonly<Record<string, string>> = {
   butternut: "courge",
   "haricot vert": "haricotvert",
   "petit pois": "petitpois",
-};
-
-// Lignes à la main (conception §6.5), une par produit, avec sa source. Elles l'emportent sur l'ADEME :
-// complément (potimarron, absent de l'ADEME) ou correction (endive : mangerbouger donne octobre à avril).
-const MANUAL: Readonly<Record<string, SeasonRow>> = {
-  endive: {
-    months: [1, 2, 3, 4, 10, 11, 12],
-    source:
-      "https://www.mangerbouger.fr/manger-mieux/bien-manger-sans-se-ruiner/calendrier-de-saison/fruits-et-legumes/endive",
-  },
-  potimarron: {
-    months: [10, 11, 12],
-    source:
-      "https://www.mangerbouger.fr/manger-mieux/bien-manger-sans-se-ruiner/calendrier-de-saison/fruits-et-legumes/potimarron",
-  },
 };
 
 async function fetchMonth(month: number): Promise<AdemeProduct[]> {
@@ -60,7 +45,7 @@ async function main(): Promise<void> {
     products: [...bySlug.values()],
     refs: REFERENTIAL,
     aliases: ALIASES,
-    manual: MANUAL,
+    manual: MANGERBOUGER_ROWS,
   });
   writeFileSync(out, renderSeasonTableModule(table));
 

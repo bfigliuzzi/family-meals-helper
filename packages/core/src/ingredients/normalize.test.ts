@@ -21,4 +21,10 @@ describe("normalizeName", () => {
   it("traite les apostrophes comme des espaces", () => {
     expect(normalizeName("huile d'olive")).toBe("huile d olive");
   });
+  it("garde le s de « pâtes » pour ne pas le confondre avec « pâte » ou « pâté »", () => {
+    expect(normalizeName("pâté")).not.toBe(normalizeName("pâtes"));
+    expect(normalizeName("pâte")).not.toBe(normalizeName("pâtes"));
+    expect(normalizeName("pates")).toBe(normalizeName("pâtes"));
+    expect(normalizeName("pâté")).toBe(normalizeName("pâte"));
+  });
 });

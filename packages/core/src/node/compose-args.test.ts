@@ -8,6 +8,7 @@ describe("parseComposeArgs", () => {
       request: "un bœuf bourguignon",
       exclusions: [],
       month: null,
+      sessionDay: "sun",
       maxAttempts: 3,
       dryRun: false,
     });
@@ -31,6 +32,7 @@ describe("parseComposeArgs", () => {
       request: "x",
       exclusions: ["courgette", "poulet"],
       month: 11,
+      sessionDay: "sun",
       maxAttempts: 2,
       dryRun: true,
     });
@@ -38,6 +40,22 @@ describe("parseComposeArgs", () => {
   it("découpe --exclude sur la virgule", () => {
     const result = parseComposeArgs(["x", "--exclude", "courgette, poulet", "--exclude", "porc"]);
     expect(result).toMatchObject({ ok: true, exclusions: ["courgette", "poulet", "porc"] });
+  });
+  it("lit --session-day sans tenir compte de la casse ni des accents", () => {
+    expect(parseComposeArgs(["x", "--session-day", "samedi"])).toMatchObject({ sessionDay: "sat" });
+    expect(parseComposeArgs(["x", "--session-day", "Dimanche"])).toMatchObject({
+      sessionDay: "sun",
+    });
+    expect(parseComposeArgs(["x", "--session-day", "vendredi"])).toMatchObject({
+      sessionDay: "fri",
+    });
+    expect(parseComposeArgs(["x", "--session-day", "lundi"])).toMatchObject({ sessionDay: "mon" });
+  });
+  it("refuse un jour de session hors vendredi, samedi, dimanche, lundi", () => {
+    expect(parseComposeArgs(["x", "--session-day", "mardi"])).toEqual({
+      ok: false,
+      error: "--session-day attend vendredi, samedi, dimanche ou lundi",
+    });
   });
   it("exige une demande", () => {
     const result = parseComposeArgs(["--dry-run"]);

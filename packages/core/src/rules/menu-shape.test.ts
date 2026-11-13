@@ -11,6 +11,7 @@ const ctx: CheckContext = {
   request: "un plat",
   exclusions: [],
   month: 11,
+  sessionDay: "sun",
   dinners: 5,
   index: buildIngredientIndex(REFERENTIAL),
   seasonTable: SEASON_TABLE,
@@ -81,6 +82,31 @@ describe("checkMenuShape", () => {
   });
   it("refuse un mauvais nombre de plats", () => {
     expect(checkMenuShape({ dishes: goodMenu.dishes.slice(0, 3) }, ctx)).toHaveLength(1);
+  });
+  it("exige les grammes pour la viande, le poisson et la charcuterie", () => {
+    const beef = { ...ingredient, name: "bœuf à braiser", form: "fresh" as const };
+    const withBeef = (over: Partial<MenuIngredient>): Menu => ({
+      dishes: DAYS.map((day, i) => dish(day, i === 0 ? [{ ...beef, ...over }] : [ingredient])),
+    });
+    const inPieces = checkMenuShape(withBeef({ qty: 2, unit: "piece" }), ctx);
+    expect(inPieces).toHaveLength(1);
+    expect(inPieces[0]).toMatchObject({
+      level: "error",
+      rule: "menu-shape",
+      dish: 0,
+      message:
+        "Donne « bœuf à braiser » en g : les plafonds de viande et les quantités se calculent en grammes.",
+    });
+    expect(checkMenuShape(withBeef({ qty: 10000, unit: "ml" }), ctx)).toHaveLength(1);
+    expect(checkMenuShape(withBeef({ qty: 600, unit: "g" }), ctx)).toEqual([]);
+    // inconnu : la catégorie donnée par l'IA compte
+    const unknownFish = withBeef({ name: "truite", category: "fish", qty: 2, unit: "piece" });
+    expect(checkMenuShape(unknownFish, ctx)).toHaveLength(1);
+  });
+  it("accepte les œufs en pièces", () => {
+    const egg = { ...ingredient, name: "œuf", qty: 4, unit: "piece" as const };
+    const menu: Menu = { dishes: DAYS.map((day, i) => dish(day, i === 0 ? [egg] : [ingredient])) };
+    expect(checkMenuShape(menu, ctx)).toEqual([]);
   });
   it("refuse un plat sans ingrédient, sans nom ou à quantité nulle", () => {
     const menu: Menu = {

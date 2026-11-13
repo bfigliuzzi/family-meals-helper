@@ -1,4 +1,4 @@
-// Commande de développement : pnpm --filter core compose "<demande>" [--exclude x] [--month 11] [--dry-run]
+// Commande de développement : pnpm --filter core compose "<demande>" [--exclude x] [--month 11] [--session-day dimanche] [--dry-run]
 // Appel réel à l'IA sans --dry-run : la clé est dans ANTHROPIC_API_KEY.
 import { createAnthropicMenuModel } from "../ai/anthropic-client.ts";
 import { composeMenu, exitCodeOf } from "../ai/compose.ts";
@@ -26,6 +26,7 @@ async function main(): Promise<number> {
     request: args.request,
     exclusions: args.exclusions,
     month,
+    sessionDay: args.sessionDay,
     maxAttempts: args.maxAttempts,
   };
 
@@ -41,6 +42,7 @@ async function main(): Promise<number> {
       request: input.request,
       exclusions: input.exclusions,
       month,
+      sessionDay: args.sessionDay,
       dinners: expectedDinners(input.request),
       inSeason: inSeasonNames(month, REFERENTIAL, SEASON_TABLE),
     });

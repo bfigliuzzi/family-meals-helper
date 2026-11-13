@@ -36,6 +36,26 @@ export const DAY_LABELS: Record<Day, string> = {
   fri: "vendredi",
 };
 
+// Jour de la session de cuisine : seulement ces quatre jours, une session du mardi au jeudi
+// tomberait après certains dîners.
+export const SESSION_DAYS = ["fri", "sat", "sun", "mon"] as const;
+export type SessionDay = (typeof SESSION_DAYS)[number];
+
+export const SESSION_DAY_LABELS: Record<SessionDay, string> = {
+  fri: "vendredi",
+  sat: "samedi",
+  sun: "dimanche",
+  mon: "lundi",
+};
+
+// Décalage en jours entre la session et le lundi : vendredi -3, samedi -2, dimanche -1, lundi 0.
+const SESSION_OFFSET: Record<SessionDay, number> = { fri: -3, sat: -2, sun: -1, mon: 0 };
+
+// Jours écoulés entre la session et le dîner : session le dimanche, lundi 1 … vendredi 5.
+export function daysAfterSession(session: SessionDay, day: Day): number {
+  return DAYS.indexOf(day) - SESSION_OFFSET[session];
+}
+
 // Les plats sont désignés par une lettre : a, b, c…
 export function dishLetter(index: number): string {
   return String.fromCharCode(97 + index);

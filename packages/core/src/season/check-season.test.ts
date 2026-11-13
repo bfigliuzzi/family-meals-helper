@@ -15,6 +15,7 @@ function ctx(month: Month, request = "un plat"): CheckContext {
     request,
     exclusions: [],
     month,
+    sessionDay: "sun",
     dinners: 1,
     index,
     seasonTable: SEASON_TABLE,
@@ -48,6 +49,16 @@ describe("checkSeason", () => {
   it("laisse passer un ingrédient nommé dans la demande", () => {
     expect(checkSeason(menuOf("tomate"), ctx(11, "des pâtes à la tomate")).findings).toEqual([]);
     expect(checkSeason(menuOf("tomate"), ctx(11, "sans tomate")).findings).toHaveLength(1);
+  });
+  // Non-régression du lot 1 : ces formulations contiennent « ne », « peu », « moins »… mais nomment
+  // bien l'ingrédient demandé ; le parseur de la demande ne doit pas les prendre pour des négations.
+  it.each([
+    ["courgette", "il ne me reste que des courgettes"],
+    ["tomate", "je ne veux que des tomates"],
+    ["tomate", "un peu de tomates"],
+    ["tomate", "au moins un plat de tomates"],
+  ])("laisse passer %s demandée par « %s »", (name, request) => {
+    expect(checkSeason(menuOf(name), ctx(11, request)).findings).toEqual([]);
   });
   it("ne confond pas pomme et pomme de terre dans la demande", () => {
     expect(checkSeason(menuOf("pomme"), ctx(6, "des pommes de terre")).findings).toHaveLength(1);

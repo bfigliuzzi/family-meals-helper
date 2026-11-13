@@ -52,10 +52,25 @@ describe("buildSeasonTable", () => {
   it("reprend la ligne manuelle avec son URL, mois triés et sans doublon", () => {
     expect(table["potimarron"]).toEqual({ months: [10, 11, 12], source: potimarronUrl });
   });
-  it("laisse une ligne manuelle l'emporter sur l'ADEME", () => {
-    const override = { courgette: { months: [3, 4] as Month[], source: "https://example.org/c" } };
-    const result = buildSeasonTable({ products, refs: REFERENTIAL, aliases, manual: override });
-    expect(result.table["courgette"]).toEqual({ months: [3, 4], source: "https://example.org/c" });
+  it("fait l'union des mois ADEME et des mois manuels, avec une source composée", () => {
+    const extra = { courgette: { months: [3, 4] as Month[], source: "https://example.org/c" } };
+    const result = buildSeasonTable({ products, refs: REFERENTIAL, aliases, manual: extra });
+    expect(result.table["courgette"]).toEqual({
+      months: [3, 4, 5, 6, 7, 8, 9, 10],
+      source: "ademe + https://example.org/c",
+    });
+  });
+  it("ne retire jamais un mois donné par l'ADEME", () => {
+    const narrow = { courgette: { months: [7] as Month[], source: "https://example.org/c" } };
+    const result = buildSeasonTable({ products, refs: REFERENTIAL, aliases, manual: narrow });
+    expect(result.table["courgette"]?.months).toEqual([5, 6, 7, 8, 9, 10]);
+  });
+  it("fait l'union aussi pour une entrée rattachée par alias", () => {
+    const extra = {
+      "chou rouge": { months: [4, 5, 6] as Month[], source: "https://example.org/x" },
+    };
+    const result = buildSeasonTable({ products, refs: REFERENTIAL, aliases, manual: extra });
+    expect(result.table["chou rouge"]?.months).toEqual([1, 2, 3, 4, 5, 6, 10, 11, 12]);
   });
   it("couvre aussi les entrées dont la forme par défaut n'est pas fraîche", () => {
     const maize = { name: "Maïs", slug: "mais", months: [7, 8, 9] };

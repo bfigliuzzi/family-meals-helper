@@ -7,7 +7,14 @@ import {
   FORMS,
   FORM_LABELS,
 } from "./ingredient.ts";
-import { DAYS, DAY_LABELS, MenuSchema } from "./menu.ts";
+import {
+  DAYS,
+  DAY_LABELS,
+  MenuSchema,
+  SESSION_DAYS,
+  SESSION_DAY_LABELS,
+  daysAfterSession,
+} from "./menu.ts";
 
 const validMenu = {
   dishes: [
@@ -66,5 +73,18 @@ describe("libellés", () => {
     for (const form of FORMS) expect(FORM_LABELS[form]).toBeTruthy();
     for (const aisle of AISLES) expect(AISLE_LABELS[aisle]).toBeTruthy();
     for (const day of DAYS) expect(DAY_LABELS[day]).toBeTruthy();
+    for (const day of SESSION_DAYS) expect(SESSION_DAY_LABELS[day]).toBeTruthy();
+  });
+});
+
+describe("daysAfterSession", () => {
+  it.each([
+    ["sun", 1, 5],
+    ["sat", 2, 6],
+    ["fri", 3, 7],
+    ["mon", 0, 4],
+  ] as const)("session %s : lundi %i, vendredi %i", (session, monday, friday) => {
+    expect(daysAfterSession(session, "mon")).toBe(monday);
+    expect(daysAfterSession(session, "fri")).toBe(friday);
   });
 });

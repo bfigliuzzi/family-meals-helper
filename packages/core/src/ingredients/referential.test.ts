@@ -64,6 +64,22 @@ describe("référentiel", () => {
     expect(pantry.sort()).toEqual([...EXPECTED_PANTRY].sort());
   });
 
+  it("range la saucisse dans la charcuterie, avec ses groupes porc et viande", () => {
+    const sausage = REFERENTIAL.find((ref) => ref.name === "saucisse")!;
+    expect(sausage.category).toBe("cured-meat");
+    expect(groupsOf(sausage)).toEqual(expect.arrayContaining(["porc", "viande"]));
+  });
+
+  it("n'achète le poisson que surgelé (rayon surgelés) ou en conserve", () => {
+    const byName = (name: string) => REFERENTIAL.find((ref) => ref.name === name)!;
+    for (const name of ["saumon", "maquereau", "cabillaud", "colin"]) {
+      expect(byName(name), name).toMatchObject({ defaultForm: "frozen", aisle: "frozen" });
+    }
+    expect(byName("saumon").category).toBe("oily-fish");
+    expect(byName("cabillaud").category).toBe("fish");
+    for (const name of ["thon", "sardine"]) expect(byName(name).defaultForm).toBe("canned");
+  });
+
   it("retrouve des entrées précises", () => {
     const index = buildIngredientIndex(REFERENTIAL);
     expect(index.find("courgette jaune")?.name).toBe("courgette");

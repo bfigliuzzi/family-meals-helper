@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { REFERENTIAL } from "../ingredients/referential.ts";
+import { MANGERBOUGER_ROWS } from "./manual-months.ts";
 import { SEASON_TABLE } from "./season-table.ts";
 
 const names = new Set(REFERENTIAL.map((ref) => ref.name));
@@ -40,10 +41,23 @@ describe("SEASON_TABLE", () => {
     expect(SEASON_TABLE["potimarron"]!.source).toContain("mangerbouger.fr");
   });
 
-  it("garde la correction manuelle de l'endive et couvre le maïs", () => {
-    expect([...SEASON_TABLE["endive"]!.months]).toEqual([1, 2, 3, 4, 10, 11, 12]);
-    expect(SEASON_TABLE["endive"]!.source).toContain("mangerbouger.fr");
+  it("couvre le maïs et le céleri-rave", () => {
     expect([...SEASON_TABLE["maïs"]!.months]).toEqual([7, 8, 9]);
     expect([...SEASON_TABLE["céleri-rave"]!.months]).toEqual([1, 2, 3, 10, 11, 12]);
+  });
+
+  it("contient tous les mois des lignes mangerbouger (garde-fou contre une régénération qui les perdrait)", () => {
+    for (const [name, row] of Object.entries(MANGERBOUGER_ROWS)) {
+      const months = SEASON_TABLE[name]?.months ?? [];
+      for (const month of row.months) expect(months, `${name} ${month}`).toContain(month);
+      expect(SEASON_TABLE[name]!.source, name).toContain("mangerbouger.fr");
+    }
+  });
+
+  it("donne l'union ADEME et mangerbouger : carotte toute l'année, endive en mai", () => {
+    expect([...SEASON_TABLE["carotte"]!.months]).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    expect(SEASON_TABLE["endive"]!.months).toContain(5);
+    expect(SEASON_TABLE["endive"]!.months).toContain(11);
+    expect(SEASON_TABLE["endive"]!.source).toMatch(/^ademe \+ https:\/\/www\.mangerbouger\.fr\//);
   });
 });

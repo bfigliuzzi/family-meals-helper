@@ -1,4 +1,7 @@
 import { parseArgs } from "node:util";
+import type { SessionDay } from "../domain/menu.ts";
+import { SESSION_DAYS, SESSION_DAY_LABELS } from "../domain/menu.ts";
+import { lightNormalize } from "../ingredients/normalize.ts";
 import type { Month } from "../season/months.ts";
 
 export function parseComposeArgs(argv: readonly string[]):
@@ -7,6 +10,7 @@ export function parseComposeArgs(argv: readonly string[]):
       request: string;
       exclusions: string[];
       month: Month | null;
+      sessionDay: SessionDay;
       maxAttempts: 1 | 2 | 3;
       dryRun: boolean;
     }
@@ -19,6 +23,7 @@ export function parseComposeArgs(argv: readonly string[]):
       options: {
         exclude: { type: "string", multiple: true },
         month: { type: "string" },
+        "session-day": { type: "string" },
         "max-attempts": { type: "string" },
         "dry-run": { type: "boolean" },
       },
@@ -45,6 +50,16 @@ export function parseComposeArgs(argv: readonly string[]):
     month = value as Month;
   }
 
+  let sessionDay: SessionDay = "sun";
+  if (values["session-day"] !== undefined) {
+    const wanted = lightNormalize(values["session-day"]);
+    const found = SESSION_DAYS.find((day) => lightNormalize(SESSION_DAY_LABELS[day]) === wanted);
+    if (found === undefined) {
+      return { ok: false, error: "--session-day attend vendredi, samedi, dimanche ou lundi" };
+    }
+    sessionDay = found;
+  }
+
   let maxAttempts: 1 | 2 | 3 = 3;
   if (values["max-attempts"] !== undefined) {
     const value = Number(values["max-attempts"]);
@@ -62,6 +77,7 @@ export function parseComposeArgs(argv: readonly string[]):
       .map((term) => term.trim())
       .filter((term) => term !== ""),
     month,
+    sessionDay,
     maxAttempts,
     dryRun: values["dry-run"] === true,
   };

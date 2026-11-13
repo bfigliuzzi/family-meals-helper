@@ -50,6 +50,9 @@ describe("requestedIn", () => {
     ["du céleri; rave", []],
     ["des pommes de terre", ["pomme de terre"]],
     ["un bœuf bourguignon, 5 dîners", ["bœuf à braiser"]],
+    ["des courgettes mais pas de tomate", ["courgette"]],
+    ["Mais du maïs", ["maïs"]],
+    ["pas de courgette mais des tomates", []],
   ])("« %s » donne %j", (request, expected) => {
     expect(requested(request)).toEqual(expected);
   });
@@ -72,6 +75,12 @@ describe("find", () => {
   });
   it("ne trouve rien pour un inconnu", () => {
     expect(index.find("romanesco")).toBeUndefined();
+  });
+  it("ne prend ni pâté ni pâte à pizza pour des pâtes", () => {
+    expect(index.find("pâté")).toBeUndefined();
+    expect(index.find("pâte à pizza")).toBeUndefined();
+    expect(index.find("pâtes")?.name).toBe("pâtes");
+    expect(index.find("spaghetti")?.name).toBe("pâtes");
   });
 });
 
