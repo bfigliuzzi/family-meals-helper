@@ -1,6 +1,6 @@
 # Recommandations nutritionnelles mangerbouger.fr (Santé publique France, PNNS)
 
-> **Rôle** : source des règles d'équilibre (§6.3 de la conception). Les contrôles retenus pour le menu sont fixés dans la conception, ce fichier en donne l'origine et le détail.
+> **Rôle** : source des règles d'équilibre (§6.3 de la conception). Les contrôles retenus pour le menu sont fixés dans la conception, ce fichier en donne l'origine et le détail. Le projet ne reprend pas tout : la recommandation sur le poisson (2 fois par semaine, dont un gras) n'est pas contrôlée, par décision de l'utilisateur du 2026-11-13 (voir conception §6.3).
 > **Règle de lecture** : les seuils chiffrés de la section « Citations vérifiées (2026-11-13) » ci-dessous sont recopiés du texte brut des pages (HTML téléchargé avec `curl`), avec l'URL exacte. Ce sont ceux à coder. Un chiffre qui n'y figure pas se revérifie sur mangerbouger.fr avant d'être écrit dans le code.
 
 Recherche faite le 2026-11-12, pour la composition automatique de menus de dîners (famille : 2 adultes, 2 enfants de 5 et 8 ans, batch cooking 4-5 dîners).

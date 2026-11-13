@@ -2,6 +2,8 @@
 
 Statut : validée par l'utilisateur le 12/11/2026. Ce document est la source de vérité du produit. Le découpage en lots est dans `docs/roadmap.md`.
 
+Mise à jour du 13/11/2026, après le lot 2 : des notes datées en §3.1, §5.1, §6.2, §6.3, §6.5, §6.6, §7 et §8 disent ce qui a changé depuis la validation, et pourquoi. Le texte qui ne vaut plus est gardé, marqué « ne vaut plus depuis ».
+
 ## 1. Intention
 
 L'utilisateur prépare chaque semaine un **batch cook** : une session de cuisine de 2 à 3 h où l'on prépare à l'avance les dîners de la semaine. Il reprenait jusqu'ici les menus de cuisine-addict.com et en a fait le tour.
@@ -32,6 +34,7 @@ Le partage du travail entre l'IA et le code :
 - Une alimentation variée, équilibrée et healthy, selon mangerbouger.fr (§6.3). Les plats hors de ces recommandations (très riches, frits) apparaissent seulement si la demande les mentionne.
 - Une liste d'ingrédients à éviter, toujours appliquée. Chaque entrée a une raison facultative (« n'aime pas », « introuvable »).
 - La session de cuisine dure 3 h au maximum. L'objectif est 2 h à 2 h 30.
+- La session a lieu le **dimanche** par défaut (décision de l'utilisateur, 2026-11-13). Elle peut aussi avoir lieu le vendredi, le samedi ou le lundi : la ligne de commande a une option `--session-day`. Le nombre de jours entre la session et chaque dîner décide de la conservation (§6.2). Une session en milieu de semaine n'est pas prévue : elle tomberait après certains dîners.
 
 ### 3.2 Équipement
 - **Toujours disponible** : le four, une plaque induction 4 feux, un Thermomix TM5 et un Kenwood Cooking Chef. Le Kenwood chauffe (mijotage, sauces) et sert aussi à trancher et à râper. S'y ajoutent des casseroles, une poêle en inox et un mixeur plongeant.
@@ -69,12 +72,16 @@ L'utilisateur écrit en langage libre :
 - des contraintes combinées : plat, style, nombre de dîners, plafond de budget ;
 - ou un seul ingrédient.
 
-Une demande explicite l'emporte sur une règle souple. Un bourguignon demandé compte dans le plafond de viande rouge, mais il n'est jamais retiré à cause de ce plafond. Les règles bloquantes s'appliquent toujours.
+Une demande explicite l'emporte sur une règle souple. Un bourguignon demandé compte dans le plafond de viande rouge, mais il ne doit pas être retiré à cause de ce plafond : l'IA ajuste les autres plats. Les règles bloquantes s'appliquent toujours.
+
+> **Note du 13/11/2026 (lot 2, décision de l'utilisateur).** Cette priorité tient au **prompt seul**. Le code ne devine pas quel plat la demande nomme. Tout constat de plafond (`meat`, `cured-meat`) ou de `same-protein` est renvoyé une fois à l'IA, avec la phrase « Si la demande nomme un de ces plats, garde-le et ajuste les autres. ». Si l'IA retire quand même le plat demandé, rien ne le signale. La vraie garantie, épingler un plat dans l'app pour que l'IA ne puisse pas le retirer, est prévue au lot 6. La version précédente (« il n'est jamais retiré à cause de ce plafond ») se lisait comme une garantie du code ; elle ne vaut plus depuis cette date. Une première version avait un détecteur de plat demandé dans le code ; elle a été supprimée parce qu'elle produisait des régressions.
+>
+> Les plafonds de budget de la demande sont reportés au lot 7 (§6.6).
 
 ### 5.2 La composition
 1. L'IA propose un menu : les plats, le jour prévu pour chacun, les accompagnements préparés le soir même. Pour chaque plat, elle donne aussi ses grandes phases (préparation, cuisson) avec durée, appareil et présence de l'utilisateur requise ou non.
 2. Le code vérifie le menu (§6) et construit un premier planning (§6.4).
-3. S'il y a des constats `error`, ou des constats `warning` pas encore soumis à l'IA, `core` renvoie les constats à l'IA pour correction. Ce cycle va jusqu'à 3 essais. Pendant ce temps, l'utilisateur voit « vérification en cours ». Après 3 essais, il voit le meilleur menu obtenu avec ses constats.
+3. S'il y a des constats `error`, ou des constats `warning` pas encore soumis à l'IA, `core` renvoie les constats à l'IA pour correction. Un constat `warning` n'est renvoyé qu'une fois par règle (pas par plat). Ce cycle va jusqu'à 3 essais. Pendant ce temps, l'utilisateur voit « vérification en cours ». Après 3 essais, il voit le meilleur menu obtenu avec ses constats : celui qui a le moins de constats `error`, puis le moins de `warning`.
 4. L'utilisateur voit le menu courant : les plats, le jour, la conservation, le temps de session calculé, le coût estimé et les avertissements.
 
 ### 5.3 La conversation
@@ -105,32 +112,46 @@ Source : `docs/research/cuisine-addict-regles.md`. Ce fichier extrait 17 guides 
   - le réchauffage et les aliments à ne pas réchauffer ;
 - **des tables de données pour le code** : la durée de conservation au frigo et au congélateur par catégorie d'aliment, la liste des aliments qui ne se congèlent pas, la liste des aliments qui ne se réchauffent pas.
 
+> **Note du 13/11/2026 (lot 2).** Ces tables sont dans `packages/core/src/rules/conservation-table.ts`, une exception par nom d'ingrédient en plus de la valeur par catégorie. Le prompt reprend leurs chiffres : il est généré à partir d'elles, pour que le texte et le contrôle ne divergent pas. La liste « ne se réchauffe pas » est courte : les pâtes (`warning`, sauf dans un gratin, des lasagnes ou des cannelloni) et les fruits de mer (`error`). Le risotto, le riz et le reste du §6.1 passent seulement par le prompt.
+
 Quand deux pages donnent des durées différentes (section 3.9 du fichier), la table retient la plus courte.
 
 ### 6.2 Conservation (règles bloquantes)
 - Un plat se conserve aussi longtemps que son ingrédient le plus fragile.
 - L'ordre des dîners suit ces durées : poisson et viande en début de semaine, plats 100 % légumes en fin de semaine.
 - Si un plat est prévu après la fin de sa durée au frigo, il est marqué « à congeler dès la fin de la session », avec sa consigne de décongélation. S'il ne se congèle pas, c'est un constat `error`.
+
+> **Note du 13/11/2026 (lot 2) : ce que fait le code.**
+> - La durée se compte depuis le jour de session (§3.1) : avec une session le dimanche, le lundi est à 1 jour, le vendredi à 5 jours.
+> - Les ingrédients marqués `sameDay` (préparés le soir même) ne comptent pas pour la conservation. L'IA les marque elle-même ; le code la croit.
+> - Un plat qui se congèle mal (pomme de terre, légumes secs, fromage…) donne un `warning`, pas une `error` : seul un aliment qui ne se congèle pas du tout bloque.
+> - L'ordre des dîners n'est pas une règle bloquante. Le code propose, en `warning` (règle `day-order`), un ordre du plus fragile au moins fragile quand il fait congeler moins de plats. Il ne propose jamais un ordre qui ajoute une `error`, mais il ne trouve pas toujours le meilleur.
+> - « À congeler » est calculé par le code, jamais déclaré par l'IA. `compose` l'affiche avec la consigne de décongélation. Les consignes de sécurité (2 h, refroidir) iront dans le PDF (lot 4).
+> - La durée vient de la catégorie de l'ingrédient, pas du type de plat (pas de durée « soupe 5 jours »). Pommes de terre préparées d'avance : 2 jours (décision de l'utilisateur).
 - Le PDF reprend les consignes de sécurité : 2 h maximum à température ambiante, refroidir avant de mettre au frigo, ne pas recongeler.
 
 ### 6.3 Équilibre mangerbouger.fr (règles souples)
-Source : `docs/research/mangerbouger-recommandations.md`. Ce fichier a été rempli à partir de résumés de pages : chaque seuil est à revérifier sur mangerbouger.fr avant d'être écrit dans le code.
+Source : `docs/research/mangerbouger-recommandations.md`. Les seuils chiffrés sont recopiés du texte brut des pages, avec leur URL, dans la section « Citations vérifiées (2026-11-13) », et l'utilisateur les a relus (lot 2).
 
 Les recommandations du site portent sur la semaine entière, tous repas confondus. Le menu ne couvre que les dîners et les restes du midi. D'où les contrôles suivants :
-- des légumes à chaque dîner, dans le plat ou en accompagnement ;
+- des légumes à chaque dîner, dans le plat ou en accompagnement (l'ail, l'oignon et l'échalote ne comptent pas) ;
 - au moins un plat à base de légumes secs (le site en recommande au moins 2 par semaine) ;
-- au plus 500 g de viande hors volaille par adulte sur la semaine, et au plus 2 plats de viande rouge ou de porc ;
-- au plus un plat avec de la charcuterie, en petite quantité (le site fixe 150 g par semaine pour un adulte, et la réserve à l'exception pour un enfant) ;
+- au plus 500 g de viande hors volaille par adulte sur la semaine, et au plus 2 plats de viande rouge ou de porc. Les quantités du menu sont pour 4 portions adultes : le code divise le total du menu par 4 pour le comparer au seuil par adulte (2 000 g sur le menu) ;
+- au plus un plat avec de la charcuterie, en petite quantité (le site fixe 150 g par semaine pour un adulte, et la réserve à l'exception pour un enfant ; 600 g sur le menu). Les saucisses comptent comme de la charcuterie, comme sur le site ;
 - jamais la même protéine deux soirs de suite ;
 - au moins un féculent complet ou semi-complet.
 
 Deux consignes vont seulement dans le prompt : la viande en quantité moindre que l'accompagnement, et un sel modéré.
 
-**Poisson** : le site recommande du poisson 2 fois par semaine, dont un poisson gras. Or cuisine-addict le garde hors du batch, car il se conserve 2 jours. L'outil propose donc l'une de ces deux options :
-- un poisson cuit le soir même, en 15 minutes au plus ;
-- un plat de poisson prévu le lundi ou le mardi.
+**Poisson** (décision de l'utilisateur, 2026-11-13) : le site recommande du poisson 2 fois par semaine, dont un poisson gras. Le foyer en mange peu et le poisson frais est trop compliqué à gérer. L'outil applique donc :
+- le poisson et les fruits de mer sont facultatifs et peu fréquents ;
+- ils sont **seulement surgelés ou en conserve, jamais frais** : une autre forme donne un constat `error` (règle `fish`) ;
+- **aucun constat pour un menu sans poisson**, et aucun poisson gras demandé ;
+- un poisson préparé d'avance suit les règles normales (1 jour au frigo, se congèle). Le prompt conseille de cuire le poisson surgelé le soir même, en 15 minutes au plus ; cette durée n'est pas contrôlée, car il n'y a pas de durées avant le lot 3 ;
+- les fruits de mer ne se réchauffent pas : ils sont ajoutés le soir même (`sameDay`), sinon constat `error` (règle `reheat`) ;
+- le thon en conserve est accepté ; la sardine et le maquereau, que le foyer n'aime pas, ne sont pas interdits dans le code : ils passent par la liste d'exclusions (`--exclude sardine --exclude maquereau` en ligne de commande).
 
-Un menu sans poisson donne un constat `warning`.
+> **Ne vaut plus depuis le 2026-11-13** (version validée le 12/11/2026) : « L'outil propose donc l'une de ces deux options : un poisson cuit le soir même, en 15 minutes au plus ; un plat de poisson prévu le lundi ou le mardi. Un menu sans poisson donne un constat `warning`. » Ce qui a changé : plus de poisson frais, plus de `warning` « menu sans poisson ». Pourquoi : décision de l'utilisateur, d'après ses habitudes (« on consomme assez peu de poisson ; surgelé si besoin, le frais est trop compliqué à gérer »).
 
 ### 6.4 Planning de session (règles bloquantes)
 - **L'entrée** est une liste d'étapes. Chaque étape a une description, une durée, un appareil, les étapes dont elle dépend, et une mention « l'utilisateur est mobilisé » ou « l'appareil tourne seul ».
@@ -146,13 +167,16 @@ Un menu sans poisson donne un constat `warning`.
 - **Saison** : une table des fruits et légumes de saison en France, mois par mois, stockée dans le dépôt.
   - Source à vérifier en premier : l'API « fruits et légumes de saison » de l'ADEME (impactco2.fr).
   - À défaut : une table saisie à partir d'un calendrier officiel.
+  - **La table est l'union de l'ADEME et du calendrier mangerbouger** (décision de l'utilisateur, 2026-11-13) : un mois est de saison s'il l'est pour l'une des deux sources. Une ligne mangerbouger ajoute des mois, elle n'en retire jamais. La carotte et le chou rouge sont ainsi de saison toute l'année, l'endive retrouve mai. Les lignes mangerbouger sont dans `packages/core/src/season/manual-months.ts`, le détail dans `docs/research/saison-fruits-legumes.md`. Ne vaut plus depuis cette date : « une ligne manuelle l'emporte sur l'ADEME » (lot 1), qui retirait des mois à l'endive.
   - Le contrôle porte sur les fruits et légumes de forme `frais` (§7). Un ingrédient hors saison passe s'il est nommé dans la demande.
   - L'ail, l'oignon, l'échalote et le citron sont exemptés du contrôle et proposés toute l'année : ce sont presque des produits du quotidien, qu'on trouve tout le temps en magasin (décision de l'utilisateur, 2026-11-13).
 - **Exclusions** : le contrôle compare les noms normalisés du référentiel, synonymes et variantes compris. Par exemple, « courgette » exclut aussi « courgette jaune ».
 
 ### 6.6 Quantités (règles souples) et budget
-- Le référentiel donne, par catégorie, une fourchette de quantité plausible par portion adulte. Par exemple, 100 à 200 g de viande crue. Une quantité hors fourchette donne un constat `warning`.
-- Si la demande fixe un plafond de budget, un dépassement donne un constat `warning`.
+- Le code donne, par groupe de catégories, une fourchette de quantité plausible par portion adulte, en poids cru. Par exemple, 100 à 200 g de viande (bœuf, porc, volaille). Elle se calcule par plat : le total du groupe divisé par 4 portions. Une quantité hors fourchette donne un constat `warning`. Les ingrédients de placard (sel, huile, farine…) ne comptent pas.
+- Ces fourchettes sont des bornes de vraisemblance pour attraper une erreur de l'IA, pas des recommandations nutritionnelles. Elles sont dans `packages/core/src/rules/quantity-table.ts`, par groupe et non par ingrédient du référentiel.
+- La viande, la volaille, la charcuterie, le poisson et les fruits de mer doivent être donnés en grammes : sinon, constat `error` (règle `menu-shape`), car les plafonds ne se calculent pas sans grammes. Les œufs se comptent en pièces (une pièce vaut 50 g).
+- **Budget** : si la demande fixe un plafond, un dépassement donne un constat `warning`. **Reporté au lot 7** (décision de l'utilisateur, 2026-11-13) : le coût vient avec les prix (§8), et il n'existe aucun constat de budget avant. Le plafond de la demande n'est pas encore contrôlé.
 
 ## 7. Ingrédients et liste de courses
 
@@ -166,14 +190,16 @@ Un menu sans poisson donne un constat `warning`.
 - une catégorie détaillée : viande rouge, volaille, porc, charcuterie, poisson, poisson gras, œuf, légume sec, légume, fruit, féculent complet, féculent raffiné, produit laitier… ;
 - le rayon ;
 - la forme par défaut ;
-- l'unité d'achat et le poids moyen d'une pièce ;
+- l'unité d'achat et le poids moyen d'une pièce (**pas encore dans le référentiel** : arrivent avec la liste de courses, lot 4) ;
 - un drapeau `placard` ;
-- la fourchette de quantité plausible.
+- la fourchette de quantité plausible (**pas par entrée** : le code la donne par groupe de catégories, §6.6).
 
 **Comment le référentiel est utilisé** :
 - L'IA reçoit la liste des noms et les emploie.
 - Pour un ingrédient absent du référentiel, l'IA fournit sa catégorie, choisie dans une liste fermée du schéma. Le code l'accepte et le marque « à confirmer ».
 - Le **type d'un plat** est déduit par le code à partir des catégories de ses ingrédients : viande rouge, volaille, poisson, végétarien, présence de légumes secs, de féculent complet, protéine principale.
+
+> **Note du 13/11/2026 (lot 2).** Le « profil d'un plat » (`packages/core/src/rules/dish-profile.ts`) donne les catégories présentes, les poids par catégorie et la protéine principale (celle qui pèse le plus ; à égalité, la première de la liste poisson, fruits de mer, viande rouge, porc, volaille, œuf, légume sec). Il n'a pas de champ « végétarien » : le marquage (V) du PDF viendra au lot 4. La charcuterie compte comme du porc pour la protéine principale. Le référentiel reste un point de départ : les poissons y sont en forme par défaut surgelé, et la saucisse est classée charcuterie.
 
 **La liste de courses** :
 - Le code additionne les quantités de chaque ingrédient sur tous les plats, puis les convertit en unités d'achat : pièces arrondies au-dessus, poids arrondis à une valeur courante.
@@ -200,7 +226,7 @@ Il n'existe pas d'API publique de prix pour les enseignes françaises, et les CG
 **Comment le coût est utilisé** :
 - La source de chaque prix est affichée.
 - Le coût est calculé après chaque proposition, pour l'affichage. Il n'entre pas dans la composition.
-- L'IA reçoit seulement la consigne d'éviter les produits chers, et le plafond de budget s'il est donné.
+- L'IA reçoit seulement la consigne d'éviter les produits chers, et le plafond de budget s'il est donné. *Lot 7 : au lot 2, aucun contrôle de budget n'existe (§6.6).*
 - L'app fonctionne aussi sans données Open Prices.
 
 ## 9. Ce que l'outil produit

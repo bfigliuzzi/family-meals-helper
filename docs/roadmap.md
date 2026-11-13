@@ -10,7 +10,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 |---|---|---|---|
 | 0 | Socle du monorepo | — | `livré` (2026-11-13, `baebfc7`) |
 | 1 | Tracer : composition IA en ligne de commande | 0 | `livré` (2026-11-13, `7dc9b43` et `ebe6cd1`) |
-| 2 | Conservation, équilibre et quantités | 1 | à faire |
+| 2 | Conservation, équilibre et quantités | 1 | `livré` (2026-11-13, `908c016` et `52960c8`) |
 | 3 | Équipement et planning de session | 1 | à faire |
 | 4 | Détail, liste de courses et PDF | 2, 3 | à faire |
 | 5 | App desktop : coquille, réglages, persistance | 4 | à faire |
@@ -118,10 +118,10 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 - **Corrections du cycle 1 de relecture** appliquées : clé expurgée des erreurs ; `ANTHROPIC_BASE_URL` en `https://` obligatoire ; exclusions par groupe de catégorie (`CATEGORY_GROUPS`), par mot-groupe et sur le nom du plat ; saison contrôlée sur la forme reçue et sur les fruits et légumes cités dans un nom inconnu ; nombre de dîners : le plus grand nombre de « dîners » cité ; plafond de 3 essais dans le moteur ; compteur d'appels en échec ; endive corrigée à la main (mangerbouger), alias du céleri branche retiré.
 - **Rejeté ou reporté** :
   - Objets Zod stricts (rejeté) : avec le format imposé, le schéma JSON interdit déjà les champs en trop ; sans lui, un champ en trop est ignoré et jamais affiché.
-  - Faux rattachements de la normalisation (reporté au lot 2) : « maïs » et le mot « mais » donnent la même clé ; `find("pâté")` renvoie `pâtes` ; `--exclude pâtes` exclut « pâte à pizza ». Effet actuel : un « mais » dans la demande compte comme une demande de maïs, ce qui l'exempte du contrôle de saison.
+  - Faux rattachements de la normalisation (reporté au lot 2) : « maïs » et le mot « mais » donnent la même clé ; `find("pâté")` renvoie `pâtes` ; `--exclude pâtes` exclut « pâte à pizza ». Effet actuel : un « mais » dans la demande compte comme une demande de maïs, ce qui l'exempte du contrôle de saison. **Traité au lot 2** (livré le 2026-11-13, `52960c8`) : le mot « mais » est retiré de la demande avant la lecture des ingrédients demandés, et `pâtes` garde son `s` (`PLURAL_KEPT`), donc `find("pâté")` et `find("pâte à pizza")` ne renvoient plus `pâtes`. Il reste des limites, voir « Reliquats du lot 2 ».
   - Groupes reconnus dans la demande (reporté) : « une soupe de courge » ne vaut pas demande pour le potiron ; « un plat pas cher avec des courgettes » coupe la demande (choix prudent : au pire un constat de trop).
   - Exclure une variante exclut toute l'entrée (`--exclude "tomate cerise"` exclut toutes les tomates) : voulu, dans le sens prudent.
-  - Faux rattachements de la normalisation et noms de plats (reporté au lot 2) : avec le contrôle du nom du plat, `--exclude pâtes` signale aussi « Pâté chinois ». Il reste reporté avec « mais » / maïs et « pâté » / pâtes.
+  - Faux rattachements de la normalisation et noms de plats (reporté au lot 2) : avec le contrôle du nom du plat, `--exclude pâtes` signale aussi « Pâté chinois ». Il reste reporté avec « mais » / maïs et « pâté » / pâtes. **Traité au lot 2** : « Pâté chinois » n'est plus signalé par `--exclude pâtes` (test dans `check-exclusions.test.ts`).
   - Noms composés frais (accepté) : « sauce tomate », reçue en `fresh` en novembre, déclenche le contrôle de saison sur la tomate qu'elle contient. L'IA corrige en passant à `canned`, au prix d'un essai ; sens prudent. « jus de citron » n'est plus concerné : le citron est exempté (conception §6.5).
   - `redact` masque un mot ordinaire long après « Bearer » (« Bearer authentication failed » devient « Bearer [clé masquée] failed ») : le texte perd un mot, rien ne fuit. Comportement prudent gardé ; à revoir si un vrai message de proxy le montre.
   - Nom du plat (faux positif voulu) : « Chili sans viande » avec `--exclude viande` donne un constat, car la négation n'est plus analysée dans les noms de plats. Le prompt demande à l'IA de ne pas écrire ce genre de nom ; au pire, un essai de plus.
@@ -133,18 +133,66 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 
 ## Lot 2 : conservation, équilibre et quantités
 
+**Statut** : `livré` le 2026-11-13, commits `908c016` (citations mangerbouger vérifiées et calendrier de saison, dans `docs/research`) et `52960c8` (le lot), branche `lot-2-conservation-equilibre`, CI GitHub verte sur `52960c8`.
+
 **Objectif** : tous les contrôles de contenu du menu, bloquants et souples.
 
 **Contenu** (conception §6.1, §6.2, §6.3, §6.6, §7)
 - Tables de conservation tirées de `docs/research/cuisine-addict-regles.md` (durée la plus courte en cas de conflit), aliments qui ne se congèlent pas, aliments qui ne se réchauffent pas.
 - Déduction du type d'un plat à partir des catégories de ses ingrédients.
-- Contrôles : conservation et ordre des jours, marquage « à congeler », équilibre mangerbouger (seuils revérifiés sur le site), poisson, fourchettes de quantités, plafond de budget en `warning`.
-- Distinction `error` / `warning` dans le cycle de correction (§5.2 étape 3), et priorité de la demande explicite sur les règles souples (§5.1).
+- Contrôles : conservation et ordre des jours, marquage « à congeler », équilibre mangerbouger (seuils revérifiés sur le site), poisson, fourchettes de quantités, plafond de budget en `warning` (reporté au lot 7, voir plus bas).
+- Distinction `error` / `warning` dans le cycle de correction (§5.2 étape 3), et priorité de la demande explicite sur les règles souples (§5.1) (obtenue par le prompt seul, voir plus bas).
 - Le prompt système intègre les règles d'équilibre et de conservation.
+
+**Ce qui a changé en cours de lot** (décisions de l'utilisateur, 2026-11-13 ; le contenu ci-dessus est le contenu prévu)
+- **Budget reporté au lot 7** : aucun constat de budget au lot 2.
+- **Session le dimanche par défaut**, option `--session-day` (vendredi, samedi, dimanche, lundi). Les jours écoulés entre la session et chaque dîner (dimanche : lundi 1 … vendredi 5) décident de la conservation.
+- **Seuils par adulte** = quantité du menu divisée par 4 portions. Les seuils mangerbouger (500 g de viande hors volaille, 150 g de charcuterie) viennent des citations exactes que l'utilisateur a relues.
+- **Poisson seulement surgelé ou en conserve**, jamais frais (constat `error` de la règle `fish`), et **pas de constat « menu sans poisson »** : le foyer en mange peu. Écart voulu avec la conception §6.3 (note datée dans la conception). Le thon est accepté ; sardine et maquereau, que le foyer n'aime pas, passent par `--exclude`, pas par le code. Les poissons du référentiel (`saumon`, `maquereau`, `cabillaud`, `colin`) sont en forme par défaut `frozen`, rayon surgelés.
+- **Pommes de terre préparées d'avance : 2 jours** au frigo.
+- **Table de saison = union** des mois ADEME et des mois du calendrier mangerbouger (`packages/core/src/season/manual-months.ts`) : une ligne mangerbouger ajoute des mois, elle n'en retire jamais. Carotte et chou rouge sont donc de saison toute l'année, l'endive retrouve mai.
+- **Plat demandé protégé par le prompt seul** (§5.1). Le code ne devine pas quel plat la demande nomme. Tout constat de plafond (`meat`, `cured-meat`) ou de `same-protein` est renvoyé une fois à l'IA, avec la phrase « Si la demande nomme un de ces plats, garde-le et ajuste les autres. ». Si l'IA retire quand même le plat demandé, rien ne le signale : la vraie garantie (épingler un plat dans l'app) est au lot 6.
+- Une première version détectait le plat demandé dans le code (règle `requested`, drapeau `fromRequest`). Elle a été **supprimée** avant le commit : elle produisait des régressions à chaque relecture. Elle ne vaut plus et n'existe pas dans le dépôt.
 
 **Livrable vérifiable** : un test par règle, avec un menu-fixture qui la viole et un qui la respecte ; `compose` affiche les constats `warning` et les plats à congeler.
 
-**Ce que ça ne fera PAS (visible)** : pas de planning ni de durée de session.
+**Bilan de validation du livrable**
+- Vérifié sans appel réel : 336 tests Vitest (23 fichiers) passent en local et en CI.
+  - Un test par règle (`conservation`, `day-order`, `reheat`, `fish`, `vegetables`, `pulses`, `meat`, `cured-meat`, `same-protein`, `whole-starch`, `quantity`), avec un menu qui la viole et un qui la respecte (`check-conservation.test.ts`, `check-balance.test.ts`, `check-quantities.test.ts`).
+  - Cycle de correction avec un faux client IA : un `warning` n'est renvoyé qu'une fois par règle, `bestOf` compare les erreurs puis les `warning`, un plafond dépassé par un plat de la demande est renvoyé avec la phrase de §5.1 (`compose.test.ts`).
+  - `compose --dry-run` affiche les prompts avec le jour de session, sans réseau ni clé.
+  - Le rendu de `compose` (« À congeler » avec la consigne de décongélation, durée au frigo de chaque plat, constats triés `error` puis `warning`, forme du poisson toujours affichée) est vérifié par test sans réseau (`render.test.ts`).
+- **Aucune démonstration réelle avec l'IA dans ce lot**, par décision. On ne sait donc pas encore si le modèle respecte les nouvelles consignes du prompt (grammes obligatoires pour la viande, le poisson et la charcuterie ; poisson surgelé ; `sameDay`) ni combien d'essais il faut. Le prompt système est plus long (il reste en cache). La première démonstration réelle viendra avec un lot suivant.
+
+**Ce que ça ne fera PAS (visible)**
+- Pas de planning ni de durée de session (lot 3).
+- Pas de plafond de budget : reporté au lot 7.
+- Pas de constat « menu sans poisson » ni de poisson gras demandé : décision de l'utilisateur.
+- Sardine et maquereau ne sont pas exclus par `core` : il faut `--exclude sardine --exclude maquereau` (réglages d'exclusions au lot 5).
+- Pas de contrôle de la durée de cuisson du poisson (« 15 minutes au plus ») : pas de durées avant le lot 3. Le prompt la demande.
+- Pas de mode de cuisson : une omelette ou des pommes de terre à l'eau marquées « préparées d'avance » sont traitées comme une préparation aux œufs ou une purée ; seul le prompt les envoie au soir même.
+- Pas de consignes de sécurité complètes (2 h à température ambiante, refroidir avant le frigo) dans `compose` : elles iront dans le PDF (lot 4). La consigne de congélation dit « après refroidissement rapide » et « ne pas recongeler ».
+- Pas de durée par type de plat (soupe 5 j, quiche) : la durée vient des catégories des ingrédients.
+- Pas de sous vide ni de consigne de décongélation propre à un plat.
+- Ordre des jours partiel : la proposition vient d'un tri par fragilité ; elle ne trouve pas toujours le meilleur ordre, mais n'ajoute jamais d'erreur.
+- Pas de fourchette de quantité pour la charcuterie, les œufs, le fromage, les matières grasses ; un légume en pièces n'est pas contrôlé en quantité.
+- Pas de seuils enfants, ni de plafond de sel ou de matières grasses.
+- `sameDay` est cru sur parole : un mijoté marqué `sameDay` échappe à la conservation.
+- Plat demandé : priorité par le prompt seul (voir plus haut) ; si l'IA le retire, rien ne le signale avant le lot 6.
+- Une règle souple a un seul essai de correction par règle, pas par plat.
+
+**Reliquats du lot 2** (dettes connues, chacune reprise dans le lot qui doit la traiter, ou laissée en l'état si c'est un choix prudent) :
+- **Phrase de congélation des pâtes écrite en dur** : la chaîne `pastaException` dans `conservationPromptLines` (`packages/core/src/rules/conservation-table.ts`), et le message du constat `reheat` (`check-conservation.ts`), énumèrent « gratin, lasagnes, cannelloni » à la main au lieu de la tirer de `PASTA_DISH_WORDS`. Une autre phrase du prompt, `PASTA_SESSION_EXCEPTION_FR`, est déjà générée depuis cette liste. Changer la liste sans changer ces phrases ferait diverger le prompt du contrôle. Dette de code, à traiter dès qu'on touche à ces fichiers.
+- **Pâtes non reconnues** : `isIdentifiedPasta` reconnaît les pâtes du référentiel, et, hors référentiel, un nom qui contient un mot de `PASTA_WORDS` (macaroni, spaghetti, penne, tagliatelle, coquillette, lasagne, cannelloni) **et** dont la catégorie est féculent ou absente. Deux cas lui échappent, sans constat `reheat` : une pâte que l'IA classe en `other` ou en légume, même avec un mot de la liste (`macaroni` en `other`) ; une pâte dont le nom n'est pas dans la liste (`fusilli`, `farfalle`), même bien classée en `refined-starch`. Elle est alors traitée comme n'importe quel ingrédient de sa catégorie.
+- **Fragilité décidée par catégorie** : la durée au frigo et la congélation d'un ingrédient viennent de sa catégorie, avec quelques exceptions par nom (`KEEPING_BY_NAME`). C'est une approximation, qui peut se tromper dans les deux sens : un plat à congeler ou un `warning` de trop, mais aussi une préparation **manquée**. Exemple : une omelette décrite par des œufs préparés d'avance est acceptée à J+2, sans constat de conservation, car le code ne voit que la catégorie `egg` (2 j, se congèle) et non le mot « omelette », qui ne compte que pour un ingrédient nommé ainsi.
+- **Tomate toujours fragile** : `tomate` vaut 2 j au frigo et « se congèle mal », même cuisinée en sauce (le code ne voit pas le mode de cuisson). `tomate concassée` vaut 3 j et se congèle.
+- **Invariant N** (négation en tête de phrase, voir le bilan du lot 1) : une négation couvre toute la phrase jusqu'à sa fin (« pas de porc cette semaine, un poulet basquaise » : le poulet n'est pas compté comme demandé), et une interdiction écrite après l'ingrédient (« le porc est interdit ») compte comme une demande pour la saison. Pour exclure un ingrédient, utiliser `--exclude`.
+- **Limites de la normalisation** :
+  - « pâtés » (au pluriel) donne encore la clé de `pâtes` ;
+  - « mais » écrit pour « maïs » dans la demande n'exempte plus le maïs du contrôle de saison (sens prudent) ;
+  - la clé du mot « mais » reste celle de « maïs » : `--exclude mais` exclut toujours le maïs.
+- **Plat demandé non épinglé** : les règles `meat`, `cured-meat` et `same-protein` ne savent pas quel plat la demande nomme ; l'épinglage est au lot 6 (voir « Ce qui a changé en cours de lot »).
+- **Aucune démonstration réelle** : voir le bilan. À faire avec la clé Mammouth (appels rares), à la première occasion.
 
 ## Lot 3 : équipement et planning de session
 
@@ -196,12 +244,13 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 **Contenu** (conception §5.2 à §5.4, §9)
 - Écran Nouvelle session : conversation, menu courant à côté, « vérification en cours », constats et avertissements.
 - Modification du menu courant (§5.3) : demandes ciblées, résumé de conversation, action « éviter cet ingrédient ».
+- **Épingler un plat demandé** : un plat que la demande nomme, ou que l'utilisateur épingle, ne peut pas être retiré par l'IA (conception §5.1). Au lot 2, la protection tient au prompt seul et rien ne signale un plat retiré ; c'est ce lot qui en fait une vraie garantie.
 - Validation, détail, export du PDF.
 - Écran Ingrédients : liste par rayon avec cases à cocher (l'état coché est conservé).
 - Historique des 5 derniers menus, transmis à l'IA, avec réouverture du PDF.
 - Si le plan relance `tauri dev` : vérifier après l'arrêt que le port 1420 est libre et que l'app ne tourne plus (pnpm 12, un groupe de processus par script).
 
-**Livrable vérifiable** : tests de la modification du menu courant avec un faux client IA ; dans l'app, l'utilisateur compose, modifie un plat, valide et obtient le PDF ; le menu apparaît dans l'historique.
+**Livrable vérifiable** : tests de la modification du menu courant avec un faux client IA, dont un test où l'IA tente de retirer un plat épinglé ; dans l'app, l'utilisateur compose, modifie un plat, valide et obtient le PDF ; le menu apparaît dans l'historique.
 
 **Ce que ça ne fera PAS (visible)** : pas de prix.
 
@@ -212,8 +261,9 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 **Contenu** (conception §8, `docs/research/sources-prix.md`)
 - `pricing/` : table manuelle, INSEE, résumé Open Prices (téléchargement hebdomadaire en tâche de fond, lecture en flux, médiane par ingrédient du référentiel), ordre de priorité, source affichée.
 - Affichage du coût dans le menu courant, la page Ingrédients (avec modification de la table manuelle) et le PDF ; mention de la licence ODbL.
+- **Plafond de budget** (reporté du lot 2, décision de l'utilisateur du 2026-11-13) : quand la demande fixe un plafond, un dépassement donne un constat `warning` (conception §6.6). Aucun constat de budget avant ce lot.
 
-**Livrable vérifiable** : tests de l'estimation sur un extrait de fichier Open Prices et un extrait du CSV INSEE ; dans l'app, un menu affiche un coût total et la source de chaque prix ; l'app reste utilisable sans données Open Prices.
+**Livrable vérifiable** : tests de l'estimation sur un extrait de fichier Open Prices et un extrait du CSV INSEE ; un test du constat de budget (un menu qui dépasse le plafond, un qui le respecte) ; dans l'app, un menu affiche un coût total et la source de chaque prix ; l'app reste utilisable sans données Open Prices.
 
 **Ce que ça ne fera PAS (visible)** : pas de prix d'un magasin précis ; pas de comparaison entre enseignes.
 
