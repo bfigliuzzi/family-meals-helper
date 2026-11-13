@@ -4,7 +4,7 @@ Ce fichier dit comment écrire du code dans `packages/core` sans casser la front
 
 ## 1. Organisation
 
-- `core` a un seul programme TypeScript (`packages/core/tsconfig.json`). Les types Node y sont visibles partout : `tsconfig.json` les charge explicitement (`"types": ["node"]`, avec `@types/node` en dépendance de `core`). Ce choix anticipe notamment le SDK Anthropic du lot 1, qui les charge de toute façon.
+- `core` a un seul programme TypeScript (`packages/core/tsconfig.json`). Les types Node y sont visibles partout : `tsconfig.json` les charge explicitement (`"types": ["node"]`, avec `@types/node` en dépendance de `core`). Ce choix vient notamment du SDK Anthropic (lot 1), qui les charge de toute façon.
 - Le code Node vit dans `packages/core/src/node/` : implémentations Node des ports, commandes de développement comme `compose`. ESLint y autorise Node.
 - Les tests se nomment `*.test.ts` ou `*.spec.ts`. ESLint les traite comme du code Node : ils peuvent lire des fichiers.
 - Tout le reste de `packages/core/src/` est le **code pur**. C'est lui que la garde surveille.

@@ -9,7 +9,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 | Lot | Titre | Dépend de | Statut |
 |---|---|---|---|
 | 0 | Socle du monorepo | — | `livré` (2026-11-13, `baebfc7`) |
-| 1 | Tracer : composition IA en ligne de commande | 0 | à faire |
+| 1 | Tracer : composition IA en ligne de commande | 0 | `livré` (2026-11-13, `7dc9b43` et `ebe6cd1`) |
 | 2 | Conservation, équilibre et quantités | 1 | à faire |
 | 3 | Équipement et planning de session | 1 | à faire |
 | 4 | Détail, liste de courses et PDF | 2, 3 | à faire |
@@ -45,10 +45,12 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 - **CSP désactivée** (`"csp": null` dans `apps/desktop/src-tauri/tauri.conf.json`) et **permissions `core:default` trop larges** (`capabilities/default.json`) : à traiter au lot 5, qui réécrit les permissions pour SQLite, le trousseau et HTTP.
 - **Pas de vérification Rust en CI** : décision de cadrage, le Rust ne contient que de la configuration. À revoir au lot 5, quand le Rust fera plus que cela.
 - **Arrêt de `tauri dev`** : pnpm 12 place chaque script dans son propre groupe de processus, donc arrêter `pnpm --filter desktop tauri dev` peut laisser Vite ou l'app tourner. Les plans des lots qui relancent `tauri dev` (5 et 6) vérifient après l'arrêt que le port 1420 est libre (`lsof -nP -iTCP:1420 -sTCP:LISTEN`) et que l'app ne tourne plus.
-- **Types Node visibles dans tout `core`** : `tsconfig.json` les charge explicitement, ce qui anticipe le SDK Anthropic du lot 1. La frontière du code pur tient par ESLint seulement, pas par TypeScript. Un second programme TypeScript sans types Node avait été essayé puis supprimé (voir `docs/conventions-core.md`, §7).
+- **Types Node visibles dans tout `core`** : `tsconfig.json` les charge explicitement, ce choix vient notamment du SDK Anthropic (lot 1). La frontière du code pur tient par ESLint seulement, pas par TypeScript. Un second programme TypeScript sans types Node avait été essayé puis supprimé (voir `docs/conventions-core.md`, §7).
 - **Contournements délibérés non couverts** (`as`, `Reflect.get`, dépendance qui accède à l'extérieur) et lectures implicites résiduelles (`Math.random()`, fuseau par défaut d'`Intl`, `format(at)` avec `at` à `undefined`) : dette assumée, jugée en relecture. Le principe d'arrêt est dans `docs/conventions-core.md`, §6.
 
 ## Lot 1 : tracer, composition IA en ligne de commande
+
+**Statut** : `livré` le 2026-11-13, commits `7dc9b43` (le lot) et `ebe6cd1` (ail, oignon, échalote et citron exemptés du contrôle de saison), branche `lot-1-tracer`, CI GitHub verte sur les deux.
 
 **Objectif** : prouver la chaîne demande → IA → vérification → correction sur un vrai appel à Claude, avec les règles bloquantes les plus simples.
 
@@ -70,20 +72,49 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 
 **Contrat de code** : le lot 1 suit `docs/conventions-core.md` (code Node dans `src/node/`, accès extérieurs par les ports (le SDK reçoit un `fetch` adapté de `HttpClient`, les fonctions métier une date fournie par `Clock`), pas de `globalThis` ni de `console` dans le code pur, `Parameters<typeof globalThis.fetch>[1]` pour les types de requête, pas de `format()` sans argument, `z.prettifyError` pour les erreurs zod). Le SDK Anthropic vit dans `packages/core/src/ai/`.
 
-**Pour le décideur** : la clé d'API Claude est lue depuis la variable d'environnement `ANTHROPIC_API_KEY` dans l'implémentation Node de `SecretStore`.
+**Pour le décideur** : la clé d'API est lue depuis la variable d'environnement `ANTHROPIC_API_KEY` dans l'implémentation Node de `SecretStore`. Pour une démonstration réelle, la clé de l'utilisateur est une clé Mammouth, lue depuis l'environnement ; il faut aussi `ANTHROPIC_BASE_URL=https://api.mammouth.ai` et `ANTHROPIC_MODEL=claude-sonnet-5-5`.
 
 **Bilan de validation du livrable**
 - Vérifié sans appel réel : tests Vitest des contrôles (exclusions avec groupes et ingrédients inconnus, saison avec les négations de la demande, forme du menu), du cycle de correction avec un faux client IA (premier menu fautif, puis menu correct ; réponse coupée, refus, erreur réseau qui garde le premier menu), du client Anthropic avec un faux `HttpClient` (URL, en-tête `Authorization: Bearer`, corps, une seule requête sur une erreur 500). `compose --dry-run` affiche les prompts sans réseau ni clé ; sans clé, `compose` s'arrête avec le code 2 avant tout appel.
 - Négation et repérage (invariants N et E2 des corrections du cycle 4) : la négation ne sert qu'à décider si un ingrédient est « demandé » (exemption de saison), avec une portée qui va du premier marqueur négatif jusqu'à la fin de la phrase, parenthèses comprises ; le nom du plat est contrôlé en entier, sans analyse de négation.
-- À remplir par l'orchestrateur après accord de l'utilisateur : sonde du fournisseur, fumée (`smoke`), démo réelle `compose "un bœuf bourguignon, 5 dîners" --exclude courgette` (sortie complète sans la clé, jetons consommés).
+- Vérifié avec un appel réel, le 2026-11-13, à travers le proxy Mammouth (`ANTHROPIC_BASE_URL=https://api.mammouth.ai`, `ANTHROPIC_MODEL=claude-sonnet-5-5`) :
+  - **Sonde** : `POST /v1/messages` avec `{}` renvoie HTTP 400 « anthropic_messages: Invalid model name… ». La route existe et la clé passe ; rien n'a été dépensé.
+  - **Fumée** (`pnpm --filter core smoke`) : code 0, texte `{"dishes":[]}`. Jetons : entrée hors cache 29, lus en cache 0, écrits en cache 2499, sortie 11.
+  - **Démo** `compose "un bœuf bourguignon, 5 dîners" --exclude courgette` : code 0 au premier essai, en 1 appel. 5 plats sur 5 jours, aucune courgette, aucun constat. Jetons d'entrée 2703 (hors cache 204, lus en cache 2499, écrits en cache 0), jetons de sortie 3350. Sortie, sans la clé :
+
+    ```text
+    Modèle : claude-sonnet-5-5 · URL : https://api.mammouth.ai · essais au plus : 3 · désactivé : aucun
+    Essai 1 sur 3 : vérification…
+    Menu pour novembre (essai 1 sur 3)
+
+    a. Bœuf bourguignon aux carottes (lundi)
+       bœuf à braiser 800 g · carotte 500 g · oignon 2 pièces · champignon de Paris 250 g · lardons 150 g · vin rouge 500 ml · concentré de tomate 30 g · farine 30 g · ail 2 pièces · thym 2 g · laurier 2 pièces · pomme de terre 600 g
+    b. Gratin de poireaux au jambon (mardi)
+       poireau 800 g · jambon blanc 200 g · lait 300 ml · farine 30 g · beurre 30 g · muscade 1 g
+       Le soir même : crème liquide 100 ml · emmental râpé 80 g
+    c. Soupe de lentilles corail et carottes (mercredi)
+       lentilles corail 250 g · carotte 500 g · oignon 1 pièce · bouillon de légumes 1000 ml (frais) · cumin 3 g · huile d'olive 20 ml
+       Le soir même : pain 200 g (frais)
+    d. Saucisses aux lentilles vertes, carottes et poireaux (jeudi)
+       saucisse 600 g · lentilles vertes 250 g · carotte 300 g · poireau 300 g · oignon 1 pièce · bouillon de volaille 600 ml (frais) · moutarde 20 g · thym 2 g
+    e. Curry de pois chiches, carottes et poireaux (vendredi)
+       pois chiche 480 g · carotte 400 g · poireau 300 g · tomate concassée 400 g · lait de coco 400 ml · curry 10 g · gingembre 15 g · oignon 1 pièce
+       Le soir même : riz basmati 300 g
+
+    Constats : aucun
+    Contrôle de saison partiel, non vérifiés : champignon de Paris
+    À confirmer (absents du référentiel) : vin rouge (autre)
+    Appels à l'IA : 1 · jetons d'entrée : 2703 (hors cache 204, lus en cache 2499, écrits en cache 0) · jetons de sortie : 3350
+    ```
+  - **Coût** : 0,0064 $ au total pour la fumée et la démo, relevé sur `GET /key/info` de Mammouth.
+  - **Conclusion** : Mammouth accepte l'API Messages, la sortie structurée, `effort` et le cache de prompt (2499 jetons écrits par la fumée, relus par la démo). Aucun `FMH_DISABLE` n'a été nécessaire.
 
 **Reliquats du lot 1** (dettes connues, chacune reprise dans le lot qui doit la traiter) :
 - **`ai/` n'est pas réexporté par `src/index.ts`** : l'app desktop n'a pas besoin du SDK dans son bundle. Le lot 5 ou 6 décidera comment l'app y accède.
 - **Dette `ANTHROPIC_CUSTOM_HEADERS`** : le constructeur du SDK Anthropic lit toujours cette variable, aucune option ne l'empêche (voir `docs/conventions-core.md`, §2).
-- **`FMH_DISABLE`** (`format`, `effort`, `cache`) : prévu pour un proxy qui refuse une de ces fonctions. À noter ici quelle valeur la démo réelle a imposé, s'il y en a une.
+- **`FMH_DISABLE`** (`format`, `effort`, `cache`) : prévu pour un proxy qui refuse une de ces fonctions. Mammouth les accepte toutes (démo du 2026-11-13) ; la variable reste disponible pour un autre proxy.
 - **Pas de repli automatique** sur un autre modèle en cas de refus (`fallbacks`).
 - **Contrôle de saison partiel** : `champignon de Paris` et `patate douce` n'ont pas de ligne dans la table (voir `docs/research/saison-fruits-legumes.md`) ; un ingrédient absent du référentiel est contrôlé à travers les fruits et légumes connus que cite son nom ; s'il n'en cite aucun, il est listé « non vérifié ». La sortie de `compose` le dit.
-- **Choix du fournisseur** : la documentation de Mammouth ne décrit qu'une API compatible OpenAI ; si la sonde ne trouve pas `/v1/messages`, l'utilisateur choisit entre une clé Anthropic directe, un second client dans `ai/` (écart à la conception §10) ou un autre proxy.
 - **Corrections du cycle 1 de relecture** appliquées : clé expurgée des erreurs ; `ANTHROPIC_BASE_URL` en `https://` obligatoire ; exclusions par groupe de catégorie (`CATEGORY_GROUPS`), par mot-groupe et sur le nom du plat ; saison contrôlée sur la forme reçue et sur les fruits et légumes cités dans un nom inconnu ; nombre de dîners : le plus grand nombre de « dîners » cité ; plafond de 3 essais dans le moteur ; compteur d'appels en échec ; endive corrigée à la main (mangerbouger), alias du céleri branche retiré.
 - **Rejeté ou reporté** :
   - Objets Zod stricts (rejeté) : avec le format imposé, le schéma JSON interdit déjà les champs en trop ; sans lui, un champ en trop est ignoré et jamais affiché.
@@ -96,7 +127,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
   - Nom du plat (faux positif voulu) : « Chili sans viande » avec `--exclude viande` donne un constat, car la négation n'est plus analysée dans les noms de plats. Le prompt demande à l'IA de ne pas écrire ce genre de nom ; au pire, un essai de plus.
   - Exemption de saison : un ingrédient voulu qui suit une négation dans la même phrase (« sans tomate, avec des courgettes ») n'est pas compté comme demandé. C'est le sens prudent : au pire un constat de saison, que l'IA corrige.
   - `redact` : un jeton partiel sous une forme rare (`Bearer \"…\"` échappé en JSON, `Bearer: …`, `Bearer%20…`) n'est pas masqué. La clé exacte, elle, l'est toujours. À revoir si un vrai message d'un proxy montre une de ces formes.
-  - Plafond de 2 $ par mois : hors du code ; suivi par `GET https://api.mammouth.ai/key/info` (orchestrateur).
+  - Plafond de 2 $ par mois : hors du code ; suivi par `GET https://api.mammouth.ai/key/info` (orchestrateur). Après la fumée et la démo du lot 1 : 0,0064 $.
   - Autres valeurs de saison de l'ADEME (orange absente en décembre) : pas corrigées au cas par cas. L'oignon et l'échalote, qui en faisaient partie, sont désormais exemptés (conception §6.5).
 - **`pnpm --filter core compose` renvoie le code 1 quand la commande échoue** : pnpm remplace le code de sortie de `node` (2) par 1. Le code 0/1/2 de la conception du lot vaut pour `node src/node/compose.ts` lancé directement.
 
