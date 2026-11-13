@@ -1,11 +1,11 @@
 # Recommandations nutritionnelles mangerbouger.fr (Santé publique France, PNNS)
 
 > **Rôle** : source des règles d'équilibre (§6.3 de la conception). Les contrôles retenus pour le menu sont fixés dans la conception, ce fichier en donne l'origine et le détail.
-> **Règle de lecture** : chaque seuil chiffré se revérifie sur mangerbouger.fr avant d'être écrit dans le code (voir la limite de méthode ci-dessous).
+> **Règle de lecture** : les seuils chiffrés de la section « Citations vérifiées (2026-11-13) » ci-dessous sont recopiés du texte brut des pages (HTML téléchargé avec `curl`), avec l'URL exacte. Ce sont ceux à coder. Un chiffre qui n'y figure pas se revérifie sur mangerbouger.fr avant d'être écrit dans le code.
 
 Recherche faite le 2026-11-12, pour la composition automatique de menus de dîners (famille : 2 adultes, 2 enfants de 5 et 8 ans, batch cooking 4-5 dîners).
 
-Limite de méthode : les pages ont été lues avec l'outil WebFetch, qui renvoie un résumé produit par un petit modèle et non le texte brut. Les valeurs chiffrées ci-dessous viennent de ces résumés. Elles sont cohérentes entre pages et avec une recherche web séparée, mais une relecture humaine d'un chiffre critique reste prudente avant de le coder en dur. Le site signalait aussi un bandeau « plusieurs pages hors ligne suite à une faille de sécurité » : certaines pages étaient indisponibles.
+Limite de méthode : la recherche du 2026-11-12 a lu les pages avec l'outil WebFetch, qui renvoie un résumé produit par un petit modèle et non le texte brut. **Mise à jour du 2026-11-13** : les 12 pages qui portent des seuils chiffrés ont été retéléchargées en HTML brut avec `curl`, et chaque seuil de la section « Citations vérifiées » a été relu contre ce texte. Tous les chiffres de ce fichier qui viennent de ces 12 pages sont confirmés ; aucune valeur n'a été corrigée. Les seuils non vérifiés sur le texte brut sont listés à la fin de la section « Citations vérifiées ». Le même jour, le guide parents 4-11 ans (PDF) a été lu avec Quartz PDFKit et la page « Manger équilibré » avec Chrome sans fenêtre. Le site signalait aussi un bandeau « plusieurs pages hors ligne suite à une faille de sécurité » : certaines pages étaient indisponibles.
 
 ## Pages lues
 
@@ -30,9 +30,9 @@ Préfixe `R` = `https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-
 | Réduire l'alcool | R/reduire/reduire-l-alcool | oui (hors sujet menus) |
 | Enfants et ados de 4 à 17 ans | https://www.mangerbouger.fr/manger-mieux/a-tout-age-et-a-chaque-etape-de-la-vie/enfants-et-adolescents-de-4-a-17-ans | oui, mais page quasi vide (pas de chiffres) |
 | De 4 à 11 ans, les portions s'adaptent à l'âge | https://www.mangerbouger.fr/manger-mieux/a-tout-age-et-a-chaque-etape-de-la-vie/enfants-et-adolescents-de-4-a-17-ans/de-4-a-11-ans-les-portions-s-adaptent-a-l-age-de-votre-enfant | oui |
-| Manger équilibré, ça veut dire quoi | https://www.mangerbouger.fr/manger-mieux/se-faire-plaisir-en-mangeant-equilibre/manger-equilibre-ca-veut-dire-quoi-et-comment-y-arriver | oui, mais contenu vide (hors ligne) |
+| Manger équilibré, ça veut dire quoi | https://www.mangerbouger.fr/manger-mieux/se-faire-plaisir-en-mangeant-equilibre/manger-equilibre-ca-veut-dire-quoi-et-comment-y-arriver | oui, relue avec Chrome le 2026-11-13 : liste d'articles, pas de chiffre (voir « Compléments ») |
 | La Fabrique à menus (page d'accueil) | https://www.mangerbouger.fr/manger-mieux/la-fabrique-a-menus/ | NON : HTTP 503 (recette.mangerbouger.fr : connexion refusée). Description issue d'une recherche web seulement |
-| Guide parents 4-11 ans (PDF, 40 p.) | https://www.mangerbouger.fr/content/show/2132/file/DT05-414-24B%20148-5fx210_GUIDE_40P_MANGER_BOUGER_4-11_ANS_bd_v2.pdf | NON : PDF illisible (pas de pdftotext), seulement l'extrait d'un moteur de recherche |
+| Guide parents 4-11 ans (PDF, 40 p.) | https://www.mangerbouger.fr/content/show/2132/file/DT05-414-24B%20148-5fx210_GUIDE_40P_MANGER_BOUGER_4-11_ANS_bd_v2.pdf | oui, relu le 2026-11-13 (texte extrait avec Quartz PDFKit, voir « Compléments ») |
 | « L'essentiel des recommandations alimentaires » (PDF) | https://www.mangerbouger.fr/content/show/1597/file/L%E2%80%99essentiel%20des%20recommandations%20alimentaires.pdf | NON : PDF illisible |
 
 Aucune page Santé publique France externe n'a été lue. Le résumé de recherche web d'un second passage (légumes secs 2 fois par semaine, 5 fruits et légumes, une petite poignée de fruits à coque) concorde avec les pages ci-dessus.
@@ -133,6 +133,157 @@ Source principale : https://www.mangerbouger.fr/manger-mieux/a-tout-age-et-a-cha
 ## La Fabrique à menus
 
 Page principale inaccessible (HTTP 503), donc non lue. D'après une recherche web (non vérifiée par lecture de la page) : outil gratuit du PNNS qui génère des menus de la semaine pour la famille, avec liste de courses, filtres (sans viande, sans poisson, sans porc, sans œufs), et fiches recette avec valeurs nutritionnelles (calories, matières grasses, glucides, fibres, sel, protéines, grammes de fruits et légumes et de légumes secs). Les critères exacts d'équilibre de l'outil ne sont pas connus. Pistes à relire quand le site est rétabli : https://www.mangerbouger.fr/manger-mieux/la-fabrique-a-menus/ et https://www.mangerbouger.fr/manger-mieux/la-fabrique-a-menus/recettes
+
+## Citations vérifiées (2026-11-13)
+
+Méthode : chaque page a été téléchargée en HTML brut avec `curl -sL`, convertie en texte, puis chaque citation ci-dessous a été retrouvée mot pour mot dans ce texte (`grep -F`). Date de consultation : 2026-11-13. Les guillemets « » inclus dans une citation sont ceux du site. Les pages des recommandations n'affichent pas de date de publication ; la page 4-11 ans indique « Date de publication le 10/06/2024 », « Modifié le 11/06/2024 ».
+
+Résultat : aucune valeur du fichier n'est contredite par le site. Le guide 4-11 ans (sous-section « Compléments ») confirme les mêmes valeurs et ajoute deux nuances.
+
+- **Fruits et légumes, par jour** : au moins 5 portions par jour, soit 3 de légumes et 2 de fruits, ou 4 de légumes et 1 de fruit.
+  - Citation : « Au moins 5 fruits et légumes par jour, par exemple 3 portions de légumes et 2 fruits ou 4 de légumes et 1 fruit. »
+  - URL : https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-l-alimentation-l-activite-physique-et-la-sedentarite/augmenter/augmenter-les-fruits-et-legumes
+- **Fruits et légumes, taille d'une portion adulte** : 80 à 100 g.
+  - Citation : « Une portion « adulte », c’est l’équivalent de 80 à 100 grammes. »
+  - URL : https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-l-alimentation-l-activite-physique-et-la-sedentarite/augmenter/augmenter-les-fruits-et-legumes
+- **Fruits et légumes, portion enfant** : 4 à 6 ans : environ la moitié de la portion adulte ; 7 à 11 ans : augmente jusqu'à la portion adulte.
+  - Citation : « Pour les enfants, entre 4 et 6 ans, la portion est d’environ la moitié de celle d’un adulte. »
+  - URL : https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-l-alimentation-l-activite-physique-et-la-sedentarite/augmenter/augmenter-les-fruits-et-legumes
+- **Fruits et légumes, enfants, fréquence** : à chaque repas.
+  - Citation : « habituez les enfants à manger des fruits et légumes à chaque repas »
+  - URL : https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-l-alimentation-l-activite-physique-et-la-sedentarite/augmenter/augmenter-les-fruits-et-legumes
+- **Légumes secs** : au moins 2 fois par semaine.
+  - Citation : « Consommer des légumes secs (lentilles, haricots, pois chiches…) au moins 2 fois par semaine car ils sont naturellement riches en fibres. »
+  - URL : https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-l-alimentation-l-activite-physique-et-la-sedentarite/augmenter/augmenter-les-legumes-secs
+- **Féculents complets** : au moins une fois par jour, au choix parmi pain complet ou aux céréales, pâtes, semoule, riz complets.
+  - Citation : « Le pain complet ou aux céréales, les pâtes, la semoule et le riz complets : au choix au moins une fois par jour. »
+  - URL : https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-l-alimentation-l-activite-physique-et-la-sedentarite/aller-vers/aller-vers-les-feculents-complets
+- **Fibres** : au moins 25 g par jour.
+  - Citation : « seules 8 % des femmes adultes et 17% des hommes atteignent la recommandation d’au moins 25g de fibres/jour »
+  - URL : https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-l-alimentation-l-activite-physique-et-la-sedentarite/aller-vers/aller-vers-les-feculents-complets
+- **Fruits à coque** : une petite poignée par jour ; avant 6 ans, jamais entiers (en poudre).
+  - Citation : « Consommer une petite poignée par jour de fruits à coque non salés (et non sucrés et sans chocolat): noix, noisettes, amandes et pistaches »
+  - URL : https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-l-alimentation-l-activite-physique-et-la-sedentarite/augmenter/augmenter-les-fruits-a-coque-non-sales-noix-noisettes-amandes-etc
+- **Fruits à coque, enfants** : plusieurs fois par semaine ; pas entiers avant 6 ans.
+  - Citation : « Avant les 6 ans de votre enfant, ne les donnez pas entiers en raison du risque de fausse route et d’étouffement mais mélangez-les en poudre à vos préparations. »
+  - URL : https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-l-alimentation-l-activite-physique-et-la-sedentarite/augmenter/augmenter-les-fruits-a-coque-non-sales-noix-noisettes-amandes-etc
+- **Poisson, fréquence** : 2 fois par semaine, dont 1 poisson gras.
+  - Citation : « 2 fois par semaine, dont un poisson gras (sardines, maquereau, hareng, saumon). »
+  - URL : https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-l-alimentation-l-activite-physique-et-la-sedentarite/aller-vers/aller-vers-les-poissons-gras-et-maigres-en-alternance
+- **Poisson, portion adulte** : 100 g.
+  - Citation : « Une portion de poisson équivaut à 100g, un petit pavé de saumon ou une boite de sardine. »
+  - URL : https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-l-alimentation-l-activite-physique-et-la-sedentarite/aller-vers/aller-vers-les-poissons-gras-et-maigres-en-alternance
+- **Poisson, portion enfant 4 à 6 ans** : 50 g.
+  - Citation : « Entre 4 et 6 ans, la portion est d’environ la moitié de celle d’un adulte, une portion de 50 g de poisson suffit, »
+  - URL : https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-l-alimentation-l-activite-physique-et-la-sedentarite/aller-vers/aller-vers-les-poissons-gras-et-maigres-en-alternance
+- **Viande hors volaille (porc, bœuf, veau, mouton, agneau, abats)** : au plus 500 g par semaine ; priorité à la volaille.
+  - Citation : « Privilégier la volaille et limiter les autres viandes (porc, bœuf, veau, mouton, agneau, abats) à 500g par semaine. »
+  - URL : https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-l-alimentation-l-activite-physique-et-la-sedentarite/reduire/reduire-la-viande-porc-baeuf-veau-mouton-agneau-abats
+- **Viande hors volaille, équivalent** : environ 3 ou 4 steaks pour 500 g.
+  - Citation : « 500g de viande hors volaille par semaine, cela correspond à environ 3 ou 4 steaks. »
+  - URL : https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-l-alimentation-l-activite-physique-et-la-sedentarite/reduire/reduire-la-viande-porc-baeuf-veau-mouton-agneau-abats
+- **Viande hors volaille, enfants** : le plafond de 500 g vaut à partir de 11 ans ; avant, le site ne donne pas de plafond chiffré.
+  - Citation : « A partir de 11 ans, comme pour les adultes, limitez les viandes hors volaille à 500 g maximum par semaine. »
+  - URL : https://www.mangerbouger.fr/manger-mieux/a-tout-age-et-a-chaque-etape-de-la-vie/enfants-et-adolescents-de-4-a-17-ans/de-4-a-11-ans-les-portions-s-adaptent-a-l-age-de-votre-enfant
+- **Viande, volaille, poisson, œufs : pas tous les jours** : alterner avec les légumes secs et les céréales.
+  - Citation : « Il n’est pas nécessaire de manger de la volaille, de la viande, du poisson ou des œufs tous les jours, on peut alterner avec des aliments qui apportent plutôt des protéines végétales comme par exemple des légumes secs ou des produits céréaliers (au mieux complets ou semi-complets). »
+  - URL : https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-l-alimentation-l-activite-physique-et-la-sedentarite/reduire/reduire-la-viande-porc-baeuf-veau-mouton-agneau-abats
+- **Viande, poisson, œufs : place dans le plat** : quantité inférieure à celle de l'accompagnement.
+  - Citation : « Ils se consomment donc en quantité inférieure à celle de l'accompagnement (légumes et/ou féculents). »
+  - URL : https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-l-alimentation-l-activite-physique-et-la-sedentarite/reduire/reduire-la-viande-porc-baeuf-veau-mouton-agneau-abats
+- **Viande, volaille, poisson, portion enfant** : 4 à 6 ans : 1 œuf ou 50 g ; vers 11 ans : environ 100 g (ou 2 œufs), soit la portion adulte.
+  - Citation : « Entre 4 et 6 ans, un œuf ou une portion de 50 g de volaille, viande ou de poisson suffit »
+  - URL : https://www.mangerbouger.fr/manger-mieux/a-tout-age-et-a-chaque-etape-de-la-vie/enfants-et-adolescents-de-4-a-17-ans/de-4-a-11-ans-les-portions-s-adaptent-a-l-age-de-votre-enfant
+- **Charcuterie** : au plus 150 g par semaine.
+  - Citation : « Limiter la charcuterie à 150g par semaine. »
+  - URL : https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-l-alimentation-l-activite-physique-et-la-sedentarite/reduire/reduire-la-charcuterie
+- **Charcuterie, équivalent et contenu** : environ 3 tranches de jambon blanc ; saucisses, lardons, bacon, viandes en conserve, jambons secs et crus en font partie.
+  - Citation : « Cela correspond à environ 3 tranches de jambon blanc ou de jambon de volaille. Les saucisses de porc ou de volaille, les lardons, le bacon, les viandes en conserve, les jambons secs et crus font partie de la charcuterie. »
+  - URL : https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-l-alimentation-l-activite-physique-et-la-sedentarite/reduire/reduire-la-charcuterie
+- **Charcuterie, enfants** : avant 11 ans : exceptionnelle, sauf jambon blanc ou de volaille de temps en temps ; dès 11 ans : 150 g par semaine.
+  - Citation : « En dehors du jambon blanc ou de volaille de temps en temps, la charcuterie ne doit être consommée qu’exceptionnellement. »
+  - URL : https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-l-alimentation-l-activite-physique-et-la-sedentarite/reduire/reduire-la-charcuterie
+- **Produits laitiers** : 2 par jour pour les adultes, 3 par jour pour les enfants.
+  - Citation : « 2 par jour pour les adultes et 3 pour les enfants. »
+  - URL : https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-l-alimentation-l-activite-physique-et-la-sedentarite/aller-vers/aller-vers-une-consommation-de-produits-laitiers-suffisante-mais-limitee
+- **Produits laitiers, une portion** : un yaourt nature, ou 150 mL de lait, ou 30 g de fromage.
+  - Citation : « Un produit laitier c’est par exemple un yaourt nature, un verre moyen de lait (150mL), un morceau de fromage (30g) ou du fromage râpé sur les pâtes, gratins et quiches… »
+  - URL : https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-l-alimentation-l-activite-physique-et-la-sedentarite/aller-vers/aller-vers-une-consommation-de-produits-laitiers-suffisante-mais-limitee
+- **Sel** : au plus 5 g par jour pour un adulte (2 g de sodium).
+  - Citation : « Il est recommandé de ne pas consommer plus de 5g de sel par jour pour un adulte, soit l’équivalent de 2 g de sodium »
+  - URL : https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-l-alimentation-l-activite-physique-et-la-sedentarite/reduire/reduire-les-produits-sales-et-le-sel
+- **Boissons sucrées et jus** : au plus 1 verre par jour ; enfants de moins de 11 ans : 1/2 verre.
+  - Citation : « dans tous les cas, pas plus d’un verre par jour. Pour les enfants de moins de 11 ans, pas plus d’1/2 verre. »
+  - URL : https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-l-alimentation-l-activite-physique-et-la-sedentarite/reduire/reduire-les-boissons-sucrees-aliments-gras-sucres-sales-et-ultra-transformes
+- **Matières grasses ajoutées** : aucun seuil chiffré : « en petites quantités », huile de colza, de noix ou d'olive de préférence.
+  - Citation : « Les matières grasses ajoutées – huile, beurre et margarine – peuvent être consommées tous les jours en petites quantités. Privilégiez l’huile de colza, de noix et d’olive. »
+  - URL : https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-l-alimentation-l-activite-physique-et-la-sedentarite/aller-vers/aller-vers-l-huile-de-colza-de-noix-et-d-olive
+- **Nutri-Score D et E** : aucun seuil chiffré : limiter.
+  - Citation : « Limitez les produits avec un Nutri-Score D et E. »
+  - URL : https://www.mangerbouger.fr/l-essentiel/les-recommandations-sur-l-alimentation-l-activite-physique-et-la-sedentarite/reduire/reduire-les-boissons-sucrees-aliments-gras-sucres-sales-et-ultra-transformes
+
+### Compléments : guide parents 4-11 ans (PDF) et article « varier son alimentation sur la semaine »
+
+Lus le 2026-11-13. Le guide est un PDF de 40 pages (même programme PNNS que le site), converti en texte avec Quartz PDFKit (`pdftotext` n'est pas installé) ; les citations sont recopiées après remplacement des retours à la ligne par des espaces. Les numéros de page sont ceux du PDF.
+
+Écarts trouvés : aucune valeur chiffrée contredite. Deux nuances sont signalées ci-dessous : le poisson (« dont un gras » sur le site, « en alternant gras et maigre » dans le guide) et la portion de légumes de l'enfant.
+
+- **Guide 4-11 ans : fruits et légumes** : à chaque repas, pour atteindre au moins 5 par jour à l'âge adulte.
+  - Citation : « Pour qu’il atteigne progressivement au moins 5 fruits et légumes par jour à l’âge adulte, habituez votre enfant à manger chaque jour des fruits et légumes aux repas. »
+  - URL : https://www.mangerbouger.fr/content/show/2132/file/DT05-414-24B%20148-5fx210_GUIDE_40P_MANGER_BOUGER_4-11_ANS_bd_v2.pdf (page 12 du PDF)
+- **Guide 4-11 ans : taille d'une portion** : moitié de la portion adulte entre 4 et 6 ans ; elle augmente jusqu'à la portion adulte entre 7 et 11 ans.
+  - Citation : « Entre 4 et 6 ans, la portion est d’environ la moitié de celle d’un adulte. »
+  - URL : https://www.mangerbouger.fr/content/show/2132/file/DT05-414-24B%20148-5fx210_GUIDE_40P_MANGER_BOUGER_4-11_ANS_bd_v2.pdf (page 34 du PDF)
+- **Guide 4-11 ans : légumes, légumes secs, féculents complets, nombre de portions** : une portion à tout âge, repère = la main de l'enfant, puis on ressert selon l'appétit. ÉCART de lecture : le guide ne divise pas ces portions par deux ; la page « fruits et légumes » dit 80 à 100 g chez l'adulte et la moitié à 4-6 ans (voir plus haut). Les deux se rejoignent si « une portion » veut dire un poing d'enfant, ce que dit aussi la page 4-11 ans.
+  - Citation : « Pour les fruits et légumes, les légumes secs et les produits céréaliers complets ou semi-complets : à tout âge, servez une portion et resservez selon l’appétit. »
+  - URL : https://www.mangerbouger.fr/content/show/2132/file/DT05-414-24B%20148-5fx210_GUIDE_40P_MANGER_BOUGER_4-11_ANS_bd_v2.pdf (page 35 du PDF)
+- **Guide 4-11 ans : légumes secs** : au moins 2 fois par semaine (même valeur que le site).
+  - Citation : « Légumes secs (lentilles, haricots, pois chiches, etc.) au moins 2 fois par semaine car ils sont naturellement riches en fibres et contiennent des protéines végétales. »
+  - URL : https://www.mangerbouger.fr/content/show/2132/file/DT05-414-24B%20148-5fx210_GUIDE_40P_MANGER_BOUGER_4-11_ANS_bd_v2.pdf (page 28 du PDF)
+- **Guide 4-11 ans : féculents complets** : au moins une fois par jour (même valeur que le site).
+  - Citation : « Le pain complet ou aux céréales, les pâtes, la semoule et le riz complets : au choix au moins une fois par jour car ils sont naturellement riches en fibres. »
+  - URL : https://www.mangerbouger.fr/content/show/2132/file/DT05-414-24B%20148-5fx210_GUIDE_40P_MANGER_BOUGER_4-11_ANS_bd_v2.pdf (page 29 du PDF)
+- **Guide 4-11 ans : poisson, fréquence** : 2 fois par semaine. ÉCART de formulation : le site dit « dont un poisson gras », le guide dit « en alternant poisson gras et poisson maigre ». Garder « 2 fois par semaine, dont 1 gras » est la lecture la plus stricte et compatible avec les deux.
+  - Citation : « Le poisson : deux fois par semaine en alternant poisson gras (sardines, maquereau, hareng, saumon) et poisson maigre. »
+  - URL : https://www.mangerbouger.fr/content/show/2132/file/DT05-414-24B%20148-5fx210_GUIDE_40P_MANGER_BOUGER_4-11_ANS_bd_v2.pdf (page 27 du PDF)
+- **Guide 4-11 ans : portion adulte de viande, poisson, œufs** : 100 g, ou 2 œufs (même valeur que le site).
+  - Citation : « Une portion adulte, c’est : 100 g de volaille, poisson ou viande ou 2 œufs. »
+  - URL : https://www.mangerbouger.fr/content/show/2132/file/DT05-414-24B%20148-5fx210_GUIDE_40P_MANGER_BOUGER_4-11_ANS_bd_v2.pdf (page 35 du PDF)
+- **Guide 4-11 ans : portion de viande, poisson, œufs à 4-6 ans** : 1 œuf ou 50 g (même valeur que le site).
+  - Citation : « un œuf ou une portion de 50 g de volaille, d’autre viande ou de poisson suffit »
+  - URL : https://www.mangerbouger.fr/content/show/2132/file/DT05-414-24B%20148-5fx210_GUIDE_40P_MANGER_BOUGER_4-11_ANS_bd_v2.pdf (page 35 du PDF)
+- **Guide 4-11 ans : viande hors volaille et charcuterie à partir de 11 ans** : 500 g et 150 g par semaine au plus, « comme pour les adultes » (même valeur que le site).
+  - Citation : « À partir de 11 ans : comme pour les adultes, limitez les viandes hors volaille à 500 g maximum par semaine et la charcuterie à 150 g maximum par semaine. »
+  - URL : https://www.mangerbouger.fr/content/show/2132/file/DT05-414-24B%20148-5fx210_GUIDE_40P_MANGER_BOUGER_4-11_ANS_bd_v2.pdf (page 35 du PDF)
+- **Guide 4-11 ans : viande avant 11 ans** : priorité à la volaille, pas de plafond chiffré pour les autres viandes (cohérent avec le fichier).
+  - Citation : « Privilégier la volaille et limiter les autres viandes (porc, bœuf, veau, mouton, agneau, abats). »
+  - URL : https://www.mangerbouger.fr/content/show/2132/file/DT05-414-24B%20148-5fx210_GUIDE_40P_MANGER_BOUGER_4-11_ANS_bd_v2.pdf (page 22 du PDF)
+- **Guide 4-11 ans : charcuterie avant 11 ans** : exceptionnelle, sauf jambon blanc ou de volaille de temps en temps (même valeur que le site).
+  - Citation : « En dehors du jambon blanc ou de volaille de temps en temps, la charcuterie ne doit être consommée qu’exceptionnellement. »
+  - URL : https://www.mangerbouger.fr/content/show/2132/file/DT05-414-24B%20148-5fx210_GUIDE_40P_MANGER_BOUGER_4-11_ANS_bd_v2.pdf (page 22 du PDF)
+- **Guide 4-11 ans : alterner les protéines dans la semaine** : alterner volaille, autres viandes, poisson, œufs et légumes secs (écrit sans chiffre).
+  - Citation : « Pour instaurer de bonnes habitudes alimentaires dès l’enfance, et pour toute la famille, vous pouvez alterner dans la semaine volaille, autres viandes, poisson, œufs et légumes secs. »
+  - URL : https://www.mangerbouger.fr/content/show/2132/file/DT05-414-24B%20148-5fx210_GUIDE_40P_MANGER_BOUGER_4-11_ANS_bd_v2.pdf (page 22 du PDF)
+- **Guide 4-11 ans : composition du plat principal** : une portion de légumes et une portion de féculents ou de légumes secs, avec volaille, poisson, œufs ou viande (écrit sans chiffre).
+  - Citation : « Prévoyez toujours une portion de légumes et une autre de féculents ou de légumes secs en plat principal, accompagnées à midi ou le soir de volaille, de poisson, d’œufs ou de viande. »
+  - URL : https://www.mangerbouger.fr/content/show/2132/file/DT05-414-24B%20148-5fx210_GUIDE_40P_MANGER_BOUGER_4-11_ANS_bd_v2.pdf (page 25 du PDF)
+- **Guide 4-11 ans : produits laitiers** : 3 par jour pendant l'enfance, 2 par jour à l'âge adulte (même valeur que le site).
+  - Citation : « 3 produits laitiers par jour pendant l’enfance et l’adolescence ; ils apportent du calcium et sont essentiels à la croissance et la bonne minéralisation des os. Ensuite, à l’âge adulte, 2 produits laitiers par jour seront suffisants. »
+  - URL : https://www.mangerbouger.fr/content/show/2132/file/DT05-414-24B%20148-5fx210_GUIDE_40P_MANGER_BOUGER_4-11_ANS_bd_v2.pdf (page 18 du PDF)
+- **Page « Manger équilibré » (article « Comment varier son alimentation sur la semaine ? ») : échelle de temps** : l'équilibre se juge sur la semaine, pas sur un repas (appui pour les contrôles hebdomadaires).
+  - Citation : « Cet équilibre alimentaire ne se construit pas sur un repas ou sur une journée mais plutôt sur la semaine. »
+  - URL : https://www.mangerbouger.fr/manger-mieux/se-faire-plaisir-en-mangeant-equilibre/manger-equilibre-ca-veut-dire-quoi-et-comment-y-arriver/comment-varier-son-alimentation-sur-la-semaine
+- **Même article : plat principal** : viande, volaille, poisson ou œufs : composant du plat, jamais l'élément dominant (même idée que la page viande).
+  - Citation : « Viandes, volaille, poissons ou œufs peuvent être des composants du plat principal mais non l’élément dominant. »
+  - URL : https://www.mangerbouger.fr/manger-mieux/se-faire-plaisir-en-mangeant-equilibre/manger-equilibre-ca-veut-dire-quoi-et-comment-y-arriver/comment-varier-son-alimentation-sur-la-semaine
+
+Seuils et pages **non** vérifiés sur le texte brut :
+
+- La Fabrique à menus (https://www.mangerbouger.fr/manger-mieux/la-fabrique-a-menus/) : HTTP 503 et page « Site en Maintenance », y compris avec Chrome sans fenêtre (3 essais espacés, 2026-11-13). Aucun critère d'équilibre de l'outil n'est connu.
+- Le PDF « L'essentiel des recommandations alimentaires » : non téléchargé ; aucun chiffre du fichier n'en dépend (le guide 4-11 ans, lui, est lu, voir ci-dessus).
+- Les pages sans seuil chiffré, relues avec Chrome sans fenêtre (JavaScript exécuté) : l'index des recommandations adultes n'est qu'une liste de liens (Augmenter, Aller vers, Réduire) ; « Manger équilibré, ça veut dire quoi » n'est qu'une liste d'articles (les deux citations ci-dessus viennent de l'article « Comment varier son alimentation sur la semaine ? »). Fait maison, Nutri-Score D et E et alcool ne portent aucun chiffre. Le fait maison dit seulement « Privilégiez le fait maison quand c’est possible. ».
+- Les valeurs de la section « Traduction pour un menu de 4-5 dîners » (sous-sections B et C) sont des interprétations du projet, pas des phrases du site, et ne se vérifient pas par citation.
+- Les repères de sel par aliment (1 g de sel par rondelle de saucisson, etc.), le jus limité à 1 verre dans la page fruits et légumes et les repères poing / paume de la main enfant sont relus sur le texte brut mais ne sont pas cités ci-dessus : ils ne sont pas des seuils de contrôle.
 
 ## Traduction pour un menu de 4-5 dîners
 

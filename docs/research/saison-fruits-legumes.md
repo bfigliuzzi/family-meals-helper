@@ -86,6 +86,25 @@ Le citron reste à janvier et février : l'ADEME et mangerbouger.fr concordent. 
 | figue | juillet à octobre (7, 8, 9, 10) | ademe |
 | raisin | septembre à octobre (9, 10) | ademe |
 
+## Calendrier mangerbouger (2026-11-13)
+
+Source : https://www.mangerbouger.fr/manger-mieux/bien-manger-sans-se-ruiner/calendrier-de-saison (page rendue en JavaScript, lue avec Chrome sans fenêtre). Pour les autres mois, la page demande elle-même `?month=N` (N de 0 pour janvier à 11 pour décembre) avec l'en-tête `X-Requested-With: XMLHttpRequest` et reçoit du JSON ; les douze mois ont été lus ainsi. Le code n'a pas été modifié : cette section ne fait que noter les écarts.
+
+Titre de la liste de novembre : « Quels sont les fruits et légumes de novembre ? ». Éléments listés (40) : Ail, Betterave, Blette, Brocoli, Carotte, Chou, Chou chinois, Chou de Bruxelles, Chou-fleur, Clémentine, Coprin chevelu, Courge, Cresson, Cèpe, Céleri, Endive, Fenouil, Grenade, Kaki, Kiwi, Litchi, Mandarine, Mâche, Navet, Oignon, Oseille, Panais, Pied de mouton, Pleurote, Poire, Poireau, Pomme, Potimarron, Potiron, Pêche de vigne, Rosé des prés, Salsifis, Topinambour, Trompette de la mort, Épinard.
+
+Écarts entre le calendrier mangerbouger et la table du code (`packages/core/src/season/season-table.ts`), sur les produits qui existent des deux côtés :
+
+| Entrée du code | Table du code | Calendrier mangerbouger |
+|---|---|---|
+| chou rouge | octobre à mars (rattaché au « Chou » de l'ADEME) | « Chou rouge » : avril à septembre ; « Chou » : octobre à mars. Le chou rouge n'est donc pas de saison en novembre selon mangerbouger |
+| carotte | septembre à mars | toute l'année |
+| betterave | octobre à mars | octobre à avril |
+| fenouil | avril, juin à novembre | avril à novembre |
+| radis | mars à juin | mars à juillet |
+| laitue | mai à septembre | « Salade » (rapprochement probable, non certain) : avril à octobre |
+
+Tous les autres produits comparés ont les mêmes mois : ail, artichaut, asperge, aubergine, blette, brocoli, butternut (« Courge »), chou de Bruxelles, chou vert (« Chou »), chou-fleur, citron, clémentine, concombre, courgette, céleri-rave (« Céleri »), endive, figue, haricot vert, maïs, mâche, navet, oignon, orange, panais, petit pois, poire, poireau, poivron, pomme, potimarron, potiron, raisin, tomate, topinambour, épinard. Absents du calendrier mangerbouger : l'échalote (exemptée du contrôle de toute façon), le champignon de Paris et la pomme de terre. En novembre, le seul désaccord est donc le chou rouge.
+
 ## Lacunes (non contrôlées)
 
 `céleri branche`, `champignon de Paris`, `patate douce`, `tomate concassée` : ni l'ADEME ni une ligne manuelle ne les couvrent. Un ingrédient absent du référentiel (par exemple `romanesco`) n'est pas contrôlé non plus. La sortie de `compose` les liste sous « Contrôle de saison partiel, non vérifiés ».
