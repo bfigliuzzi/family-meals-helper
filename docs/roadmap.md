@@ -12,7 +12,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 | 1 | Tracer : composition IA en ligne de commande | 0 | `livré` (2026-11-13, `7dc9b43` et `ebe6cd1`) |
 | 2 | Conservation, équilibre et quantités | 1 | `livré` (2026-11-13, `908c016` et `52960c8`) |
 | 3 | Équipement et planning de session | 1 | `livré` (2026-11-13, `5b98d7b`) |
-| 4 | Détail, liste de courses et PDF | 2, 3 | à faire |
+| 4 | Détail, liste de courses et PDF | 2, 3 | `livré` (2026-11-14, `ca72cc6`) ; démonstration réelle non faite |
 | 5 | App desktop : coquille, réglages, persistance | 4 | à faire |
 | 6 | App desktop : session, ingrédients, historique | 5 | à faire |
 | 7 | Prix | 4 (affichage dans l'app : 6) | à faire |
@@ -57,7 +57,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 **Contenu** (conception §2, §5.1, §5.2, §6.5, §7)
 - `domain/` : schémas Zod de Menu, Plat, Ingrédient (avec forme) ; le Constat est une interface TypeScript sans schéma Zod, car il n'est jamais lu depuis l'extérieur.
 - `ports/` : `HttpClient`, `Clock`, `SecretStore`. Une implémentation Node pour la ligne de commande, dans `packages/core/src/node/`.
-- `ingredients/` : référentiel de départ (une centaine d'ingrédients courants) avec synonymes, catégorie détaillée, rayon, forme, drapeau `placard`.
+- `ingredients/` : référentiel de départ (une centaine d'ingrédients courants) avec synonymes, catégorie détaillée, rayon, forme, drapeau `placard`. *Le rayon a été retiré au lot 4 (2026-11-14, courses en drive).*
 - `season/` : table de saison France par mois (§6.5 : vérifier d'abord l'API ADEME).
 - `rules/` : contrôle des exclusions et de la saison, qui produit des constats.
 - `ai/` : client Claude via le port HTTP, prompt système avec le texte des règles cuisine-addict de composition (§6.1) en prompt caching, sortie structurée validée par Zod, cycle proposer → vérifier → corriger (3 essais).
@@ -148,7 +148,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 - **Budget reporté au lot 7** : aucun constat de budget au lot 2.
 - **Session le dimanche par défaut**, option `--session-day` (vendredi, samedi, dimanche, lundi). Les jours écoulés entre la session et chaque dîner (dimanche : lundi 1 … vendredi 5) décident de la conservation.
 - **Seuils par adulte** = quantité du menu divisée par 4 portions. Les seuils mangerbouger (500 g de viande hors volaille, 150 g de charcuterie) viennent des citations exactes que l'utilisateur a relues.
-- **Poisson seulement surgelé ou en conserve**, jamais frais (constat `error` de la règle `fish`), et **pas de constat « menu sans poisson »** : le foyer en mange peu. Écart voulu avec la conception §6.3 (note datée dans la conception). Le thon est accepté ; sardine et maquereau, que le foyer n'aime pas, passent par `--exclude`, pas par le code. Les poissons du référentiel (`saumon`, `maquereau`, `cabillaud`, `colin`) sont en forme par défaut `frozen`, rayon surgelés.
+- **Poisson seulement surgelé ou en conserve**, jamais frais (constat `error` de la règle `fish`), et **pas de constat « menu sans poisson »** : le foyer en mange peu. Écart voulu avec la conception §6.3 (note datée dans la conception). Le thon est accepté ; sardine et maquereau, que le foyer n'aime pas, passent par `--exclude`, pas par le code. Les poissons du référentiel (`saumon`, `maquereau`, `cabillaud`, `colin`) sont en forme par défaut `frozen`, rayon surgelés. *Les rayons ont été retirés du référentiel au lot 4 (2026-11-14) : seule la forme par défaut `frozen` reste.*
 - **Pommes de terre préparées d'avance : 2 jours** au frigo.
 - **Table de saison = union** des mois ADEME et des mois du calendrier mangerbouger (`packages/core/src/season/manual-months.ts`) : une ligne mangerbouger ajoute des mois, elle n'en retire jamais. Carotte et chou rouge sont donc de saison toute l'année, l'endive retrouve mai.
 - **Plat demandé protégé par le prompt seul** (§5.1). Le code ne devine pas quel plat la demande nomme. Tout constat de plafond (`meat`, `cured-meat`) ou de `same-protein` est renvoyé une fois à l'IA, avec la phrase « Si la demande nomme un de ces plats, garde-le et ajuste les autres. ». Si l'IA retire quand même le plat demandé, rien ne le signale : la vraie garantie (épingler un plat dans l'app) est au lot 6.
@@ -171,7 +171,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 - Sardine et maquereau ne sont pas exclus par `core` : il faut `--exclude sardine --exclude maquereau` (réglages d'exclusions au lot 5).
 - Pas de contrôle de la durée de cuisson du poisson (« 15 minutes au plus ») : pas de durées avant le lot 3. Le prompt la demande. **Depuis le lot 3 (2026-11-13), il y a des durées de phases, mais ce contrôle n'existe toujours pas** (voir « Ce que ça ne fera PAS » du lot 3).
 - Pas de mode de cuisson : une omelette ou des pommes de terre à l'eau marquées « préparées d'avance » sont traitées comme une préparation aux œufs ou une purée ; seul le prompt les envoie au soir même.
-- Pas de consignes de sécurité complètes (2 h à température ambiante, refroidir avant le frigo) dans `compose` : elles iront dans le PDF (lot 4). La consigne de congélation dit « après refroidissement rapide » et « ne pas recongeler ».
+- Pas de consignes de sécurité complètes (2 h à température ambiante, refroidir avant le frigo) dans `compose` : elles iront dans le PDF (lot 4). **Livré au lot 4 (2026-11-14)** : la fiche porte une note de sécurité. La consigne de congélation dit « après refroidissement rapide » et « ne pas recongeler ».
 - Pas de durée par type de plat (soupe 5 j, quiche) : la durée vient des catégories des ingrédients.
 - Pas de sous vide ni de consigne de décongélation propre à un plat.
 - Ordre des jours partiel : la proposition vient d'un tri par fragilité ; elle ne trouve pas toujours le meilleur ordre, mais n'ajoute jamais d'erreur.
@@ -192,7 +192,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
   - « mais » écrit pour « maïs » dans la demande n'exempte plus le maïs du contrôle de saison (sens prudent) ;
   - la clé du mot « mais » reste celle de « maïs » : `--exclude mais` exclut toujours le maïs.
 - **Plat demandé non épinglé** : les règles `meat`, `cured-meat` et `same-protein` ne savent pas quel plat la demande nomme ; l'épinglage est au lot 6 (voir « Ce qui a changé en cours de lot »).
-- **Aucune démonstration réelle** : voir le bilan. À faire avec la clé Mammouth (appels rares), à la première occasion.
+- **Aucune démonstration réelle** : voir le bilan. À faire avec la clé Mammouth (appels rares), à la première occasion. **Toujours à faire au 2026-11-14** : le lot 4 ne l'a pas faite non plus (pas de clé dans l'environnement de construction) ; une seule démonstration de `batch`, lancée par l'utilisateur, couvre les lots 2, 3 et 4 (voir « Reliquats du lot 4 »).
 
 ## Lot 3 : équipement et planning de session
 
@@ -221,10 +221,10 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
   - Les quatre cas du livrable sont testés : four saturé, deux appareils d'appoint, plus de 3 h, et 2 h 15, qui est le `balancedMenu()` des fixtures.
   - Quatre nouveaux constats `error` : `phases` (forme des phases), `equipment` (appareil absent), `extra-appliance` (plus d'un appareil d'appoint), `session-length` (le message nomme le plat qui finit le plus tard).
   - `compose` affiche la durée de session, l'appareil d'appoint et le planning ; `compose --dry-run` a été vérifié.
-- **Aucune démonstration réelle avec l'IA dans ce lot.** On ne sait pas si Mammouth accepte le nouveau schéma (le champ `phases`), ni combien d'essais il faut. À faire à la première occasion.
+- **Aucune démonstration réelle avec l'IA dans ce lot.** On ne sait pas si Mammouth accepte le nouveau schéma (le champ `phases`), ni combien d'essais il faut. À faire à la première occasion. **Toujours à faire au 2026-11-14** (voir « Reliquats du lot 4 »).
 
 **Ce que ça ne fera PAS (visible)**
-- Pas d'étapes détaillées, seulement les grandes phases.
+- Pas d'étapes détaillées, seulement les grandes phases. **Livré au lot 4 (2026-11-14)** : `batch` rédige un détail par étapes, et `compose` reste aux grandes phases.
 - Les durées de l'IA sont crues sur parole.
 - Un préchauffage ou une dépendance oubliés peuvent sous-estimer la durée, sans constat. Le prompt demande un préchauffage de 15 minutes ; son effet sur la durée dépend du planning (des phases qui se chevauchent peuvent l'absorber).
 - « Une phase = une place d'un appareil », le préchauffage commun, et l'exclusion du refroidissement et de la vaisselle sont demandés à l'IA par le prompt ; le code ne les vérifie pas.
@@ -232,25 +232,100 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 - Tout plat qui n'est pas entièrement `sameDay` doit recevoir au moins une phase, même si sa préparation est partagée avec un autre plat ; sinon constat `phases`. Un plat entièrement `sameDay` doit avoir `phases` vide.
 - Pas de contrôle « une seule cuisson longue », ni « poisson en 15 minutes » : le prompt le demande, le code ne le vérifie pas.
 - Après 3 essais, le menu retenu peut s'afficher sans durée (« durée non calculée »), si ses phases restent fausses.
-- Les séparateurs Unicode et les caractères de direction ne sont pas neutralisés dans la sortie de `compose`.
+- ~~Les séparateurs Unicode et les caractères de direction ne sont pas neutralisés dans la sortie de `compose`.~~ **Fermé au lot 4 (2026-11-14)** : `printable` retire les caractères `Default_Ignorable_Code_Point` et remplace les contrôles C0/C1 et U+2028/2029 par une espace, pour `compose` comme pour le PDF.
 
 **Reliquats du lot 3** (dettes connues, chacune reprise dans le lot qui doit la traiter) :
 - **Validation d'un équipement modifiable** (capacités entières ≥ 1, `id` uniques) : reportée au lot 5, qui rend l'équipement modifiable (ajoutée à son contenu).
-- **Démonstration réelle** : à faire avec la clé Mammouth (appels rares), à la première occasion.
+- **Démonstration réelle** : à faire avec la clé Mammouth (appels rares), à la première occasion. **Toujours à faire au 2026-11-14** : couverte par la démonstration de `batch` du lot 4 (voir « Reliquats du lot 4 »).
 
 ## Lot 4 : détail, liste de courses et PDF
 
+**Statut** : `livré` le 2026-11-14, commit `ca72cc6` (branche `lot-4-detail-courses-pdf`), CI GitHub verte (run 43534798699, terminé le 2026-11-14). **Démonstration réelle non faite** (pas de clé dans l'environnement de construction) : à lancer par l'utilisateur, voir « Reliquats du lot 4 ».
+
 **Objectif** : fermer le tracer. Un menu validé donne une fiche PDF utilisable en cuisine.
 
-**Contenu** (conception §5.4, §7, §9)
-- Rédaction du détail par l'IA après validation : recettes, étapes détaillées, ce qu'il reste à faire chaque soir ; replanification et correction si le planning dépasse 3 h.
-- Liste de courses : somme par ingrédient, conversion en unités d'achat, rayons, répartition entre plats, section placard.
-- `pdf/` : génération du PDF dans `core` (moteur au choix, §11), avec les six parties de §9.
-- Une commande : `pnpm --filter core batch "<demande>" --out menu.pdf`, qui enchaîne composition, validation automatique, détail et PDF.
+**Contenu** (conception §5.4, §7, §9, avec leurs notes du 2026-11-14)
+- Rédaction du détail par l'IA après validation : étapes rédigées, ce qu'il reste à faire chaque soir ; replanification et correction si le planning dépasse 3 h.
+- Liste de courses : somme par ingrédient dans l'unité de la recette, répartition entre plats, placard.
+- `pdf/` : génération de la fiche dans `core` (moteur pdfmake), A4 portrait, 1 à 2 feuilles (§9).
+- Une commande : `pnpm --filter core batch "<demande>" [--out menu.pdf]`, qui enchaîne composition, validation automatique, détail et PDF.
 
-**Livrable vérifiable** : tests de la liste de courses (somme, arrondis, placard) ; un PDF généré depuis un menu-fixture sans appel réseau, contrôlé à l'œil par l'utilisateur ; une démonstration réelle de `batch`.
+Contenu prévu à l'origine : recettes, conversion en unités d'achat, rayons, PDF en six parties (voir `60c6d39`).
 
-**Ce que ça ne fera PAS (visible)** : pas de conversation (le menu est validé tel quel) ; pas de prix dans le PDF.
+**Livrable vérifiable** : tests de la liste de courses (somme, unités mélangées, répartition, placard) ; un PDF généré depuis un menu-fixture sans appel réseau (`pnpm --filter core pdf:fixture --out <fichier.pdf>`), contrôlé à l'œil par l'utilisateur ; une démonstration réelle de `batch` (**non faite**, voir « Reliquats du lot 4 »).
+
+**Ce qui a changé en cours de lot**
+
+*Décisions de l'utilisateur (2026-11-13 et 2026-11-14)* :
+- Pas d'unité d'achat ni de poids de pièce. La liste additionne les quantités de la recette (g, ml, pièce), une somme par unité, sans conversion.
+- **Pas de rayons** (courses en drive) : une liste d'ingrédients regroupés avec leur répartition, par exemple « 1 kg de potiron (d : 600 g, e : 400 g) ». Les rayons sont retirés du référentiel.
+- Pas de boîtes de conservation. La fiche donne la durée maximale au frigo et la congélation, tirées des tables du lot 2.
+- Un seul appel de détail. Le code calcule tout ce qu'il peut : menu, conservation, liste, quantités, planning, consignes.
+- Plus de 3 h après 3 essais : PDF produit avec un avertissement en première page, code 1.
+- Détail faux ou illisible après 3 essais : PDF de repli avec les grandes phases de la composition, un avertissement, code 1. Code 2 seulement sans menu utilisable, ou pour une erreur d'usage ou locale.
+- `--out` facultatif. Par défaut, `~/Downloads/menu-batch-AAAA-MM-JJ.pdf`, puis `-2`, `-3`… sans jamais écraser un fichier. Un chemin relatif se comprend depuis le dossier où la commande a été tapée (`INIT_CWD`).
+- **Fiche au format cuisine-addict** (retour de l'utilisateur sur la première fiche) : pas d'horaires ; étapes rédigées (découpes, matière grasse, feu, remuer, ce qu'il faut garder) ; quantité au moment de l'usage ; tas partagés ; soupe au Thermomix s'il est libre ; compacte, 1 à 2 feuilles ; **A4 portrait sur une colonne**.
+- Une seule démonstration réelle, lancée par l'utilisateur.
+
+*Choix faits par le décideur à la place de l'utilisateur, absent* :
+- Moteur pdfmake, police Roboto livrée dans le paquet ; rendu dans `src/node/`.
+- (V) déduit des catégories et des groupes du référentiel.
+- Un ingrédient inconnu est marqué « à confirmer ».
+- `batch` s'arrête avant le détail si la composition garde une `error`.
+- Les quantités sont **calculées par le code** à partir de repères `{a.1}` placés par l'IA dans le texte ; un tas partagé s'écrit `{d.1/e.1}`.
+- Les étapes sont imprimées dans l'ordre du planning. Les indications « Après l'étape N » (dépendance ou appareil occupé) et « Pendant ce temps » sont calculées, et « Pendant ce temps » apparaît une seule fois par cuisson.
+- Conservation par tas :
+  - mention complète sur l'étape qui finit le plat ;
+  - « au frais dès que prêt » pour un tas sans suite ;
+  - « au frais jusqu'à l'étape N » si la suite attend 60 min ou plus.
+
+  On préfère une consigne de trop à une consigne manquante.
+- Pas de flèche (absente de Roboto) : les tas s'écrivent comme la liste, la conservation est séparée par « — ».
+- Le cas limite à 3 pages est accepté, la police reste à 9 pt.
+- Caractères invisibles : suppression selon `\p{Default_Ignorable_Code_Point}` avant la comparaison et l'impression.
+- Une exclusion trouvée dans le texte du détail (étape, titre de phase, soir) ou dans une phase de la composition est **bloquante** : nouvel essai, puis repli.
+- Le nom par défaut ne remplace jamais un fichier. Un `--out` existant est remplacé en gardant ses droits POSIX ; un nouveau fichier suit l'`umask`.
+
+**Bilan de validation du livrable**
+- 810 tests Vitest (40 fichiers), lint, format, typecheck, build et CI verts.
+- Liste de courses testée : somme, unités mélangées, répartition, placard, inconnu « à confirmer », formes.
+- Détail testé : lecture, correction en 3 essais, plats intouchables, plus de 3 h, repli, exclusions.
+- `pdf:fixture` (fiche d'exemple sur 2 pages, fiche de repli sur 1 page) regardé par l'utilisateur sur la première version, puis réécrit à son retour.
+- Fiche lourde : rien de perdu à la pagination.
+- `batch` testé de bout en bout avec de faux modèles, écriture du fichier comprise.
+- 13 cycles de relecture croisée. La règle de bascule vers un exécutant Opus a été appliquée ; les régressions des cycles 7 à 11 venaient des spécifications du décideur.
+- **Démonstration réelle : non faite.** Elle vaut aussi pour les démonstrations des lots 2 et 3, qui gardent leur mention « à faire » tant qu'elle n'a pas eu lieu.
+
+**Ce que ça ne fera PAS (visible)**
+- Pas de conversation. Un menu qui garde une `error` arrête `batch` sans PDF.
+- Pas de prix. Pas de PDF dans l'app (lot 6), pas d'historique.
+- Pas d'unités d'achat ni de rayons : les quantités sont celles des recettes, sans conversion, dans une liste alphabétique. La matière grasse est en ml, pas en cuillères.
+- Pas de boîtes de conservation ni d'ustensiles : seulement les appareils.
+- Pas de recettes complètes : des étapes rédigées par l'IA. Seules les quantités du menu sont calculées par le code ; le reste du texte n'est pas contrôlé, sauf pour les exclusions et les repères. Une quantité écrite à la main n'est signalée que si elle a la forme « nombre + g, kg, ml, cl ou l » devant un nom du menu.
+- Le partage d'une quantité entre plusieurs étapes (« la moitié de… ») est écrit par l'IA.
+- Pas d'horaires : la durée calculée s'affiche une fois. Les indications d'enchaînement viennent du planning et ne valent que si les durées de l'IA sont justes. Le planificateur n'est pas toujours optimal.
+- Une préparation réservée reçoit sa consigne de conservation propre seulement si l'IA a déclaré la dépendance demandée par le prompt. Sinon, la note générale de la fiche s'applique (« ranger chaque préparation dès qu'elle est froide, 2 h max »). Une préparation reprise moins de 60 min plus tard n'a pas de consigne propre.
+- Une étape de matériel (préchauffage du four) peut recevoir une consigne de conservation inutile, dans de rares cas : le code ne devine pas si une étape touche un aliment.
+- Si l'IA donne plus de titres de phase que prévu, la fiche peut déborder sur une 3e page.
+- Plus de 3 h après 3 essais : PDF avec avertissement, pas de retour au menu (lot 6). Détail faux : fiche de repli avec les grandes phases, sans quantités par étape ni consigne du soir rédigée.
+- (V) peut se tromper pour un ingrédient animal mal classé ou absent du référentiel. La conservation vient des tables par catégorie du lot 2, avec leurs limites.
+- Exclusions :
+  - contrôlées par des mots entiers et par les groupes du référentiel ; elles peuvent refuser à tort un texte qui contient le mot ailleurs (« noix de muscade » avec `--exclude noix`), ce qui est voulu, par prudence ;
+  - **pas de groupes d'allergènes** : `--exclude lait` n'exclut ni le beurre ni la crème, `--exclude arachide` n'exclut pas les cacahuètes, `--exclude soja` n'exclut pas la sauce soja ; il faut exclure chaque ingrédient par son nom ;
+  - un nom écrit avec une lettre d'un autre alphabet qui ressemble à une lettre latine (homoglyphe) n'est pas détecté.
+- Un émoji s'affiche comme un carré vide. La note de sécurité peut être coupée entre deux pages.
+
+**Reliquats du lot 4** (dettes connues, chacune reprise dans le lot qui doit la traiter)
+- **Démonstration réelle** de `batch` avec la clé Mammouth, à lancer par l'utilisateur. Elle couvre aussi les lots 2 et 3. Vérifier que Mammouth accepte le schéma du détail ; sinon `FMH_DISABLE=format`. Noter les jetons affichés, pour le budget de 2 $/mois. L'utilisateur n'a pas vu les fiches finales : regarder les deux fiches de fixture (`pdf:fixture` et `pdf:fixture --fallback`) avant la démonstration.
+- **Groupes d'allergènes** absents du référentiel (voir « Questions ouvertes »).
+- **Homoglyphes** non détectés par les exclusions (il faudrait la table des confusables d'Unicode, UTS #39).
+- **Préparation réservée sans dépendance déclarée** par l'IA : pas de consigne de conservation propre (le code ne sait pas quelle étape utilise vraiment une préparation ; la note générale s'applique).
+- **ACL** : le remplacement d'un `--out` existant garde les droits POSIX, pas les ACL ni les attributs étendus.
+- **Faux positifs voulus** des exclusions (« noix de muscade »).
+- **Consigne de trop** possible sur un préchauffage.
+- **« Après N appels »** : quand le détail part en repli après un appel en échec ou refusé, la raison imprimée (« restent incohérentes après N appels », `ai/batch.ts`) compte aussi cet appel.
+- Cas limite à 3 pages ; note de sécurité coupée entre deux pages (cosmétique).
+- Reliquats des lots 2 et 3 : ne changent pas, sauf les caractères Unicode du lot 3, **fermés** (`printable` et `Default_Ignorable_Code_Point`).
 
 ## Lot 5 : app desktop, coquille, réglages et persistance
 
@@ -278,7 +353,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 - Modification du menu courant (§5.3) : demandes ciblées, résumé de conversation, action « éviter cet ingrédient ».
 - **Épingler un plat demandé** : un plat que la demande nomme, ou que l'utilisateur épingle, ne peut pas être retiré par l'IA (conception §5.1). Au lot 2, la protection tient au prompt seul et rien ne signale un plat retiré ; c'est ce lot qui en fait une vraie garantie.
 - Validation, détail, export du PDF.
-- Écran Ingrédients : liste par rayon avec cases à cocher (l'état coché est conservé).
+- Écran Ingrédients : liste avec cases à cocher (l'état coché est conservé). *Au lot 4, les rayons ont été retirés (courses en drive) : la liste est alphabétique, sans rayon. Reste à trancher avant ce lot si l'écran reste par rayon (voir « Questions ouvertes »).*
 - Historique des 5 derniers menus, transmis à l'IA, avec réouverture du PDF.
 - Si le plan relance `tauri dev` : vérifier après l'arrêt que le port 1420 est libre et que l'app ne tourne plus (pnpm 12, un groupe de processus par script).
 
@@ -299,9 +374,13 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 
 **Ce que ça ne fera PAS (visible)** : pas de prix d'un magasin précis ; pas de comparaison entre enseignes.
 
+**Depuis le lot 4 (2026-11-14)** : les pièces n'ont pas de poids moyen (abandonné au lot 4) et la liste de courses garde l'unité de la recette. L'estimation de prix devra utiliser l'unité de la recette (g, ml, pièce).
+
 ---
 
 ## Questions ouvertes (à trancher avant le lot concerné)
 
 - ~~**Avant le lot 0** : le remote git et la branche de travail ; le profil Codex du projet.~~ Tranché : remote GitHub public https://github.com/bfigliuzzi/family-meals-helper, une branche par lot (`lot-0-socle`) ; profil Codex `~/.codex/family-meals-helper.config.toml` en gpt-6.1-sol, effort high.
 - **Avant le lot 5** : nico-build-plan suppose un Storybook (`packages/design-system`) et une procédure Claude Design pour tout composant d'interface. Ce projet n'en a pas : décider s'il en crée un, ou si les lots UI utilisent une bibliothèque de composants existante.
+- **Avant le lot 5** : groupes d'allergènes dans le référentiel, par exemple les 14 allergènes de l'étiquetage européen, rattachés à chaque entrée, avec une source dans `docs/research/`. Recommandation du décideur : un petit lot dédié. (Voir « Reliquats du lot 4 ».)
+- **Avant le lot 6** : l'écran Ingrédients reste-t-il par rayon ? Les rayons ont été retirés du référentiel au lot 4 (courses en drive) ; les rajouter serait une donnée par entrée.

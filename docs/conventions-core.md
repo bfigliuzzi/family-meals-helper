@@ -51,6 +51,18 @@ Le `throw` qui suit ce `catch` porte `// eslint-disable-next-line preserve-caugh
   - pdfmake passe `font: null` à pdfkit, donc la police standard Helvetica (fichier AFM sur le disque) n'est pas chargée ;
   - les polices (Roboto, livrée dans le paquet pdfmake, quatre styles) arrivent en octets (`Uint8Array`), lues par `loadPdfFonts`. Aucun fichier de police n'est ajouté au dépôt.
 
+### Écriture du fichier
+
+- Sans `--out` : `open(…, "wx")` sur `menu-batch-AAAA-MM-JJ.pdf`, puis `-2`, `-3`… Le nom est réservé au moment d'écrire : deux commandes en même temps, ou un fichier créé pendant les appels, ne s'écrasent jamais.
+- Avec `--out` : un temporaire au nom court dans le même dossier, puis `rename`. Si l'écriture échoue, l'ancien fichier reste intact. Le fichier remplacé garde ses bits de droits POSIX ; un nouveau fichier suit l'`umask`. **Limite** : les ACL et les attributs étendus d'un fichier remplacé ne sont pas gardés.
+- La destination est contrôlée avant tout appel payé : dossier existant, accessible en écriture et en traversée ; cible absente (`ENOENT` seulement) ou fichier ordinaire, pas un lien symbolique, accessible en écriture.
+- Les erreurs de stdout et stderr (tube fermé…) sont ignorées (`guardOutputStreams`) : les erreurs de sortie ne changent pas le code de sortie, qui dit seulement si le PDF a été écrit. Le PDF est écrit avant le résumé.
+
+## 2 ter. Texte venu de l'IA
+
+- Avant d'imprimer et avant de comparer des noms (`lightNormalize`, exclusions), les caractères `\p{Default_Ignorable_Code_Point}` sont supprimés (`domain/invisible.ts`). Les contrôles C0/C1 et U+2028/2029 deviennent une espace (`printable`, `src/ai/printable.ts`). Un texte vide une fois imprimé est refusé par le contrôle (`isBlankWhenPrinted`).
+- Les repères `{a.1}` du détail sont lus par un seul analyseur (`parseStepText`, `src/pdf/step-text.ts`), partagé par le contrôle et le rendu.
+
 ## 3. Globales
 
 - Le code pur n'utilise que les globales d'ECMAScript et la liste `portableGlobals` d'`eslint.config.js` (`URL`, `Request`, `Response`, `Headers`, `TextEncoder`, `AbortController`…). Elles s'écrivent directement.

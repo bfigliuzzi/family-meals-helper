@@ -2,6 +2,8 @@
 
 Statut : validée par l'utilisateur le 12/11/2026. Ce document est la source de vérité du produit. Le découpage en lots est dans `docs/roadmap.md`.
 
+Mise à jour du 14/11/2026, après le lot 4 : des notes datées en §5.4, §6.2, §7, §9 et §10 disent ce qui a changé (liste de courses sans rayon ni unité d'achat, fiche A4 sur le modèle cuisine-addict).
+
 Mise à jour du 13/11/2026, après les lots 2 et 3 : des notes datées en §3.1, §3.2, §5.1, §6.2, §6.3, §6.4, §6.5, §6.6, §7 et §8 disent ce qui a changé depuis la validation, et pourquoi. Le texte qui ne vaut plus est gardé, marqué « ne vaut plus depuis ».
 
 ## 1. Intention
@@ -97,6 +99,8 @@ Une demande explicite l'emporte sur une règle souple. Un bourguignon demandé c
 2. Le code recalcule le planning à partir des étapes détaillées. S'il dépasse 3 h, l'IA corrige les étapes sans changer les plats, en 3 essais au plus. En cas d'échec, l'app propose de revenir au menu pour remplacer le plat le plus long.
 3. Le code produit la liste de courses et le PDF. Le menu entre dans l'historique, qui garde les 5 derniers menus validés.
 
+> **Note du 14/11/2026 (lot 4).** En ligne de commande (`batch`) : l'IA rédige un détail court (étapes avec repères d'ingrédients, une ligne par soir). Le code recalcule le planning et contrôle le détail : repères, exclusions, appareils, 3 h. Plus de 3 h après 3 essais : PDF avec avertissement, code 1. Détail faux ou illisible : fiche de repli avec les grandes phases de la composition, code 1. Pas de PDF seulement sans menu utilisable (code 2). L'historique est pour le lot 6. *Le retour au menu proposé à l'étape 2 n'existe pas en ligne de commande : il viendra avec l'app (lot 6).*
+
 ## 6. Règles et vérifications
 
 Chaque règle existe sous deux formes :
@@ -128,7 +132,7 @@ Quand deux pages donnent des durées différentes (section 3.9 du fichier), la t
 > - Les ingrédients marqués `sameDay` (préparés le soir même) ne comptent pas pour la conservation. L'IA les marque elle-même ; le code la croit.
 > - Un plat qui se congèle mal (pomme de terre, légumes secs, fromage…) donne un `warning`, pas une `error` : seul un aliment qui ne se congèle pas du tout bloque.
 > - L'ordre des dîners n'est pas une règle bloquante. Le code propose, en `warning` (règle `day-order`), un ordre du plus fragile au moins fragile quand il fait congeler moins de plats. Il ne propose jamais un ordre qui ajoute une `error`, mais il ne trouve pas toujours le meilleur.
-> - « À congeler » est calculé par le code, jamais déclaré par l'IA. `compose` l'affiche avec la consigne de décongélation. Les consignes de sécurité (2 h, refroidir) iront dans le PDF (lot 4).
+> - « À congeler » est calculé par le code, jamais déclaré par l'IA. `compose` l'affiche avec la consigne de décongélation. Les consignes de sécurité (2 h, refroidir) iront dans le PDF (lot 4). *Fait au lot 4 : la fiche porte une note de sécurité.*
 > - La durée vient de la catégorie de l'ingrédient, pas du type de plat (pas de durée « soupe 5 jours »). Pommes de terre préparées d'avance : 2 jours (décision de l'utilisateur).
 - Le PDF reprend les consignes de sécurité : 2 h maximum à température ambiante, refroidir avant de mettre au frigo, ne pas recongeler.
 
@@ -197,9 +201,9 @@ Deux consignes vont seulement dans le prompt : la viande en quantité moindre qu
 **Ce que contient le référentiel**, pour chaque ingrédient :
 - le nom et ses synonymes ;
 - une catégorie détaillée : viande rouge, volaille, porc, charcuterie, poisson, poisson gras, œuf, légume sec, légume, fruit, féculent complet, féculent raffiné, produit laitier… ;
-- le rayon ;
+- le rayon (**ne vaut plus depuis le lot 4** : les rayons sont retirés du référentiel, voir la note du 14/11/2026 plus bas) ;
 - la forme par défaut ;
-- l'unité d'achat et le poids moyen d'une pièce (**pas encore dans le référentiel** : arrivent avec la liste de courses, lot 4) ;
+- l'unité d'achat et le poids moyen d'une pièce (**abandonnés au lot 4**, voir la note du 14/11/2026 plus bas) ;
 - un drapeau `placard` ;
 - la fourchette de quantité plausible (**pas par entrée** : le code la donne par groupe de catégories, §6.6).
 
@@ -216,6 +220,11 @@ Deux consignes vont seulement dans le prompt : la viande en quantité moindre qu
 - Chaque ligne indique la répartition entre plats : « 1,1 kg tomates (a 400 / b 200 / d 500) ».
 - Les ingrédients marqués `placard` (sel, épices, huiles, vinaigres, farine, sucre, bouillon, moutarde…) vont dans une section « vérifie ton placard ».
 - Les conserves et les surgelés restent dans la liste, à leur rayon.
+
+> **Note du 14/11/2026 (lot 4) : ce que fait le code.** Elle remplace la liste ci-dessus pour la conversion et le classement.
+> - Dans « Ce que contient le référentiel » : plus de rayon, plus d'unité d'achat ni de poids de pièce.
+> - « La liste de courses » : somme par ingrédient dans l'unité de la recette, sans conversion ; répartition entre plats (« 1 kg de potiron (c : 600 g, e : 400 g) ») ; pas de classement par rayon (décision de l'utilisateur, courses en drive) ; deux formes d'un même ingrédient font deux lignes ; le placard tient en une ligne à vérifier ; l'unité d'achat et le poids des pièces sont abandonnés.
+> - Le marquage (V) annoncé dans la note du lot 2 est déduit par le code des catégories et des groupes du référentiel.
 
 ## 8. Prix
 
@@ -242,7 +251,7 @@ Il n'existe pas d'API publique de prix pour les enseignes françaises, et les CG
 
 **L'interface** :
 - **Nouvelle session** : la conversation avec l'IA, et le menu courant affiché à côté, mis à jour à chaque modification.
-- **Ingrédients** : la liste de courses par rayon, avec des cases à cocher, les coûts estimés et le total.
+- **Ingrédients** : la liste de courses par rayon, avec des cases à cocher, les coûts estimés et le total. *Note du 14/11/2026 (lot 4) : les rayons sont retirés ; reste à trancher avant le lot 6 si cet écran reste par rayon (`docs/roadmap.md`, « Questions ouvertes »).*
 - **Réglages** : les ingrédients à éviter, l'équipement, la clé d'API, le modèle, la table de prix.
 - **Historique** : les 5 derniers menus, avec leur PDF.
 - L'utilisateur veut une app soignée : une interface propre et sobre.
@@ -254,6 +263,17 @@ Il n'existe pas d'API publique de prix pour les enseignes françaises, et les CG
 4. Les étapes de la session dans l'ordre chronologique, regroupées par phase. Chaque étape donne son appareil, sa durée et les quantités au moment où elles servent.
 5. Les consignes de conservation et de sécurité.
 6. « Ce qu'il reste à faire chaque soir » : la préparation à sortir, ce qu'on ajoute et la façon de réchauffer.
+
+> **Note du 14/11/2026 (lot 4), qui remplace la liste des six parties.** Fiche A4 portrait, 1 à 2 feuilles, sur le modèle des fiches cuisine-addict. Contenu :
+> - titre et durée calculée (une fois, sans horaires) ;
+> - avertissement, s'il y a lieu ;
+> - menu : lettres, (V), jour, appareils, frigo, congélation ;
+> - ingrédients regroupés, placard, appareils ;
+> - déroulé par phases : étapes numérotées avec case à cocher, quantités au moment de l'usage, indications d'enchaînement, conservation calculée, étape finale de rangement ;
+> - note de sécurité ;
+> - « Dans la semaine ».
+>
+> Plus de liste par rayon ni de boîtes de conservation (partie 3 de la liste ci-dessus : seulement les appareils).
 
 ## 10. Architecture
 
@@ -285,9 +305,10 @@ packages/core/src/
   season/        table et contrôle de saison
   equipment/     descriptions des appareils
   scheduling/    construction et vérification du planning
-  ingredients/   référentiel, normalisation, liste de courses
+  ingredients/   référentiel, normalisation
+  shopping/      liste de courses (ajouté au lot 4, note du 14/11/2026)
   pricing/       sources de prix et estimation
-  pdf/           génération du PDF d'un menu validé
+  pdf/           description de la fiche PDF d'un menu validé (la fiche, sans effet de bord) ; le rendu en octets, l'écriture du fichier et la date sont dans `node/` (note du 14/11/2026, lot 4)
   ports/         interfaces : stockage, HTTP, horloge, secrets
   node/          implémentations Node des ports et commandes de développement (seul dossier, avec les tests, où Node est permis)
 apps/desktop/    Tauri + React : écrans et implémentations des ports
@@ -297,6 +318,6 @@ Les règles d'écriture de `core` (frontière du code pur, globales permises, he
 
 ## 11. Laissé au builder
 - Le découpage des prompts et le format exact des sorties structurées.
-- Le moteur de PDF, à condition qu'il fonctionne dans `core` sans Tauri (par exemple `@react-pdf/renderer` ou `pdfmake`).
+- Le moteur de PDF, à condition qu'il fonctionne dans `core` sans Tauri (par exemple `@react-pdf/renderer` ou `pdfmake`). *Tranché au lot 4 (note du 14/11/2026) : pdfmake, rendu dans `src/node/`.*
 - Le contenu de départ du référentiel et des tables de conservation, tiré des fichiers de recherche.
 - La présentation de l'interface.
