@@ -4,7 +4,7 @@ import type { Menu } from "../domain/menu.ts";
 import { buildIngredientIndex } from "../ingredients/index-lookup.ts";
 import { REFERENTIAL } from "../ingredients/referential.ts";
 import { SEASON_TABLE } from "../season/season-table.ts";
-import { checkExclusions, unknownExclusionTerms } from "./check-exclusions.ts";
+import { checkExclusions, excludedTermsIn, unknownExclusionTerms } from "./check-exclusions.ts";
 import type { CheckContext } from "./context.ts";
 
 const index = buildIngredientIndex(REFERENTIAL);
@@ -127,6 +127,38 @@ describe("checkExclusions : ingrédients inconnus", () => {
   });
 });
 
+describe("checkExclusions : caractères invisibles", () => {
+  it("repère « poulet » dans un nom de plat coupé par une espace sans chasse", () => {
+    const findings = checkExclusions(
+      menuWith("carotte", { dish: "Pou\u200blet aux carottes" }),
+      ctxFor("poulet"),
+    );
+    expect(findings).toEqual([
+      expect.objectContaining({ level: "error", rule: "exclusion", dish: 0, ingredient: null }),
+    ]);
+  });
+  it("exclut un ingrédient « poulet » coupé par un trait d'union conditionnel", () => {
+    expect(excluded("poulet", "pou\u00adlet")).toBe(true);
+  });
+  it.each([
+    ["un graphème combinant invisible (U+034F)", "\u034f"],
+    ["une application de fonction (U+2061)", "\u2061"],
+    ["un sélecteur de variante (U+FE0F)", "\ufe0f"],
+  ])("repère « poulet » coupé par %s, dans le nom du plat et dans l'ingrédient", (_, char) => {
+    const findings = checkExclusions(
+      menuWith("carotte", { dish: `Pou${char}let aux carottes` }),
+      ctxFor("poulet"),
+    );
+    expect(findings).toEqual([
+      expect.objectContaining({ level: "error", rule: "exclusion", dish: 0, ingredient: null }),
+    ]);
+    expect(excluded("poulet", `pou${char}let`)).toBe(true);
+  });
+  it("exclut un ingrédient « cuisse de poulet » coupé par un joint sans chasse", () => {
+    expect(excluded("poulet", "cuisse de pou\u200dlet")).toBe(true);
+  });
+});
+
 describe("checkExclusions : nom du plat", () => {
   function dishFindings(exclusion: string, dish: string) {
     return checkExclusions(menuWith("carotte", { dish }), ctxFor(exclusion));
@@ -211,7 +243,6 @@ describe("checkExclusions : mots-groupes par intersection", () => {
       variants: [],
       groups: ["agrume", "fruit d'hiver"],
       category: "fruit",
-      aisle: "produce",
       defaultForm: "fresh",
       pantry: false,
       seasonExempt: false,
@@ -257,5 +288,56 @@ describe("unknownExclusionTerms", () => {
         index,
       ),
     ).toEqual(["gluten"]);
+  });
+});
+
+describe("excludedTermsIn : texte libre (étapes, soirs, phases)", () => {
+  it("trouve le beurre et le fromage (parmesan) dans un texte, tels qu'écrits par l'utilisateur", () => {
+    expect(
+      excludedTermsIn(
+        "Finir avec une noix de beurre et du parmesan.",
+        ["beurre", "Fromage"],
+        index,
+      ),
+    ).toEqual(["beurre", "Fromage"]);
+  });
+  it("ne trouve rien dans un texte qui ne cite pas le terme", () => {
+    expect(excludedTermsIn("Poêler à sec, feu vif.", ["beurre"], index)).toEqual([]);
+  });
+  it("trouve un terme coupé par un caractère invisible ou écrit au pluriel", () => {
+    expect(excludedTermsIn("Ajouter du beu\u200brre fondu.", ["beurre"], index)).toEqual([
+      "beurre",
+    ]);
+    expect(excludedTermsIn("Des noix de cajou grillées.", ["noix de cajou"], index)).toEqual([
+      "noix de cajou",
+    ]);
+  });
+  it("lit le texte sans analyse de négation : « sans beurre » cite le beurre", () => {
+    expect(excludedTermsIn("Cuire sans beurre.", ["beurre"], index)).toEqual(["beurre"]);
+  });
+});
+
+describe("checkExclusions : descriptions de phases (imprimées sur la fiche de repli)", () => {
+  it("refuse une phase qui cite un ingrédient exclu", () => {
+    const menu = menuWith("carotte", {});
+    menu.dishes[0]!.phases = [
+      {
+        id: "a1",
+        description: "Faire fondre le beurre",
+        minutes: 5,
+        appliance: "induction",
+        attended: true,
+        after: [],
+      },
+    ];
+    expect(checkExclusions(menu, ctxFor("beurre"))).toEqual([
+      expect.objectContaining({
+        level: "error",
+        rule: "exclusion",
+        dish: 0,
+        message:
+          "La phase « a1 » cite un ingrédient exclu (exclusion : beurre) : décris-la sans le nommer.",
+      }),
+    ]);
   });
 });

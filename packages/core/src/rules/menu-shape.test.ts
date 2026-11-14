@@ -108,6 +108,38 @@ describe("checkMenuShape", () => {
     const menu: Menu = { dishes: DAYS.map((day, i) => dish(day, i === 0 ? [egg] : [ingredient])) };
     expect(checkMenuShape(menu, ctx)).toEqual([]);
   });
+  it.each([
+    ["un échappement et une inversion de direction", "\u001b\u202e"],
+    ["une espace sans chasse", "\u200b"],
+    ["un sélecteur de variante", "\ufe0f"],
+  ])("refuse un nom de plat vide une fois imprimé : %s", (_, name) => {
+    const menu: Menu = {
+      dishes: DAYS.map((day, i) => dish(day, [ingredient], i === 1 ? name : "Plat")),
+    };
+    expect(checkMenuShape(menu, ctx)).toEqual([
+      expect.objectContaining({
+        level: "error",
+        rule: "menu-shape",
+        dish: 1,
+        message: "Le plat n'a pas de nom.",
+      }),
+    ]);
+  });
+  it("refuse un nom d'ingrédient vide une fois imprimé (trait d'union conditionnel seul)", () => {
+    const menu: Menu = {
+      dishes: DAYS.map((day, i) =>
+        dish(day, i === 0 ? [{ ...ingredient, name: "\u00ad", category: "other" }] : [ingredient]),
+      ),
+    };
+    expect(checkMenuShape(menu, ctx)).toEqual([
+      expect.objectContaining({
+        level: "error",
+        rule: "menu-shape",
+        dish: 0,
+        message: "Un ingrédient n'a pas de nom.",
+      }),
+    ]);
+  });
   it("refuse un plat sans ingrédient, sans nom ou à quantité nulle", () => {
     const menu: Menu = {
       dishes: [

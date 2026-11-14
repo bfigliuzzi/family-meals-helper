@@ -234,3 +234,29 @@ export function conservationPromptLines(refs: readonly IngredientRef[]): string[
   lines.push("Range les plats du plus fragile au moins fragile pour congeler le moins possible.");
   return lines;
 }
+
+// Consignes de sécurité, une règle par ligne. Texte fixe ; chaque ligne cite sa source, les numéros de ligne de
+// `docs/research/cuisine-addict-regles.md`. La fiche les répartit en trois endroits : la mention de fin de plat
+// (refroidir dès que c'est prêt, 2 h au plus), l'étape finale de rangement (jamais chaud au frigo, moyens de
+// refroidir, congélation) et la note `SAFETY_NOTE_FR`.
+export const SAFETY_RULES_FR: readonly string[] = [
+  // l. 145 : jamais plus de 2 h à température ambiante, cru ou cuit
+  "Refroidir et ranger chaque préparation dès qu'elle est prête, sans attendre la fin de la session : jamais plus de 2 h à température ambiante, cru ou cuit.",
+  // l. 147 et 132 : pas de plat chaud au frigo
+  "Ne pas mettre un plat chaud au frigo : le refroidir vite avant, sur une grille ou la casserole dans l'eau froide.",
+  // l. 278
+  "Ne congeler que des préparations complètement refroidies.",
+  // l. 293
+  "Ne jamais recongeler un plat décongelé.",
+  // l. 143 : la cuisson ne prolonge pas la DLC
+  "La cuisson ne prolonge pas la DLC : un plat ne se garde jamais au-delà de la date limite de ses produits, même si la durée affichée est plus longue.",
+  // l. 144 et 148 : conditions des durées, et plus de prudence pour les personnes fragiles (l. 144)
+  "Les durées supposent des produits frais, une chaîne du froid respectée, un frigo à 4 °C au plus et un plat qui n'a pas traîné. En cas d'odeur ou de goût bizarre, ne pas consommer. Plus de prudence pour les jeunes enfants, les personnes âgées ou malades.",
+];
+
+// Note de sécurité de la fiche, condensée en deux lignes. Mêmes sources que `SAFETY_RULES_FR` : l. 145 (chaque
+// préparation rangée dès qu'elle est froide, 2 h au plus à température ambiante), l. 278 (congeler froid), l. 293 (ne
+// jamais recongeler), l. 143 (DLC), l. 144 et 148 (produits frais, chaîne du froid respectée, frigo à 4 °C au plus,
+// plat qui n'a pas traîné, odeur ou goût bizarre, personnes fragiles).
+export const SAFETY_NOTE_FR =
+  "Ranger chaque préparation dès qu'elle est froide, 2 h max à température ambiante · ne congeler que froid · ne jamais recongeler un plat décongelé · la cuisson ne prolonge pas la DLC des produits · durées valables pour des produits frais, une chaîne du froid respectée, un frigo à 4 °C au plus et un plat qui n'a pas traîné ; odeur ou goût bizarre : ne pas consommer ; prudence pour les jeunes enfants, les personnes âgées ou malades.";

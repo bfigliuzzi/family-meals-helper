@@ -5,7 +5,7 @@ import { balancedMenu } from "../rules/fixtures/menus.ts";
 import { SEASON_TABLE } from "../season/season-table.ts";
 import { composeMenu, exitCodeOf } from "./compose.ts";
 import type { ComposeInput } from "./compose.ts";
-import type { MenuModel, ModelReply, TokenUsage } from "./model.ts";
+import type { Model, ModelReply, TokenUsage } from "./model.ts";
 import { renderComposeResult } from "./render.ts";
 
 const usage: TokenUsage = { input: 100, output: 50, cacheRead: 0, cacheWrite: 0 };
@@ -16,7 +16,7 @@ function reply(text: string, stopReason: string | null = "end_turn"): ModelReply
 
 function fakeModel(script: (ModelReply | Error)[]) {
   const prompts: { system: string; user: string }[] = [];
-  const model: MenuModel = {
+  const model: Model = {
     complete(prompt) {
       prompts.push(prompt);
       const next = script[prompts.length - 1];
@@ -59,7 +59,7 @@ const input: ComposeInput = {
   sessionDay: "sun",
   maxAttempts: 3,
 };
-const deps = (model: MenuModel) => ({ model, refs: REFERENTIAL, seasonTable: SEASON_TABLE });
+const deps = (model: Model) => ({ model, refs: REFERENTIAL, seasonTable: SEASON_TABLE });
 
 describe("composeMenu", () => {
   it("corrige un premier menu fautif : courgette exclue et tomate hors saison", async () => {

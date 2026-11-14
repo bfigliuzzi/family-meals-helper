@@ -10,17 +10,21 @@
     "typecheck": "tsc",
     "test": "node src/index.ts && vitest run",
     "compose": "node src/node/compose.ts",
+    "batch": "node src/node/batch.ts",
+    "pdf:fixture": "node src/node/pdf-fixture.ts",
     "smoke": "node src/node/smoke.ts",
     "season:import": "node src/node/season-import.ts"
   },
   "devDependencies": {
     "@types/node": "24.19.2",
+    "@types/pdfmake": "0.3.3",
     "typescript": "6.0.3",
     "vite": "8.3.7",
     "vitest": "5.1.0"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.8.0",
+    "pdfmake": "0.3.14",
     "zod": "4.6.7"
   }
 }

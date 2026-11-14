@@ -28,16 +28,6 @@ export type Category = (typeof CATEGORIES)[number];
 export const FORMS = ["fresh", "canned", "frozen", "dry"] as const;
 export type Form = (typeof FORMS)[number];
 
-export const AISLES = [
-  "produce",
-  "meat-fish",
-  "dairy",
-  "savory-grocery",
-  "sweet-grocery",
-  "frozen",
-] as const;
-export type Aisle = (typeof AISLES)[number];
-
 export const CATEGORY_LABELS: Record<Category, string> = {
   "red-meat": "viande rouge",
   poultry: "volaille",
@@ -69,15 +59,6 @@ export const FORM_LABELS: Record<Form, string> = {
   dry: "sec",
 };
 
-export const AISLE_LABELS: Record<Aisle, string> = {
-  produce: "fruits et légumes",
-  "meat-fish": "viandes et poissons",
-  dairy: "crèmerie",
-  "savory-grocery": "épicerie salée",
-  "sweet-grocery": "épicerie sucrée",
-  frozen: "surgelés",
-};
-
 // Termes d'exclusion larges portés par toute entrée d'une catégorie (--exclude viande).
 // La charcuterie compte comme du porc : choix prudent, la charcuterie de supermarché en est presque toujours.
 export const CATEGORY_GROUPS: Readonly<Partial<Record<Category, readonly string[]>>> = {
@@ -97,7 +78,6 @@ export const IngredientRefSchema = z.object({
   variants: z.array(z.string()),
   groups: z.array(z.string()),
   category: z.enum(CATEGORIES),
-  aisle: z.enum(AISLES),
   defaultForm: z.enum(FORMS),
   pantry: z.boolean(),
   // Ni contrôlé ni restreint par la table de saison : on le trouve toute l'année (conception §6.5).

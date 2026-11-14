@@ -18,6 +18,6 @@ export interface ModelReply {
   usage: TokenUsage;
 }
 
-export interface MenuModel {
+export interface Model {
   complete(prompt: { system: string; user: string }): Promise<ModelReply>;
 }

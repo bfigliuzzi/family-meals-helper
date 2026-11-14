@@ -1,9 +1,9 @@
 import { CATEGORY_LABELS } from "../domain/ingredient.ts";
 import type { Finding, RuleId } from "../domain/finding.ts";
 import { DAY_LABELS, SESSION_DAY_LABELS, dishLetter } from "../domain/menu.ts";
-import type { Menu, MenuIngredient, Phase } from "../domain/menu.ts";
+import type { Menu, MenuIngredient } from "../domain/menu.ts";
 import { FORM_LABELS } from "../domain/ingredient.ts";
-import { APPLIANCE_LABELS } from "../equipment/household.ts";
+import { APPLIANCE_LABELS, phaseUseText } from "../equipment/household.ts";
 import { buildIngredientIndex } from "../ingredients/index-lookup.ts";
 import { REFERENTIAL } from "../ingredients/referential.ts";
 import { THAW_INSTRUCTION_FR } from "../rules/check-conservation.ts";
@@ -14,10 +14,13 @@ import { MAX_SESSION_MINUTES, clockText, durationText } from "../scheduling/plan
 import type { SessionPlan } from "../scheduling/plan-session.ts";
 import { monthName } from "../season/months.ts";
 import type { ComposeInput, ComposeResult, StopCause } from "./compose.ts";
+import type { BatchResult } from "./batch.ts";
+import type { ModelReply } from "./model.ts";
+import { printable } from "./printable.ts";
 
 const index = buildIngredientIndex(REFERENTIAL);
 
-const RULE_LABELS: Record<RuleId, string> = {
+export const RULE_LABELS: Record<RuleId, string> = {
   "menu-shape": "forme",
   exclusion: "exclusion",
   season: "saison",
@@ -38,6 +41,7 @@ const RULE_LABELS: Record<RuleId, string> = {
   equipment: "équipement",
   "extra-appliance": "appareil d'appoint",
   "session-length": "durée de session",
+  detail: "détail",
 };
 
 const STOP_MESSAGES: Partial<Record<StopCause, string>> = {
@@ -95,29 +99,35 @@ function sortFindings(findings: readonly Finding[]): Finding[] {
     .map((entry) => entry.finding);
 }
 
-function describeTokens(result: ComposeResult): string {
-  const { attempts, calls, failedCalls } = result;
+interface Spent {
+  attempts: readonly { reply: ModelReply }[];
+  calls: number;
+  failedCalls: number;
+}
+
+function describeTokens(label: string, results: readonly Spent[]): string {
+  let calls = 0;
+  let failedCalls = 0;
   let input = 0;
   let output = 0;
   let cacheRead = 0;
   let cacheWrite = 0;
-  for (const { reply } of attempts) {
-    input += reply.usage.input;
-    output += reply.usage.output;
-    cacheRead += reply.usage.cacheRead;
-    cacheWrite += reply.usage.cacheWrite;
+  for (const result of results) {
+    calls += result.calls;
+    failedCalls += result.failedCalls;
+    for (const { reply } of result.attempts) {
+      input += reply.usage.input;
+      output += reply.usage.output;
+      cacheRead += reply.usage.cacheRead;
+      cacheWrite += reply.usage.cacheWrite;
+    }
   }
   const total = input + cacheRead + cacheWrite;
   return (
-    `Appels à l'IA : ${calls}${failedCalls > 0 ? ` (dont ${failedCalls} en échec : consommation inconnue)` : ""} · jetons d'entrée : ${total} ` +
+    `${label} : ${calls}${failedCalls > 0 ? ` (dont ${failedCalls} en échec : consommation inconnue)` : ""} · jetons d'entrée : ${total} ` +
     `(hors cache ${input}, lus en cache ${cacheRead}, écrits en cache ${cacheWrite}) · ` +
     `jetons de sortie : ${output}`
   );
-}
-
-function describeUse(phase: Phase): string {
-  if (phase.appliance === "none") return phase.attended ? APPLIANCE_LABELS.none : "attente";
-  return `${APPLIANCE_LABELS[phase.appliance]}${phase.attended ? "" : ", tourne seul"}`;
 }
 
 function describeSession(session: SessionPlan | null): string[] {
@@ -133,17 +143,9 @@ function describeSession(session: SessionPlan | null): string[] {
     "Planning :",
     ...session.phases.map(
       ({ dish, phase, start, end }) =>
-        `   ${clockText(start)}–${clockText(end)} · ${dishLetter(dish)}. ${phase.description} · ${describeUse(phase)}`,
+        `   ${clockText(start)}–${clockText(end)} · ${dishLetter(dish)}. ${phase.description} · ${phaseUseText(phase)}`,
     ),
   ];
-}
-
-// Les noms, descriptions et constats viennent de l'IA : pas de caractère de contrôle dans le terminal.
-function printable(line: string): string {
-  return Array.from(line, (char) => {
-    const code = char.codePointAt(0)!;
-    return code <= 0x1f || (code >= 0x7f && code <= 0x9f) ? " " : char;
-  }).join("");
 }
 
 export function renderComposeResult(result: ComposeResult, input: ComposeInput): string {
@@ -184,6 +186,71 @@ export function renderComposeResult(result: ComposeResult, input: ComposeInput):
   const stopMessage = STOP_MESSAGES[result.stop];
   if (stopMessage !== undefined) lines.push(stopMessage);
   if (result.technicalError !== null) lines.push(`Erreur technique : ${result.technicalError}`);
-  lines.push(describeTokens(result));
+  lines.push(describeTokens("Appels à l'IA", [result]));
   return lines.map(printable).join("\n");
+}
+
+const DETAIL_STOP_MESSAGES: Partial<Record<StopCause, string>> = {
+  ...STOP_MESSAGES,
+  refusal: "L'IA a refusé de rédiger le détail.",
+  "no-progress": "L'IA a renvoyé la même fiche : arrêt.",
+};
+
+function describeDetail(result: BatchResult, input: ComposeInput): string[] {
+  const menu = result.compose.best?.menu ?? null;
+  const { detail } = result;
+  if (detail === null || menu === null) {
+    return [
+      result.stoppedBecause === "menu-errors"
+        ? "Détail : non demandé, le menu garde des erreurs."
+        : "Détail : non demandé, aucun menu lisible.",
+    ];
+  }
+  const { best } = detail;
+  const lines = [
+    best === null
+      ? `Détail : aucun essai lisible sur ${input.maxAttempts}.`
+      : `Détail : essai ${best.number} retenu sur ${input.maxAttempts}${best.plan === null ? "" : ` · durée calculée ${durationText(best.plan.minutes)} (${durationText(MAX_SESSION_MINUTES)} au plus)`}`,
+  ];
+  if (best !== null) {
+    lines.push(
+      best.findings.length === 0 ? "Constats du détail : aucun" : "Constats du détail :",
+      ...sortFindings(best.findings).map((finding) => describeFinding(finding, menu)),
+    );
+  }
+  const stopMessage = DETAIL_STOP_MESSAGES[detail.stop];
+  if (stopMessage !== undefined) lines.push(stopMessage);
+  if (detail.technicalError !== null) lines.push(`Erreur technique : ${detail.technicalError}`);
+  lines.push(describeTokens("Appels pour le détail", [detail]));
+  return lines;
+}
+
+// Le texte dit lequel des deux cas du code 1 s'applique : repli sur les grandes phases, ou session de plus de 3 h.
+function describeOutcome(result: BatchResult): string | null {
+  if (result.fallback !== null) {
+    return `Fiche de repli : ${result.fallbackReason ?? "détail non utilisable"}. Le PDF donne les grandes phases du menu, avec un avertissement.`;
+  }
+  const best = result.detail?.best;
+  if (
+    result.sheet !== null &&
+    best != null &&
+    best.findings.some((finding) => finding.level === "error")
+  ) {
+    return "Session de plus de 3 h : le PDF donne les étapes détaillées, avec un avertissement en première page.";
+  }
+  return null;
+}
+
+export function renderBatchResult(result: BatchResult, input: ComposeInput): string {
+  const lines = [
+    renderComposeResult(result.compose, input),
+    "",
+    ...describeDetail(result, input).map(printable),
+  ];
+  const outcome = describeOutcome(result);
+  if (outcome !== null) lines.push(outcome);
+  const spent: Spent[] =
+    result.detail === null ? [result.compose] : [result.compose, result.detail];
+  lines.push(describeTokens("Total des appels", spent));
+  return lines.join("\n");
 }

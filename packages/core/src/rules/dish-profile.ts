@@ -75,3 +75,25 @@ export function profileDish(dish: Dish, index: IngredientIndex): DishProfile {
   }
   return { categories, grams, unknownWeight, mainProtein };
 }
+
+const ANIMAL_CATEGORIES: readonly Category[] = [
+  "red-meat",
+  "poultry",
+  "pork",
+  "cured-meat",
+  "fish",
+  "oily-fish",
+  "seafood",
+];
+const ANIMAL_GROUPS: readonly string[] = ["viande", "volaille", "poisson", "fruits de mer"];
+
+// Plat végétarien : œufs et laitages permis. Sens prudent : un ingrédient de catégorie inconnue le rend faux,
+// et un condiment qui porte un groupe animal aussi (« bouillon de volaille »).
+export function isVegetarian(dish: Dish, index: IngredientIndex): boolean {
+  return dish.ingredients.every((ingredient) => {
+    const category = categoryOf(ingredient, index);
+    if (category === null || ANIMAL_CATEGORIES.includes(category)) return false;
+    const groups = index.find(ingredient.name)?.groups ?? [];
+    return !groups.some((group) => ANIMAL_GROUPS.includes(group));
+  });
+}

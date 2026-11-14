@@ -1,3 +1,4 @@
+import { printable } from "../ai/printable.ts";
 import { CATEGORY_GROUPS } from "../domain/ingredient.ts";
 import type { Category, IngredientRef } from "../domain/ingredient.ts";
 import type { Finding } from "../domain/finding.ts";
@@ -54,6 +55,21 @@ function carriedGroups(group: string, index: IngredientIndex): string[] {
   return first.filter((candidate) => others.every((groups) => groups.includes(candidate)));
 }
 
+// Les termes d'exclusion, tels que l'utilisateur les a écrits, que cite un texte libre (étape, ligne du soir,
+// description de phase). Même règle que pour un nom de plat : texte lu en entier, normalisé (caractères invisibles
+// retirés, accents et pluriels ignorés), avec les groupes du référentiel et des catégories, sans analyse de négation
+// (« sans beurre » cite le beurre : rater une exclusion coûte plus cher qu'un nouvel essai).
+export function excludedTermsIn(
+  text: string,
+  exclusions: readonly string[],
+  index: IngredientIndex,
+): string[] {
+  return exclusions.filter((raw) => {
+    const term = normalizeName(raw);
+    return term !== "" && isExcluded(text, null, term, index);
+  });
+}
+
 export function checkExclusions(menu: Menu, ctx: CheckContext): Finding[] {
   const findings: Finding[] = [];
   for (const raw of ctx.exclusions) {
@@ -83,6 +99,17 @@ export function checkExclusions(menu: Menu, ctx: CheckContext): Finding[] {
           dish: dishIndex,
           ingredient: null,
           message: `Le nom du plat cite « ${dish.name} », qui est exclu (exclusion : ${raw.trim()}).`,
+        });
+      }
+      // Les descriptions de phases sont imprimées sur la fiche de repli : elles ne citent rien d'exclu non plus.
+      for (const phase of dish.phases) {
+        if (!isExcluded(printable(phase.description), null, term, ctx.index)) continue;
+        findings.push({
+          level: "error",
+          rule: "exclusion",
+          dish: dishIndex,
+          ingredient: null,
+          message: `La phase « ${phase.id} » cite un ingrédient exclu (exclusion : ${raw.trim()}) : décris-la sans le nommer.`,
         });
       }
     }

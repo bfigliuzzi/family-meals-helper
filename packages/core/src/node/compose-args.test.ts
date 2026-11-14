@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseComposeArgs } from "./compose-args.ts";
+import { parseBatchArgs, parseComposeArgs } from "./compose-args.ts";
 
 describe("parseComposeArgs", () => {
   it("lit la demande et les valeurs par défaut", () => {
@@ -77,5 +77,76 @@ describe("parseComposeArgs", () => {
   });
   it("refuse une option inconnue", () => {
     expect(parseComposeArgs(["x", "--model", "m"]).ok).toBe(false);
+  });
+});
+
+describe("parseComposeArgs : --out", () => {
+  it("refuse --out, réservé à batch", () => {
+    const result = parseComposeArgs(["x", "--out", "menu.pdf"]);
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe("parseBatchArgs", () => {
+  it("lit la demande, --out et les valeurs par défaut", () => {
+    expect(parseBatchArgs(["un bœuf bourguignon", "--out", "menu.pdf"])).toEqual({
+      ok: true,
+      request: "un bœuf bourguignon",
+      exclusions: [],
+      month: null,
+      sessionDay: "sun",
+      maxAttempts: 3,
+      dryRun: false,
+      out: "menu.pdf",
+    });
+  });
+  it("lit les mêmes options que compose", () => {
+    expect(
+      parseBatchArgs([
+        "x",
+        "--out",
+        "/tmp/MENU.PDF",
+        "--exclude",
+        "courgette",
+        "--month",
+        "11",
+        "--session-day",
+        "samedi",
+        "--max-attempts",
+        "2",
+      ]),
+    ).toMatchObject({
+      ok: true,
+      exclusions: ["courgette"],
+      month: 11,
+      sessionDay: "sat",
+      maxAttempts: 2,
+      out: "/tmp/MENU.PDF",
+    });
+  });
+  it("accepte l'absence de --out, avec ou sans --dry-run : le PDF ira dans Téléchargements", () => {
+    expect(parseBatchArgs(["x"])).toMatchObject({ ok: true, dryRun: false, out: null });
+    expect(parseBatchArgs(["x", "--dry-run"])).toMatchObject({
+      ok: true,
+      dryRun: true,
+      out: null,
+    });
+  });
+  it("exige une extension .pdf, sans tenir compte de la casse", () => {
+    expect(parseBatchArgs(["x", "--out", "menu.txt"])).toEqual({
+      ok: false,
+      error: "--out attend un nom de fichier qui finit par .pdf",
+    });
+    expect(parseBatchArgs(["x", "--out", "menu.PDF"]).ok).toBe(true);
+  });
+  it("garde les erreurs de compose : demande absente, --max-attempts hors bornes", () => {
+    expect(parseBatchArgs(["--out", "a.pdf"])).toEqual({
+      ok: false,
+      error: 'La demande est obligatoire : batch "<demande>" [--exclude x] [--out <fichier.pdf>]',
+    });
+    expect(parseBatchArgs(["x", "--out", "a.pdf", "--max-attempts", "4"])).toEqual({
+      ok: false,
+      error: "--max-attempts attend un nombre de 1 à 3",
+    });
   });
 });

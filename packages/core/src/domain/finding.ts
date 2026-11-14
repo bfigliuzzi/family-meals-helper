@@ -19,7 +19,8 @@ export type RuleId =
   | "phases"
   | "equipment"
   | "extra-appliance"
-  | "session-length";
+  | "session-length"
+  | "detail";
 
 export interface Finding {
   level: FindingLevel;

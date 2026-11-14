@@ -1,3 +1,5 @@
+import { removeInvisible } from "../domain/invisible.ts";
+
 // Mots dont le « s » final est gardé : « pâtes » ne doit pas se confondre avec « pâte » ni « pâté ».
 // Limite connue : « pâtés » donne encore « pates ».
 const PLURAL_KEPT = new Set(["pates"]);
@@ -15,8 +17,10 @@ export function normalizeName(text: string): string {
 }
 
 // Même chose sans retirer le pluriel : garde les mots tels quels pour repérer « sans », « pas »…
+// Les caractères invisibles (marques de direction comprises) sont retirés en premier : « pou\u00ADlet » se compare
+// comme « poulet », le mot que la fiche imprime. U+2028/U+2029 restent des séparateurs, comme à l'impression.
 export function lightNormalize(text: string): string {
-  return text
+  return removeInvisible(text)
     .toLowerCase()
     .replace(/œ/g, "oe")
     .replace(/æ/g, "ae")

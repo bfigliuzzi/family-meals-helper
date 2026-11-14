@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { normalizeName } from "./normalize.ts";
+import { removeInvisible } from "../domain/invisible.ts";
+import { SEASON_TABLE } from "../season/season-table.ts";
+import { lightNormalize, normalizeName } from "./normalize.ts";
+import { REFERENTIAL } from "./referential.ts";
 
 describe("normalizeName", () => {
   it("passe en minuscules et remplace œ", () => {
@@ -26,5 +29,28 @@ describe("normalizeName", () => {
     expect(normalizeName("pâte")).not.toBe(normalizeName("pâtes"));
     expect(normalizeName("pates")).toBe(normalizeName("pâtes"));
     expect(normalizeName("pâté")).toBe(normalizeName("pâte"));
+  });
+});
+
+describe("lightNormalize : caractères invisibles", () => {
+  it("les retire avant de comparer : le mot lu est celui que la fiche imprime", () => {
+    expect(lightNormalize("Pou\u200blet")).toBe("poulet");
+    expect(normalizeName("ca\u00adrottes")).toBe("carotte");
+    expect(lightNormalize("a\u2060b\ufeffc")).toBe("abc");
+  });
+  it("retire les marques de direction, mais garde U+2028 comme séparateur, comme à l'impression", () => {
+    expect(lightNormalize("Pou\u202elet")).toBe("poulet");
+    expect(lightNormalize("Pou\u2028let")).toBe("pou let");
+  });
+  it("retire aussi U+034F, U+2061 et U+FE0F", () => {
+    expect(lightNormalize("Pou\u034fl\u2061e\ufe0ft")).toBe("poulet");
+  });
+  it("ne change aucun nom du référentiel ni de la table de saison", () => {
+    const names = [
+      ...REFERENTIAL.flatMap((ref) => [ref.name, ...ref.synonyms, ...ref.variants]),
+      ...Object.keys(SEASON_TABLE),
+    ];
+    expect(names.length).toBeGreaterThan(100);
+    expect(names.filter((name) => removeInvisible(name) !== name)).toEqual([]);
   });
 });

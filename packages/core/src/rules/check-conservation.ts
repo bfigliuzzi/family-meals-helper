@@ -34,6 +34,8 @@ export interface DishKeeping {
   limitedBy: string | null;
   daysAfterSession: number;
   toFreeze: boolean;
+  // Congélation de la partie préparée d'avance ; null : le plat n'a aucun ingrédient préparé d'avance.
+  freeze: Freeze | null;
 }
 
 const FREEZE_RANK: Record<Freeze, number> = { yes: 0, poor: 1, no: 2 };
@@ -44,6 +46,8 @@ interface DishTraits {
   limitedBy: string | null;
   freeze: Freeze;
   freezeBlocker: string | null;
+  // Au moins un ingrédient préparé d'avance : sans lui, `freeze` n'a pas de sens.
+  prepared: boolean;
 }
 
 // Catégories où un mot de PASTA_WORDS désigne une pâte ; `null` : catégorie inconnue.
@@ -108,9 +112,11 @@ function traitsOf(dish: Dish, ctx: CheckContext): DishTraits {
     limitedBy: null,
     freeze: "yes",
     freezeBlocker: null,
+    prepared: false,
   };
   for (const ingredient of dish.ingredients) {
     if (ingredient.sameDay) continue;
+    traits.prepared = true;
     const { fridgeDays, freeze } = keepingOf(ingredient, dish, ctx);
     if (fridgeDays !== null && (traits.fridgeDays === null || fridgeDays < traits.fridgeDays)) {
       traits.fridgeDays = fridgeDays;
@@ -187,6 +193,7 @@ function conservationFindings(
       limitedBy: trait.limitedBy,
       daysAfterSession: served,
       toFreeze: verdict.toFreeze,
+      freeze: trait.prepared ? trait.freeze : null,
     });
     if (verdict.error) {
       findings.push({

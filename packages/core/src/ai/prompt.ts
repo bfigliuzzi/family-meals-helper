@@ -57,7 +57,8 @@ export function buildSystemPrompt(refs: readonly IngredientRef[]): string {
     "Une phase occupe une seule place d'un seul appareil pendant toute sa durée : deux plats au four font deux phases, trois casseroles sur la plaque font trois phases.",
     "Si un plat passe au four, ajoute une seule phase « Préchauffer le four » (oven, attended false, 15 minutes) dans le premier plat qui l'utilise, et mets son id dans le after de toutes les cuissons au four, de tous les plats. Ne compte ni le refroidissement, ni la vaisselle.",
     "Quantités pour 4 portions adultes.",
-    "Le nom d'un plat ne cite jamais un ingrédient exclu, même précédé de « sans ».",
+    "Liste aussi la matière grasse, le bouillon et les épices qui servent pendant la session, avec leur quantité (par exemple huile d'olive 30 ml) : les étapes les citeront.",
+    "Ni le nom d'un plat ni la description d'une phase ne cite un ingrédient exclu, même précédé de « sans ».",
   ].join("\n");
   return [
     COMPOSITION_RULES_FR,
@@ -74,7 +75,7 @@ export function buildSystemPrompt(refs: readonly IngredientRef[]): string {
   ].join("\n");
 }
 
-function findingLine(finding: Finding, menu: Menu | null): string {
+export function findingLine(finding: Finding, menu: Menu | null): string {
   const dish = finding.dish === null ? undefined : menu?.dishes[finding.dish];
   if (finding.dish === null || dish === undefined) {
     return `- [${finding.level}] [${finding.rule}] ${finding.message}`;

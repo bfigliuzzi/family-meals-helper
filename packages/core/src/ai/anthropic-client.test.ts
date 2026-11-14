@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { APPLIANCES } from "../domain/menu.ts";
+import { z } from "zod";
+import { DetailSchema } from "../domain/detail.ts";
+import { APPLIANCES, MenuSchema } from "../domain/menu.ts";
 import type { HttpClient } from "../ports/http-client.ts";
-import { createAnthropicMenuModel, describeApiError, redact } from "./anthropic-client.ts";
+import { createAnthropicModel, describeApiError, redact } from "./anthropic-client.ts";
 import type { AnthropicOptions } from "./anthropic-client.ts";
 import type { Feature } from "./model.ts";
 
@@ -33,6 +35,7 @@ function options(http: HttpClient, overrides: Partial<AnthropicOptions> = {}): A
     http,
     logger: silentLogger,
     disabled: new Set<Feature>(),
+    schema: MenuSchema,
     ...overrides,
   };
 }
@@ -43,11 +46,11 @@ async function bodyOf(request: Request | undefined): Promise<Record<string, unkn
   return (await request!.json()) as Record<string, unknown>;
 }
 
-describe("createAnthropicMenuModel", () => {
+describe("createAnthropicModel", () => {
   it("appelle /v1/messages avec la clé en Bearer, pour l'URL par défaut et pour Mammouth", async () => {
     for (const baseURL of ["https://api.anthropic.com", "https://api.mammouth.ai"]) {
       const { http, requests } = fakeHttp(200, fixture("messages-ok.json"));
-      await createAnthropicMenuModel(options(http, { baseURL })).complete(prompt);
+      await createAnthropicModel(options(http, { baseURL })).complete(prompt);
       expect(requests).toHaveLength(1);
       expect(requests[0]?.url).toBe(`${baseURL}/v1/messages`);
       expect(requests[0]?.headers.get("authorization")).toBe("Bearer test-key");
@@ -56,7 +59,7 @@ describe("createAnthropicMenuModel", () => {
 
   it("envoie modèle, plafond, cache, effort et format par défaut", async () => {
     const { http, requests } = fakeHttp(200, fixture("messages-ok.json"));
-    await createAnthropicMenuModel(options(http)).complete(prompt);
+    await createAnthropicModel(options(http)).complete(prompt);
     const body = await bodyOf(requests[0]);
     expect(body["model"]).toBe("claude-sonnet-5-5");
     expect(body["max_tokens"]).toBe(8000);
@@ -71,7 +74,7 @@ describe("createAnthropicMenuModel", () => {
 
   it("envoie un schéma où chaque plat a des phases à six champs, appareil en enum", async () => {
     const { http, requests } = fakeHttp(200, fixture("messages-ok.json"));
-    await createAnthropicMenuModel(options(http)).complete(prompt);
+    await createAnthropicModel(options(http)).complete(prompt);
     const body = await bodyOf(requests[0]);
     interface JsonSchema {
       type?: string;
@@ -94,6 +97,52 @@ describe("createAnthropicMenuModel", () => {
     expect(minutes?.type).toBe("number");
     expect(minutes?.minimum).toBeUndefined();
     expect(minutes?.maximum).toBeUndefined();
+  });
+
+  it("envoie le schéma reçu dans output_config.format, et rien sans la fonction format", async () => {
+    const schema = z.object({ ok: z.boolean() });
+    const { http, requests } = fakeHttp(200, fixture("messages-ok.json"));
+    await createAnthropicModel(options(http, { schema })).complete(prompt);
+    const config = (await bodyOf(requests[0]))["output_config"] as {
+      format: { type: string; schema: { properties?: Record<string, unknown> } };
+    };
+    expect(config.format.type).toBe("json_schema");
+    expect(Object.keys(config.format.schema.properties ?? {})).toEqual(["ok"]);
+    const off = fakeHttp(200, fixture("messages-ok.json"));
+    const disabled = new Set<Feature>(["format"]);
+    await createAnthropicModel(options(off.http, { schema, disabled })).complete(prompt);
+    const offConfig = (await bodyOf(off.requests[0]))["output_config"] as { format?: unknown };
+    expect(offConfig.format).toBeUndefined();
+  });
+
+  it("envoie un schéma du détail fermé, tous champs requis, appareil en enum", async () => {
+    const { http, requests } = fakeHttp(200, fixture("messages-ok.json"));
+    await createAnthropicModel(options(http, { schema: DetailSchema })).complete(prompt);
+    interface JsonSchema {
+      type?: string;
+      enum?: unknown[];
+      additionalProperties?: unknown;
+      required?: string[];
+      properties?: Record<string, JsonSchema>;
+      items?: JsonSchema;
+    }
+    const config = (await bodyOf(requests[0]))["output_config"] as {
+      format: { schema: JsonSchema };
+    };
+    const root = config.format.schema;
+    const step = root.properties?.["steps"]?.items;
+    const evening = root.properties?.["evenings"]?.items;
+    for (const object of [root, step, evening]) {
+      expect(object?.additionalProperties).toBe(false);
+      expect([...(object?.required ?? [])].sort()).toEqual(
+        Object.keys(object?.properties ?? {}).sort(),
+      );
+    }
+    expect([...(step?.required ?? [])].sort()).toEqual(
+      ["after", "appliance", "attended", "dishes", "id", "minutes", "phase", "text"].sort(),
+    );
+    expect(step?.properties?.["appliance"]?.enum).toEqual([...APPLIANCES]);
+    expect(APPLIANCES).toHaveLength(8);
   });
 
   it("retire chaque fonction désactivée, les autres restant présentes", async () => {
@@ -132,7 +181,7 @@ describe("createAnthropicMenuModel", () => {
     for (const [feature, verify] of cases) {
       const { http, requests } = fakeHttp(200, fixture("messages-ok.json"));
       const disabled = new Set<Feature>([feature]);
-      await createAnthropicMenuModel(options(http, { disabled })).complete(prompt);
+      await createAnthropicModel(options(http, { disabled })).complete(prompt);
       verify(await bodyOf(requests[0]));
     }
   });
@@ -140,13 +189,13 @@ describe("createAnthropicMenuModel", () => {
   it("n'envoie pas output_config quand effort et format sont désactivés", async () => {
     const { http, requests } = fakeHttp(200, fixture("messages-ok.json"));
     const disabled = new Set<Feature>(["effort", "format"]);
-    await createAnthropicMenuModel(options(http, { disabled })).complete(prompt);
+    await createAnthropicModel(options(http, { disabled })).complete(prompt);
     expect((await bodyOf(requests[0]))["output_config"]).toBeUndefined();
   });
 
   it("lit le texte, la raison d'arrêt et les jetons", async () => {
     const { http } = fakeHttp(200, fixture("messages-ok.json"));
-    const reply = await createAnthropicMenuModel(options(http)).complete(prompt);
+    const reply = await createAnthropicModel(options(http)).complete(prompt);
     expect(reply).toEqual({
       text: '{"dishes":[]}',
       stopReason: "end_turn",
@@ -159,7 +208,7 @@ describe("createAnthropicMenuModel", () => {
       500,
       '{"type":"error","error":{"type":"api_error","message":"boom"}}',
     );
-    const error: unknown = await createAnthropicMenuModel(options(http))
+    const error: unknown = await createAnthropicModel(options(http))
       .complete(prompt)
       .catch((e: unknown) => e);
     expect(requests).toHaveLength(1);
@@ -195,7 +244,7 @@ describe("expurgation de la clé", () => {
       },
     });
     const { http } = fakeHttp(400, body);
-    const error: unknown = await createAnthropicMenuModel(options(http, { apiKey: "test-key-123" }))
+    const error: unknown = await createAnthropicModel(options(http, { apiKey: "test-key-123" }))
       .complete(prompt)
       .catch((e: unknown) => e);
     expect(error).toBeInstanceOf(Error);
@@ -210,7 +259,7 @@ describe("expurgation de la clé", () => {
       error: { type: "invalid_request_error", message: 'Invalid: Bearer "sk-ant-abcdefgh"' },
     });
     const { http } = fakeHttp(400, body);
-    const error: unknown = await createAnthropicMenuModel(options(http))
+    const error: unknown = await createAnthropicModel(options(http))
       .complete(prompt)
       .catch((e: unknown) => e);
     expect((error as Error).message).not.toContain("abcdefgh");
@@ -224,7 +273,7 @@ describe("expurgation de la clé", () => {
       },
     });
     const { http } = fakeHttp(500, body);
-    const error: unknown = await createAnthropicMenuModel(options(http, { apiKey: "test-key-123" }))
+    const error: unknown = await createAnthropicModel(options(http, { apiKey: "test-key-123" }))
       .complete(prompt)
       .catch((e: unknown) => e);
     const message = (error as Error).message;
@@ -236,7 +285,7 @@ describe("expurgation de la clé", () => {
 describe("describeApiError", () => {
   async function errorFor(status: number, body: string): Promise<string> {
     const { http } = fakeHttp(status, body);
-    const error: unknown = await createAnthropicMenuModel(options(http))
+    const error: unknown = await createAnthropicModel(options(http))
       .complete(prompt)
       .catch((e: unknown) => e);
     return describeApiError(error);
@@ -260,7 +309,7 @@ describe("describeApiError", () => {
   });
   it("traduit une erreur réseau", async () => {
     const http: HttpClient = { send: () => Promise.reject(new TypeError("fetch failed")) };
-    const error: unknown = await createAnthropicMenuModel(options(http))
+    const error: unknown = await createAnthropicModel(options(http))
       .complete(prompt)
       .catch((e: unknown) => e);
     expect(describeApiError(error)).toContain("Connexion impossible");

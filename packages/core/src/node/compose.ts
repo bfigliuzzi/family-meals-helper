@@ -1,19 +1,18 @@
 // Commande de développement : pnpm --filter core compose "<demande>" [--exclude x] [--month 11] [--session-day dimanche] [--dry-run]
 // Appel réel à l'IA sans --dry-run : la clé est dans ANTHROPIC_API_KEY.
-import { createAnthropicMenuModel } from "../ai/anthropic-client.ts";
+import { createAnthropicModel } from "../ai/anthropic-client.ts";
 import { composeMenu, exitCodeOf } from "../ai/compose.ts";
-import { buildSystemPrompt, buildUserPrompt } from "../ai/prompt.ts";
 import { renderComposeResult } from "../ai/render.ts";
+import { MenuSchema } from "../domain/menu.ts";
 import { buildIngredientIndex } from "../ingredients/index-lookup.ts";
 import { REFERENTIAL } from "../ingredients/referential.ts";
 import { unknownExclusionTerms } from "../rules/check-exclusions.ts";
-import { expectedDinners } from "../rules/menu-shape.ts";
-import { inSeasonNames } from "../season/check-season.ts";
 import { monthOf } from "../season/months.ts";
 import { SEASON_TABLE } from "../season/season-table.ts";
 import { parseComposeArgs } from "./compose-args.ts";
 import { readAiConfig } from "./config.ts";
-import { createEnvSecretStore, nodeClock, nodeHttpClient } from "./ports.ts";
+import { composeDryRunLines } from "./dry-run.ts";
+import { createEnvSecretStore, guardOutputStreams, nodeClock, nodeHttpClient } from "./ports.ts";
 
 async function main(): Promise<number> {
   const args = parseComposeArgs(process.argv.slice(2));
@@ -37,27 +36,7 @@ async function main(): Promise<number> {
   }
 
   if (args.dryRun) {
-    const system = buildSystemPrompt(REFERENTIAL);
-    const user = buildUserPrompt({
-      request: input.request,
-      exclusions: input.exclusions,
-      month,
-      sessionDay: args.sessionDay,
-      dinners: expectedDinners(input.request),
-      inSeason: inSeasonNames(month, REFERENTIAL, SEASON_TABLE),
-    });
-    process.stdout.write(
-      [
-        "=== Prompt système ===",
-        system,
-        "",
-        "=== Prompt utilisateur (essai 1) ===",
-        user,
-        "",
-        `Taille : système ${system.length} caractères, utilisateur ${user.length} caractères. Aucun appel effectué.`,
-        "",
-      ].join("\n"),
-    );
+    process.stdout.write(composeDryRunLines(input).join("\n"));
     return 0;
   }
 
@@ -76,13 +55,14 @@ async function main(): Promise<number> {
     `Modèle : ${config.model} · URL : ${config.baseURL} · essais au plus : ${input.maxAttempts} · désactivé : ${disabled}\n`,
   );
 
-  const model = createAnthropicMenuModel({
+  const model = createAnthropicModel({
     apiKey,
     baseURL: config.baseURL,
     model: config.model,
     http: nodeHttpClient,
     logger: console,
     disabled: config.disabled,
+    schema: MenuSchema,
   });
   const result = await composeMenu(input, {
     model,
@@ -95,6 +75,8 @@ async function main(): Promise<number> {
   process.stdout.write(`${renderComposeResult(result, input)}\n`);
   return exitCodeOf(result);
 }
+
+guardOutputStreams();
 
 // Une erreur imprévue donne le code 2, jamais le code 1 de Node.
 main().then(

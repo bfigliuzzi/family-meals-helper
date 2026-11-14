@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { parseMenuReply } from "./menu-reply.ts";
+import { DetailSchema } from "../domain/detail.ts";
+import { parseJsonReply, parseMenuReply } from "./menu-reply.ts";
 
 const json = JSON.stringify({
   dishes: [
@@ -53,5 +54,25 @@ describe("parseMenuReply", () => {
     const result = parseMenuReply('{"dishes":[{"name":"X","day":"mon","ingredients":[]}]}');
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toContain("phases");
+  });
+});
+
+describe("parseJsonReply", () => {
+  const detail = JSON.stringify({ steps: [], evenings: [] });
+  it("lit une réponse du détail, avec ou sans bloc de code", () => {
+    expect(parseJsonReply(detail, DetailSchema)).toEqual({
+      ok: true,
+      value: { steps: [], evenings: [] },
+    });
+    expect(parseJsonReply(`\`\`\`json\n${detail}\n\`\`\``, DetailSchema).ok).toBe(true);
+  });
+  it("refuse un menu comme détail, et un texte qui n'est pas du JSON", () => {
+    const wrong = parseJsonReply(json, DetailSchema);
+    expect(wrong.ok).toBe(false);
+    if (!wrong.ok) expect(wrong.error).toContain("format attendu");
+    expect(parseJsonReply("bonjour", DetailSchema)).toEqual({
+      ok: false,
+      error: "La réponse n'est pas du JSON lisible.",
+    });
   });
 });

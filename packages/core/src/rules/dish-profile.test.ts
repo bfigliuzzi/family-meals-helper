@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Dish, MenuIngredient } from "../domain/menu.ts";
 import { buildIngredientIndex } from "../ingredients/index-lookup.ts";
 import { REFERENTIAL } from "../ingredients/referential.ts";
-import { categoryOf, gramsOf, profileDish } from "./dish-profile.ts";
+import { categoryOf, gramsOf, isVegetarian, profileDish } from "./dish-profile.ts";
 
 const index = buildIngredientIndex(REFERENTIAL);
 
@@ -82,5 +82,35 @@ describe("profileDish", () => {
   it("ignore un ingrédient inconnu sans catégorie", () => {
     const profile = profileDish(dishOf(item("kumquat", 100)), index);
     expect(profile.categories.size).toBe(0);
+  });
+});
+
+describe("isVegetarian", () => {
+  it("est vrai pour un dal de lentilles et de potiron", () => {
+    expect(isVegetarian(dishOf(item("lentilles corail", 250), item("potiron", 600)), index)).toBe(
+      true,
+    );
+  });
+  it("est faux avec du poulet", () => {
+    expect(isVegetarian(dishOf(item("cuisse de poulet", 600), item("carotte", 500)), index)).toBe(
+      false,
+    );
+  });
+  it("est faux avec un bouillon de volaille, condiment du référentiel qui porte un groupe animal", () => {
+    expect(
+      isVegetarian(dishOf(item("lentilles corail", 250), item("bouillon de volaille", 1)), index),
+    ).toBe(false);
+  });
+  it("est faux avec un inconnu sans catégorie, vrai si l'IA le dit légume", () => {
+    expect(isVegetarian(dishOf(item("truffe", 20)), index)).toBe(false);
+    expect(isVegetarian(dishOf(item("truffe", 20, { category: "vegetable" })), index)).toBe(true);
+  });
+  it("est vrai avec des œufs et du fromage", () => {
+    expect(
+      isVegetarian(
+        dishOf(item("œuf", 6, { unit: "piece" }), item("gruyère râpé", 100), item("poireau", 400)),
+        index,
+      ),
+    ).toBe(true);
   });
 });

@@ -70,10 +70,10 @@ describe("référentiel", () => {
     expect(groupsOf(sausage)).toEqual(expect.arrayContaining(["porc", "viande"]));
   });
 
-  it("n'achète le poisson que surgelé (rayon surgelés) ou en conserve", () => {
+  it("n'achète le poisson que surgelé ou en conserve", () => {
     const byName = (name: string) => REFERENTIAL.find((ref) => ref.name === name)!;
     for (const name of ["saumon", "maquereau", "cabillaud", "colin"]) {
-      expect(byName(name), name).toMatchObject({ defaultForm: "frozen", aisle: "frozen" });
+      expect(byName(name), name).toMatchObject({ defaultForm: "frozen" });
     }
     expect(byName("saumon").category).toBe("oily-fish");
     expect(byName("cabillaud").category).toBe("fish");

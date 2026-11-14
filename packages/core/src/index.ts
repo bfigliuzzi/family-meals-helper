@@ -1,5 +1,6 @@
 export const CORE_CHECK_MESSAGE = "Le paquet core est bien relié à l'application.";
 
+export * from "./domain/detail.ts";
 export * from "./domain/finding.ts";
 export * from "./domain/ingredient.ts";
 export * from "./domain/menu.ts";
@@ -10,8 +11,13 @@ export * from "./ingredients/index-lookup.ts";
 export * from "./ingredients/normalize.ts";
 export * from "./ingredients/referential.ts";
 export * from "./equipment/household.ts";
+export * from "./scheduling/check-detail.ts";
 export * from "./scheduling/check-session.ts";
 export * from "./scheduling/plan-session.ts";
+export * from "./shopping/quantity-text.ts";
+export * from "./shopping/shopping-list.ts";
+export * from "./pdf/sheet.ts";
+export * from "./pdf/step-text.ts";
 export * from "./season/build-table.ts";
 export * from "./season/check-season.ts";
 export * from "./season/manual-months.ts";

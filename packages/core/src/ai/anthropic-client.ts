@@ -1,10 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { ClientOptions } from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { MenuSchema } from "../domain/menu.ts";
+import type { z } from "zod";
 import type { HttpClient } from "../ports/http-client.ts";
 import { toFetch } from "./fetch-adapter.ts";
-import type { Feature, MenuModel, ModelReply } from "./model.ts";
+import type { Feature, Model, ModelReply } from "./model.ts";
 
 export interface AnthropicOptions {
   apiKey: string;
@@ -13,12 +13,14 @@ export interface AnthropicOptions {
   http: HttpClient;
   logger: NonNullable<ClientOptions["logger"]>;
   disabled: ReadonlySet<Feature>;
+  // Forme de la réponse, envoyée en sortie structurée : celle du menu, ou celle du détail.
+  schema: z.ZodType;
   maxTokens?: number;
 }
 
 // Toutes les options sont explicites : le SDK ne lit de l'environnement que ce qu'on ne peut pas
 // éviter (ANTHROPIC_CUSTOM_HEADERS, dette nommée dans docs/conventions-core.md).
-export function createAnthropicMenuModel(opts: AnthropicOptions): MenuModel {
+export function createAnthropicModel(opts: AnthropicOptions): Model {
   const client = new Anthropic({
     apiKey: opts.apiKey,
     baseURL: opts.baseURL,
@@ -35,7 +37,7 @@ export function createAnthropicMenuModel(opts: AnthropicOptions): MenuModel {
     async complete(prompt): Promise<ModelReply> {
       const outputConfig = {
         ...(opts.disabled.has("effort") ? {} : { effort: "low" as const }),
-        ...(opts.disabled.has("format") ? {} : { format: zodOutputFormat(MenuSchema) }),
+        ...(opts.disabled.has("format") ? {} : { format: zodOutputFormat(opts.schema) }),
       };
       let message;
       try {

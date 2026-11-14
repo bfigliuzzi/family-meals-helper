@@ -1,3 +1,4 @@
+import { isBlankWhenPrinted } from "../ai/printable.ts";
 import type { Finding } from "../domain/finding.ts";
 import type { Category } from "../domain/ingredient.ts";
 import { DAY_LABELS } from "../domain/menu.ts";
@@ -63,12 +64,12 @@ export function checkMenuShape(menu: Menu, ctx: CheckContext): Finding[] {
       );
     }
     seenDays.add(dish.day);
-    if (dish.name.trim() === "") findings.push(error(index, null, "Le plat n'a pas de nom."));
+    if (isBlankWhenPrinted(dish.name)) findings.push(error(index, null, "Le plat n'a pas de nom."));
     if (dish.ingredients.length === 0) {
       findings.push(error(index, null, "Le plat n'a aucun ingrédient."));
     }
     for (const ingredient of dish.ingredients) {
-      if (ingredient.name.trim() === "") {
+      if (isBlankWhenPrinted(ingredient.name)) {
         findings.push(error(index, null, "Un ingrédient n'a pas de nom."));
       }
       if (!(ingredient.qty > 0)) {
@@ -83,7 +84,7 @@ export function checkMenuShape(menu: Menu, ctx: CheckContext): Finding[] {
       // Sans grammes, les plafonds ne se calculent pas : un poids inconnu ne vaut pas « pas de dépassement ».
       const category = categoryOf(ingredient, ctx.index);
       if (
-        ingredient.name.trim() !== "" &&
+        !isBlankWhenPrinted(ingredient.name) &&
         ingredient.unit !== "g" &&
         category !== null &&
         GRAMS_ONLY_CATEGORIES.includes(category)

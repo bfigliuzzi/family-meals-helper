@@ -1,3 +1,4 @@
+import { isBlankWhenPrinted } from "../ai/printable.ts";
 import type { Finding } from "../domain/finding.ts";
 import type { Dish, Menu } from "../domain/menu.ts";
 import { APPLIANCE_LABELS } from "../equipment/household.ts";
@@ -88,7 +89,8 @@ export function checkSession(
     } else {
       known.add(phase.id);
     }
-    if (phase.description.trim() === "") {
+    // Le texte compte tel qu'il sera imprimé : fait seulement de caractères neutralisés, il serait vide sur la fiche.
+    if (isBlankWhenPrinted(phase.description)) {
       findings.push(error("phases", dish, `La phase « ${phase.id} » n'a pas de description.`));
     }
     if (
@@ -191,7 +193,7 @@ function phasesInCycles(entries: readonly SessionPhase[]): string[] {
 }
 
 // Plat de la phase qui finit le plus tard ; à égalité de fin, la première du planning.
-function lastDish(plan: SessionPlan, menu: Menu): { name: string; end: number } {
+export function lastDish(plan: SessionPlan, menu: Menu): { name: string; end: number } {
   let last = plan.phases[0]!;
   for (const entry of plan.phases) if (entry.end > last.end) last = entry;
   return { name: menu.dishes[last.dish]!.name, end: last.end };

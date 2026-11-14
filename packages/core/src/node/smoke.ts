@@ -1,8 +1,9 @@
 // Test de connexion : un seul appel réel, même forme de requête que `compose`.
 // Lancé par l'orchestrateur avec la clé, jamais par les tests.
-import { createAnthropicMenuModel } from "../ai/anthropic-client.ts";
+import { createAnthropicModel } from "../ai/anthropic-client.ts";
 import { parseMenuReply } from "../ai/menu-reply.ts";
 import { buildSystemPrompt } from "../ai/prompt.ts";
+import { MenuSchema } from "../domain/menu.ts";
 import { REFERENTIAL } from "../ingredients/referential.ts";
 import { readAiConfig } from "./config.ts";
 import { createEnvSecretStore, nodeHttpClient } from "./ports.ts";
@@ -18,13 +19,14 @@ async function main(): Promise<number> {
     process.stderr.write("ANTHROPIC_API_KEY manquante.\n");
     return 2;
   }
-  const model = createAnthropicMenuModel({
+  const model = createAnthropicModel({
     apiKey,
     baseURL: config.baseURL,
     model: config.model,
     http: nodeHttpClient,
     logger: console,
     disabled: config.disabled,
+    schema: MenuSchema,
     maxTokens: 300,
   });
   try {

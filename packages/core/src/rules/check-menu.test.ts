@@ -52,6 +52,19 @@ function balancedWith(extra: MenuIngredient[]): Menu {
 }
 
 describe("checkMenu", () => {
+  it("donne un seul constat pour un ingrédient au nom invisible, sans catégorie à demander", () => {
+    const result = checkMenu(menuWith([{ ...carrot, name: "\u200b", category: null }]), cleanCtx);
+    const lot1 = result.findings.filter((finding) => LOT1_RULES.includes(finding.rule));
+    expect(lot1).toEqual([
+      expect.objectContaining({
+        level: "error",
+        rule: "menu-shape",
+        dish: 0,
+        message: "Un ingrédient n'a pas de nom.",
+      }),
+    ]);
+    expect(result.toConfirm).toEqual([]);
+  });
   it("ne trouve rien à redire à balancedMenu, dont le plat e est à congeler", () => {
     const result = checkMenu(balancedMenu(), cleanCtx);
     expect(result.findings).toEqual([]);

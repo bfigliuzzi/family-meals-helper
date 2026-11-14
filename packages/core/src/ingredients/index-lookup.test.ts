@@ -99,3 +99,26 @@ describe("containsWords", () => {
     expect(containsWords("poivron", "poivre")).toBe(false);
   });
 });
+
+describe("find : caractères invisibles", () => {
+  it("retrouve l'entrée du référentiel malgré un caractère invisible dans le nom", () => {
+    expect(index.find("caro\u200btte")?.name).toBe("carotte");
+    expect(index.find("cuisse de pou\u00adlet")?.name).toBe("cuisse de poulet");
+  });
+});
+
+describe("requestedIn : caractères invisibles dans la demande", () => {
+  it.each([
+    ["une espace sans chasse", "\u200b"],
+    ["un graphème combinant invisible", "\u034f"],
+    ["une application de fonction", "\u2061"],
+  ])("lit « mais » coupé par %s comme la conjonction, pas comme du maïs", (_, char) => {
+    expect(names(index.requestedIn(`ma${char}is pas de tomate`))).not.toContain("maïs");
+    expect(names(index.requestedIn(`des carottes, ma${char}is pas de tomate`))).toEqual([
+      "carotte",
+    ]);
+  });
+  it("lit « maïs » coupé par une espace sans chasse comme du maïs", () => {
+    expect(names(index.requestedIn("du ma\u200bïs"))).toContain("maïs");
+  });
+});

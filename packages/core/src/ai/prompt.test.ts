@@ -29,9 +29,9 @@ describe("buildSystemPrompt", () => {
   it("contient tous les noms du référentiel", () => {
     for (const ref of REFERENTIAL) expect(system).toContain(ref.name);
   });
-  it("interdit de citer un ingrédient exclu dans le nom d'un plat", () => {
+  it("interdit de citer un ingrédient exclu dans le nom d'un plat ou la description d'une phase", () => {
     expect(system).toContain(
-      "Le nom d'un plat ne cite jamais un ingrédient exclu, même précédé de « sans ».",
+      "Ni le nom d'un plat ni la description d'une phase ne cite un ingrédient exclu, même précédé de « sans ».",
     );
   });
 });
@@ -42,6 +42,15 @@ describe("buildSystemPrompt : équipement et phases", () => {
     for (const line of equipmentPromptLines(HOUSEHOLD_EQUIPMENT)) expect(system).toContain(line);
     expect(system).toContain("Vise 2 h à 2 h 30");
     expect(system).toContain("au-delà de 3 h");
+    expect(system).toContain("Soupe ou velouté : au Thermomix");
+    expect(system).toContain(
+      "Cookeo comme appareil d'appoint, s'il fait gagner du temps sur une légumineuse ou une viande.",
+    );
+  });
+  it("demande la matière grasse, le bouillon et les épices de la session, avec leur quantité", () => {
+    expect(system).toContain(
+      "Liste aussi la matière grasse, le bouillon et les épices qui servent pendant la session, avec leur quantité (par exemple huile d'olive 30 ml)",
+    );
   });
   it("demande les phases : ligne JSON, appareils, préchauffage commun", () => {
     expect(system).toContain(

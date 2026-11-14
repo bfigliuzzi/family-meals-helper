@@ -15,6 +15,7 @@ Ce fichier dit comment écrire du code dans `packages/core` sans casser la front
   - des imports de types écrits `import type { X } from "./module.ts"`. Le type d'import `import("./module.ts").X` est refusé dans le code pur (sélecteur `TSImportType`), à ne pas confondre avec l'import dynamique, aussi refusé.
 - Un script de `core` se déclare dans `packages/core/package.json`, sans toucher à ESLint ni aux tsconfig. Par exemple `compose` : `node src/node/compose.ts`.
 - Scripts du lot 1 : `compose` (composition par l'IA), `smoke` (un seul appel de test de connexion) et `season:import` (régénère `src/season/season-table.ts` depuis l'API ADEME ; voir `docs/research/saison-fruits-legumes.md`). Le script d'import est le seul code qui fait un appel réseau hors de l'IA.
+- Scripts du lot 4 : `batch` (composition, détail, liste de courses et fiche PDF) et `pdf:fixture` (une fiche d'exemple, sans réseau ni clé ; `--fallback` pour la fiche de repli). `batch` passe par `runBatchCommand(argv, io)` (`src/node/batch-command.ts`) : tout ce qui touche à l'extérieur (environnement, modèles, polices, destination, écriture, heure) arrive par l'objet `io`, remplacé dans les tests.
 
 ## 2. SDK Anthropic
 
@@ -39,6 +40,16 @@ Les erreurs du client ne sortent jamais telles quelles : `complete` les traduit 
 Le `throw` qui suit ce `catch` porte `// eslint-disable-next-line preserve-caught-error` : on ne joint pas l'erreur d'origine (`cause`), parce qu'elle peut contenir la clé et que Node l'afficherait en entier.
 
 **Règle** : l'environnement (`ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_MODEL`, `FMH_DISABLE`) n'est lu que dans `packages/core/src/node/`.
+
+## 2 bis. PDF (pdfmake)
+
+- La fiche est **décrite** par le code pur : `src/pdf/sheet.ts` rend une définition de document (`TDocumentDefinitions`), sans effet de bord. Il n'importe que des types de pdfmake, avec `import type { … } from "pdfmake/interfaces.js"` : le chemin `pdfmake/interfaces` seul n'est pas résolu par TypeScript en `NodeNext`, l'extension `.js` l'est (l'import de type est effacé, il n'y a aucun import réel).
+- Le **rendu en octets, l'écriture du fichier et la date** sont dans `src/node/` (`render-pdf.ts`, `pdf-fonts.ts`). Aucun import de pdfmake à l'exécution hors de `src/node/` et des tests. Vérification : `rg -n "from \"pdfmake" packages/core/src --glob '!**/node/**' --glob '!*.test.ts' | rg -v "import type"` ne doit rien afficher.
+- `pdfmake` est un objet partagé par tout le processus. `renderPdf` remet donc polices et politiques d'accès à chaque appel, juste avant `createPdf`, qui les lit sur-le-champ. Les politiques d'accès sont `() => false` : pdfmake ne télécharge rien et ne lit aucun fichier.
+- Effets constatés dans les sources (pdfmake 0.3.14, pdfkit 0.20.2), acceptés :
+  - pdfkit exécute `new Date()` dans son constructeur (`CreationDate`), valeur ensuite remplacée par `info.creationDate`, que `renderPdf` fixe avec la date du port `Clock` : deux rendus avec la même date donnent la même `CreationDate` ;
+  - pdfmake passe `font: null` à pdfkit, donc la police standard Helvetica (fichier AFM sur le disque) n'est pas chargée ;
+  - les polices (Roboto, livrée dans le paquet pdfmake, quatre styles) arrivent en octets (`Uint8Array`), lues par `loadPdfFonts`. Aucun fichier de police n'est ajouté au dépôt.
 
 ## 3. Globales
 

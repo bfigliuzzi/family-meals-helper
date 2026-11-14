@@ -1,12 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  AISLES,
-  AISLE_LABELS,
-  CATEGORIES,
-  CATEGORY_LABELS,
-  FORMS,
-  FORM_LABELS,
-} from "./ingredient.ts";
+import { CATEGORIES, CATEGORY_LABELS, FORMS, FORM_LABELS } from "./ingredient.ts";
 import {
   DAYS,
   DAY_LABELS,
@@ -112,7 +105,6 @@ describe("libellés", () => {
   it("couvrent toutes les valeurs", () => {
     for (const category of CATEGORIES) expect(CATEGORY_LABELS[category]).toBeTruthy();
     for (const form of FORMS) expect(FORM_LABELS[form]).toBeTruthy();
-    for (const aisle of AISLES) expect(AISLE_LABELS[aisle]).toBeTruthy();
     for (const day of DAYS) expect(DAY_LABELS[day]).toBeTruthy();
     for (const day of SESSION_DAYS) expect(SESSION_DAY_LABELS[day]).toBeTruthy();
   });

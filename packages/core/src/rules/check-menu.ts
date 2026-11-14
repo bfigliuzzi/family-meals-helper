@@ -1,3 +1,4 @@
+import { isBlankWhenPrinted } from "../ai/printable.ts";
 import type { Category } from "../domain/ingredient.ts";
 import type { Finding } from "../domain/finding.ts";
 import type { Menu } from "../domain/menu.ts";
@@ -33,7 +34,8 @@ export function checkMenu(menu: Menu, ctx: CheckContext): MenuCheck {
   const toConfirm: { name: string; category: Category }[] = [];
   for (const [dishIndex, dish] of menu.dishes.entries()) {
     for (const ingredient of dish.ingredients) {
-      if (ingredient.name.trim() === "" || ctx.index.find(ingredient.name) !== undefined) continue;
+      if (isBlankWhenPrinted(ingredient.name) || ctx.index.find(ingredient.name) !== undefined)
+        continue;
       if (ingredient.category === null) {
         findings.push({
           level: "error",

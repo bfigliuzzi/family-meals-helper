@@ -1,4 +1,4 @@
-import type { Aisle, Category, Form, IngredientRef } from "../domain/ingredient.ts";
+import type { Category, Form, IngredientRef } from "../domain/ingredient.ts";
 
 interface Extra {
   synonyms?: string[];
@@ -8,7 +8,6 @@ interface Extra {
 }
 interface Defaults {
   category: Category;
-  aisle: Aisle;
   form: Form;
   pantry: boolean;
 }
@@ -24,7 +23,6 @@ function group(defaults: Defaults): Maker {
       variants: extra.variants ?? [],
       groups: extra.groups ?? [],
       category: d.category,
-      aisle: d.aisle,
       defaultForm: d.form,
       pantry: d.pantry,
       seasonExempt: extra.seasonExempt ?? false,
@@ -32,23 +30,21 @@ function group(defaults: Defaults): Maker {
   };
 }
 
-const veg = group({ category: "vegetable", aisle: "produce", form: "fresh", pantry: false });
-const fruit = group({ category: "fruit", aisle: "produce", form: "fresh", pantry: false });
-const herb = group({ category: "herb-spice", aisle: "produce", form: "fresh", pantry: false });
-const spice = group({ category: "herb-spice", aisle: "savory-grocery", form: "dry", pantry: true });
+const veg = group({ category: "vegetable", form: "fresh", pantry: false });
+const fruit = group({ category: "fruit", form: "fresh", pantry: false });
+const herb = group({ category: "herb-spice", form: "fresh", pantry: false });
+const spice = group({ category: "herb-spice", form: "dry", pantry: true });
 const shelf = group({
   category: "condiment",
-  aisle: "savory-grocery",
   form: "fresh",
   pantry: true,
 });
-const canned = group({ category: "other", aisle: "savory-grocery", form: "canned", pantry: false });
-const meat = group({ category: "red-meat", aisle: "meat-fish", form: "fresh", pantry: false });
-const fish = group({ category: "fish", aisle: "frozen", form: "frozen", pantry: false });
-const dairy = group({ category: "dairy", aisle: "dairy", form: "fresh", pantry: false });
+const canned = group({ category: "other", form: "canned", pantry: false });
+const meat = group({ category: "red-meat", form: "fresh", pantry: false });
+const fish = group({ category: "fish", form: "frozen", pantry: false });
+const dairy = group({ category: "dairy", form: "fresh", pantry: false });
 const starch = group({
   category: "refined-starch",
-  aisle: "savory-grocery",
   form: "dry",
   pantry: false,
 });
@@ -101,7 +97,7 @@ export const REFERENTIAL: readonly IngredientRef[] = [
   veg("blette", { synonyms: ["bette"] }),
   veg("topinambour"),
   veg("patate douce"),
-  veg("maïs", {}, { form: "canned", aisle: "savory-grocery" }),
+  veg("maïs", {}, { form: "canned" }),
   // Fruits frais
   fruit("citron", { seasonExempt: true }),
   fruit("pomme"),
@@ -139,8 +135,8 @@ export const REFERENTIAL: readonly IngredientRef[] = [
   shelf("bouillon de légumes", {}, { form: "dry" }),
   shelf("concentré de tomate", { groups: ["tomate"] }, { form: "canned" }),
   shelf("farine", {}, { category: "refined-starch", form: "dry" }),
-  shelf("sucre", {}, { category: "sugar", aisle: "sweet-grocery", form: "dry" }),
-  shelf("miel", {}, { category: "sugar", aisle: "sweet-grocery" }),
+  shelf("sucre", {}, { category: "sugar", form: "dry" }),
+  shelf("miel", {}, { category: "sugar" }),
   // Conserves et surgelés
   canned(
     "tomate concassée",
@@ -152,11 +148,7 @@ export const REFERENTIAL: readonly IngredientRef[] = [
   canned("haricot rouge", {}, { category: "pulse" }),
   canned("thon", { groups: ["poisson"] }, { category: "fish" }),
   canned("sardine", { groups: ["poisson"] }, { category: "oily-fish" }),
-  canned(
-    "crevette",
-    { groups: ["fruits de mer"] },
-    { category: "seafood", form: "frozen", aisle: "frozen" },
-  ),
+  canned("crevette", { groups: ["fruits de mer"] }, { category: "seafood", form: "frozen" }),
   // Viandes et poissons
   meat("bœuf à braiser", {
     synonyms: ["paleron", "macreuse", "gîte", "joue de bœuf", "bœuf bourguignon"],
@@ -204,7 +196,7 @@ export const REFERENTIAL: readonly IngredientRef[] = [
   meat("jambon blanc", { groups: ["porc", "viande"] }, { category: "cured-meat" }),
   meat("chorizo", { groups: ["porc", "viande"] }, { category: "cured-meat" }),
   // Poisson : le foyer n'achète que du surgelé (ou de la conserve), jamais du frais (conception §6.3,
-  // décision de l'utilisateur) ; le rayon servira à la liste de courses.
+  // décision de l'utilisateur).
   fish("saumon", { groups: ["poisson"] }, { category: "oily-fish" }),
   fish("maquereau", { groups: ["poisson"] }, { category: "oily-fish" }),
   fish("cabillaud", { synonyms: ["dos de cabillaud"], groups: ["poisson"] }),

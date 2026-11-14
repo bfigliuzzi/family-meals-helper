@@ -4,6 +4,8 @@ import {
   APPLIANCE_LABELS,
   HOUSEHOLD_EQUIPMENT,
   UTENSILS_FR,
+  applianceChoiceLines,
+  equipmentCapacityLines,
   equipmentPromptLines,
 } from "./household.ts";
 
@@ -72,5 +74,53 @@ describe("equipmentPromptLines", () => {
       expect(line.startsWith("Le soir même")).toBe(false);
     }
     expect(text).not.toContain("Session de cuisine");
+  });
+});
+
+describe("equipmentCapacityLines", () => {
+  const capacity = equipmentCapacityLines(HOUSEHOLD_EQUIPMENT);
+  const all = equipmentPromptLines(HOUSEHOLD_EQUIPMENT);
+  const choices = applianceChoiceLines(HOUSEHOLD_EQUIPMENT);
+  it("donne les quatre lignes de capacité puis les règles de choix, sans la consigne de durée", () => {
+    expect(capacity).toHaveLength(4 + choices.length);
+    expect(capacity.slice(4)).toEqual(choices);
+    expect(capacity.join("\n")).not.toContain("le menu est refusé");
+  });
+  it("est suivie de la seule ligne de durée dans le prompt de composition", () => {
+    expect(all.slice(0, capacity.length)).toEqual(capacity);
+    expect(all).toHaveLength(capacity.length + 1);
+    expect(all[capacity.length]).toBe(
+      "Le code calcule la durée de la session à partir des phases. Vise 2 h à 2 h 30 ; au-delà de 3 h, le menu est refusé. Lance la cuisson longue le plus tôt possible.",
+    );
+  });
+});
+
+describe("applianceChoiceLines", () => {
+  const text = applianceChoiceLines(HOUSEHOLD_EQUIPMENT).join("\n");
+  it("met la soupe au Thermomix s'il tient et s'il est libre, sinon casserole et mixeur plongeant", () => {
+    expect(text).toContain("Soupe ou velouté : au Thermomix, qui cuit puis mixe dans le même bol");
+    expect(text).toContain("si le volume tient dans le bol et s'il est libre");
+    expect(text).toContain("sinon une casserole sur la plaque, puis le mixeur plongeant");
+    expect(text).toContain("Ne mixe pas à la main ce que le Thermomix vient de cuire.");
+  });
+  it("donne le mijoté, la cuisson longue et le Cookeo", () => {
+    expect(text).toContain("cocotte sur la plaque, ou Kenwood (mijotage, sauces)");
+    expect(text).toContain("Cuisson longue sans surveillance : four.");
+    expect(text).toContain(
+      "Cookeo comme appareil d'appoint, s'il fait gagner du temps sur une légumineuse ou une viande.",
+    );
+    expect(text).not.toContain("s'il est l'appareil d'appoint");
+  });
+  it("ne cite que les appareils présents", () => {
+    const without = HOUSEHOLD_EQUIPMENT.filter(
+      (spec) => spec.id !== "thermomix" && spec.id !== "cookeo" && spec.id !== "kenwood",
+    );
+    const lines = applianceChoiceLines(without).join("\n");
+    expect(lines).not.toContain("Thermomix");
+    expect(lines).not.toContain("Cookeo");
+    expect(lines).not.toContain("Kenwood");
+    expect(lines).toContain(
+      "Soupe ou velouté : une casserole sur la plaque, puis le mixeur plongeant.",
+    );
   });
 });

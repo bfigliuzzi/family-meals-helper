@@ -4,17 +4,22 @@ import { SESSION_DAYS, SESSION_DAY_LABELS } from "../domain/menu.ts";
 import { lightNormalize } from "../ingredients/normalize.ts";
 import type { Month } from "../season/months.ts";
 
-export function parseComposeArgs(argv: readonly string[]):
-  | {
-      ok: true;
-      request: string;
-      exclusions: string[];
-      month: Month | null;
-      sessionDay: SessionDay;
-      maxAttempts: 1 | 2 | 3;
-      dryRun: boolean;
-    }
-  | { ok: false; error: string } {
+export interface ComposeArgs {
+  request: string;
+  exclusions: string[];
+  month: Month | null;
+  sessionDay: SessionDay;
+  maxAttempts: 1 | 2 | 3;
+  dryRun: boolean;
+}
+
+export type BatchArgs = ComposeArgs & { out: string | null };
+
+// Corps commun à `compose` et à `batch` ; `--out` n'est connu que de `batch`.
+function parseCommonArgs(
+  argv: readonly string[],
+  command: "compose" | "batch",
+): { ok: true; args: ComposeArgs; out: string | null } | { ok: false; error: string } {
   let parsed;
   try {
     parsed = parseArgs({
@@ -26,6 +31,7 @@ export function parseComposeArgs(argv: readonly string[]):
         "session-day": { type: "string" },
         "max-attempts": { type: "string" },
         "dry-run": { type: "boolean" },
+        ...(command === "batch" ? { out: { type: "string" } } : {}),
       },
     });
   } catch (error) {
@@ -35,7 +41,10 @@ export function parseComposeArgs(argv: readonly string[]):
 
   const request = positionals[0]?.trim() ?? "";
   if (request === "") {
-    return { ok: false, error: 'La demande est obligatoire : compose "<demande>" [--exclude x]' };
+    return {
+      ok: false,
+      error: `La demande est obligatoire : ${command} "<demande>" [--exclude x]${command === "batch" ? " [--out <fichier.pdf>]" : ""}`,
+    };
   }
   if (positionals.length > 1) {
     return { ok: false, error: "Une seule demande attendue : la mettre entre guillemets." };
@@ -71,14 +80,38 @@ export function parseComposeArgs(argv: readonly string[]):
 
   return {
     ok: true,
-    request,
-    exclusions: (values.exclude ?? [])
-      .flatMap((value) => value.split(","))
-      .map((term) => term.trim())
-      .filter((term) => term !== ""),
-    month,
-    sessionDay,
-    maxAttempts,
-    dryRun: values["dry-run"] === true,
+    args: {
+      request,
+      exclusions: (values.exclude ?? [])
+        .flatMap((value) => value.split(","))
+        .map((term) => term.trim())
+        .filter((term) => term !== ""),
+      month,
+      sessionDay,
+      maxAttempts,
+      dryRun: values["dry-run"] === true,
+    },
+    out: "out" in values && typeof values.out === "string" ? values.out : null,
   };
+}
+
+export function parseComposeArgs(
+  argv: readonly string[],
+): ({ ok: true } & ComposeArgs) | { ok: false; error: string } {
+  const parsed = parseCommonArgs(argv, "compose");
+  return parsed.ok ? { ok: true, ...parsed.args } : parsed;
+}
+
+// `--out` est facultatif (sans lui, le PDF va dans Téléchargements). S'il est donné, il finit par .pdf, sans tenir
+// compte de la casse.
+export function parseBatchArgs(
+  argv: readonly string[],
+): ({ ok: true } & BatchArgs) | { ok: false; error: string } {
+  const parsed = parseCommonArgs(argv, "batch");
+  if (!parsed.ok) return parsed;
+  const { out } = parsed;
+  if (out !== null && !out.toLowerCase().endsWith(".pdf")) {
+    return { ok: false, error: "--out attend un nom de fichier qui finit par .pdf" };
+  }
+  return { ok: true, ...parsed.args, out };
 }

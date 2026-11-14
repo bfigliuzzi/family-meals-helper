@@ -9,7 +9,7 @@ import { expectedDinners } from "../rules/menu-shape.ts";
 import { inSeasonNames } from "../season/check-season.ts";
 import type { Month, SeasonRow } from "../season/months.ts";
 import { parseMenuReply } from "./menu-reply.ts";
-import type { MenuModel, ModelReply } from "./model.ts";
+import type { Model, ModelReply } from "./model.ts";
 import { buildSystemPrompt, buildUserPrompt } from "./prompt.ts";
 
 export interface ComposeInput {
@@ -94,7 +94,7 @@ function findingsToSend(check: MenuCheck, sent: ReadonlySet<RuleId>): Finding[] 
 export async function composeMenu(
   input: ComposeInput,
   deps: {
-    model: MenuModel;
+    model: Model;
     refs: readonly IngredientRef[];
     seasonTable: Readonly<Record<string, SeasonRow>>;
     onAttempt?: (attempt: Attempt) => void;

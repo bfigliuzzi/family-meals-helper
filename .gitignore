@@ -5,6 +5,7 @@ dist/
 .serena/
 .DS_Store
 *.log
+*.pdf
 .worktrees-buildplan/
 .env
 .env.*

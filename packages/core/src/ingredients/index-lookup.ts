@@ -1,4 +1,5 @@
 import type { IngredientRef } from "../domain/ingredient.ts";
+import { removeInvisible } from "../domain/invisible.ts";
 import { lightNormalize, normalizeName } from "./normalize.ts";
 
 export interface IngredientIndex {
@@ -35,9 +36,11 @@ function withoutBut(sentence: string): string {
 // parenthèse, ni mot ne sont des limites. Dans chaque phrase, on garde les mots qui précèdent le
 // premier marqueur négatif ; tout ce qui le suit est ignoré jusqu'à la fin de la phrase.
 // Les phrases ne sont jamais rejointes : une clé du référentiel ne peut pas en enjamber deux.
+// Les caractères invisibles sont retirés de toute la demande avant le découpage et avant `withoutBut` : sinon
+// « ma\u200Bis » échapperait à `withoutBut`, puis `lightNormalize` en ferait « mais », lu comme du maïs.
 function requestedParts(text: string): string[] {
   const parts: string[] = [];
-  for (const sentence of text.split(/[.;!?\n]/)) {
+  for (const sentence of removeInvisible(text).split(/[.;!?\n]/)) {
     const words = lightNormalize(withoutBut(sentence))
       .split(" ")
       .filter((word) => word !== "");

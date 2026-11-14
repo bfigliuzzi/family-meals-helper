@@ -191,6 +191,12 @@ describe("checkSession : phases", () => {
       "La phase « a1 » n'a pas de description.",
     ]);
   });
+  it("refuse une description vide une fois imprimée (caractères neutralisés seulement)", () => {
+    const hidden = menuOf(dishOf("A", [phase("a1", 10, "none", true, [], "\u001b\u202e")]));
+    expect(check(hidden).findings).toMatchObject([
+      { level: "error", rule: "phases", message: "La phase « a1 » n'a pas de description." },
+    ]);
+  });
   it.each([0, -5, 2.5, 601, 1e308])("refuse %s minutes", (minutes) => {
     const { findings, plan } = check(menuOf(dishOf("A", [phase("a1", minutes, "none", true)])));
     expect(findings.map((finding) => finding.rule)).toEqual(["phases"]);

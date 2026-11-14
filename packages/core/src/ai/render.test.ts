@@ -7,9 +7,12 @@ import type { CheckContext } from "../rules/context.ts";
 import { balancedMenu, phase } from "../rules/fixtures/menus.ts";
 import { SEASON_TABLE } from "../season/season-table.ts";
 import { composeMenu } from "./compose.ts";
-import type { MenuModel } from "./model.ts";
+import type { Model } from "./model.ts";
 import type { Attempt, ComposeInput, ComposeResult, StopCause } from "./compose.ts";
-import { renderComposeResult } from "./render.ts";
+import { balancedDetail, balancedDetailLasting, cyclicDetail } from "../rules/fixtures/detail.ts";
+import { batchMenu } from "./batch.ts";
+import type { BatchResult } from "./batch.ts";
+import { RULE_LABELS, renderBatchResult, renderComposeResult } from "./render.ts";
 
 const input: ComposeInput = {
   request: "x",
@@ -444,7 +447,7 @@ describe("de la composition au rendu, sans réseau", () => {
       ],
       phases: menu.dishes[1]!.phases,
     };
-    const model: MenuModel = {
+    const model: Model = {
       complete: () =>
         Promise.resolve({
           text: JSON.stringify(menu),
@@ -470,5 +473,112 @@ describe("de la composition au rendu, sans réseau", () => {
     expect(text).toContain(
       "[warning] réchauffage · plat b « Pâtes à la bolognaise » : les pâtes se cuisent le soir même",
     );
+  });
+});
+
+describe("renderBatchResult", () => {
+  const batchInput: ComposeInput = {
+    request: "un bœuf bourguignon, 5 dîners",
+    exclusions: [],
+    month: 11,
+    sessionDay: "sun",
+    maxAttempts: 3,
+  };
+  const usage = { input: 100, output: 50, cacheRead: 0, cacheWrite: 0 };
+  const replying = (value: unknown): Model => ({
+    complete: () => Promise.resolve({ text: JSON.stringify(value), stopReason: "end_turn", usage }),
+  });
+
+  function batch(detail: unknown[], composed: unknown = balancedMenu()): Promise<BatchResult> {
+    let calls = 0;
+    const detailModel: Model = {
+      complete: () =>
+        replying(detail[Math.min(calls++, detail.length - 1)]).complete({ system: "", user: "" }),
+    };
+    return batchMenu(batchInput, {
+      models: { compose: replying(composed), detail: detailModel },
+      refs: REFERENTIAL,
+      seasonTable: SEASON_TABLE,
+    });
+  }
+
+  it("a un libellé pour la règle detail", () => {
+    expect(RULE_LABELS.detail).toBe("détail");
+  });
+
+  it("ajoute la section détail avec la durée, les constats, les jetons et le total", async () => {
+    const text = renderBatchResult(await batch([balancedDetail()]), batchInput);
+    expect(text).toContain("Menu pour novembre");
+    expect(text).toContain("Détail : essai 1 retenu sur 3 · durée calculée 2 h 15 (3 h au plus)");
+    expect(text).toContain("Constats du détail : aucun");
+    expect(text).toContain("Appels pour le détail : 1 · jetons d'entrée : 100");
+    expect(text).toContain(
+      "Total des appels : 2 · jetons d'entrée : 200 (hors cache 200, lus en cache 0, écrits en cache 0) · jetons de sortie : 100",
+    );
+    expect(text).not.toContain("Fiche de repli");
+    expect(text).not.toContain("Session de plus de 3 h");
+  });
+
+  it("montre les avertissements du détail avec le libellé « détail »", async () => {
+    const uncited = balancedDetail();
+    uncited.steps = uncited.steps.map((step) =>
+      step.id === "s12" ? { ...step, text: "Laver et émincer les poireaux" } : step,
+    );
+    const text = renderBatchResult(await batch([uncited]), batchInput);
+    expect(text).toContain(
+      "[warning] détail · plat a « Cabillaud, fondue de poireaux et riz complet » : non cité dans les étapes : poireau (a).",
+    );
+  });
+
+  it("dit que la session dépasse 3 h quand le PDF sort avec un avertissement", async () => {
+    const text = renderBatchResult(await batch([balancedDetailLasting(300)]), batchInput);
+    expect(text).toContain("[error] durée de session");
+    expect(text).toContain("Session de plus de 3 h : le PDF donne les étapes détaillées");
+  });
+
+  it("dit que la fiche est un repli quand le détail reste incohérent", async () => {
+    const text = renderBatchResult(await batch([cyclicDetail()]), batchInput);
+    expect(text).toContain(
+      "Fiche de repli : les étapes détaillées restent incohérentes après 2 appels (enchaînement des étapes). Le PDF donne les grandes phases du menu, avec un avertissement.",
+    );
+    expect(text).toContain("L'IA a renvoyé la même fiche : arrêt.");
+  });
+
+  it("dit la même raison de repli que le PDF : erreur technique au premier appel du détail", async () => {
+    const failing: Model = { complete: () => Promise.reject(new Error("réseau coupé")) };
+    const result = await batchMenu(batchInput, {
+      models: { compose: replying(balancedMenu()), detail: failing },
+      refs: REFERENTIAL,
+      seasonTable: SEASON_TABLE,
+    });
+    const text = renderBatchResult(result, batchInput);
+    expect(text).toContain(
+      "Fiche de repli : le service d'IA n'a pas répondu (erreur technique). Le PDF donne les grandes phases du menu",
+    );
+    expect(text).not.toContain("pas rendu de détail lisible");
+    expect(result.fallbackReason).toBe("le service d'IA n'a pas répondu (erreur technique)");
+  });
+
+  it("dit que le détail n'est pas demandé quand le menu garde une erreur", async () => {
+    const bad = balancedMenu();
+    bad.dishes[1]!.ingredients.push({
+      name: "courgette",
+      qty: 100,
+      unit: "g",
+      form: "fresh",
+      category: null,
+      sameDay: false,
+    });
+    const result = await batchMenu(
+      { ...batchInput, exclusions: ["courgette"], maxAttempts: 1 },
+      {
+        models: { compose: replying(bad), detail: replying(balancedDetail()) },
+        refs: REFERENTIAL,
+        seasonTable: SEASON_TABLE,
+      },
+    );
+    const text = renderBatchResult(result, batchInput);
+    expect(text).toContain("Détail : non demandé, le menu garde des erreurs.");
+    expect(text).toContain("Total des appels : 1");
   });
 });

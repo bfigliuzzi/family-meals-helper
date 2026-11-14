@@ -86,8 +86,26 @@ describe("conservation : un aliment qui se congèle mal", () => {
     const { findings, keeping } = checkConservation(oneDish("fri", item("carotte")), ctx);
     expect(findings).toEqual([]);
     expect(keeping).toEqual([
-      { dish: 0, fridgeDays: 4, limitedBy: "carotte", daysAfterSession: 5, toFreeze: true },
+      {
+        dish: 0,
+        fridgeDays: 4,
+        limitedBy: "carotte",
+        daysAfterSession: 5,
+        toFreeze: true,
+        freeze: "yes",
+      },
     ]);
+  });
+  it("donne la congélation de la partie préparée d'avance, et null pour un plat du soir", () => {
+    expect(checkConservation(oneDish("mon", item("pomme de terre")), ctx).keeping[0]?.freeze).toBe(
+      "poor",
+    );
+    expect(checkConservation(oneDish("mon", item("yaourt nature")), ctx).keeping[0]?.freeze).toBe(
+      "no",
+    );
+    const evening = oneDish("mon", item("pâtes", { sameDay: true }));
+    expect(checkConservation(evening, ctx).keeping[0]?.freeze).toBeNull();
+    expect(checkConservation(balancedMenu(), ctx).keeping[0]?.freeze).toBe("yes");
   });
 });
 
