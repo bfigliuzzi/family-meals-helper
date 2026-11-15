@@ -2,6 +2,8 @@
 
 Statut : validée par l'utilisateur le 12/11/2026. Ce document est la source de vérité du produit. Le découpage en lots est dans `docs/roadmap.md`.
 
+Mise à jour du 15/11/2026, après le lot 5 : des notes datées en §3.1, §3.2, §6.5, §9 et §10 disent ce qui a changé (réglages enregistrés par des commandes Rust, trousseau par `keyring`, plus de plugin SQL ni HTTP, équipement réglable par disponibilité et capacité, pas de groupes d'allergènes). Le texte qui ne vaut plus est gardé, marqué « ne vaut plus depuis ».
+
 Mise à jour du 14/11/2026, après le lot 4 : des notes datées en §5.4, §6.2, §7, §9 et §10 disent ce qui a changé (liste de courses sans rayon ni unité d'achat, fiche A4 sur le modèle cuisine-addict).
 
 Mise à jour du 13/11/2026, après les lots 2 et 3 : des notes datées en §3.1, §3.2, §5.1, §6.2, §6.3, §6.4, §6.5, §6.6, §7 et §8 disent ce qui a changé depuis la validation, et pourquoi. Le texte qui ne vaut plus est gardé, marqué « ne vaut plus depuis ».
@@ -38,6 +40,8 @@ Le partage du travail entre l'IA et le code :
 - La session de cuisine dure 3 h au maximum. L'objectif est 2 h à 2 h 30.
 - La session a lieu le **dimanche** par défaut (décision de l'utilisateur, 2026-11-13). Elle peut aussi avoir lieu le vendredi, le samedi ou le lundi : la ligne de commande a une option `--session-day`. Le nombre de jours entre la session et chaque dîner décide de la conservation (§6.2). Une session en milieu de semaine n'est pas prévue : elle tomberait après certains dîners.
 
+> **Note du 15/11/2026 (lot 5).** Dans les réglages, chaque exclusion a un terme (60 caractères au plus) et une raison facultative (120 caractères au plus), et la liste a 200 entrées au plus. **Pas de groupes d'allergènes** (décision de l'utilisateur, 2026-11-14 : personne n'est allergique dans le foyer) : on exclut chaque ingrédient par son nom.
+
 ### 3.2 Équipement
 - **Toujours disponible** : le four, une plaque induction 4 feux, un Thermomix TM5 et un Kenwood Cooking Chef. Le Kenwood chauffe (mijotage, sauces) et sert aussi à trancher et à râper. S'y ajoutent des casseroles, une poêle en inox et un mixeur plongeant.
 - **Appareils d'appoint, un par session au maximum** :
@@ -48,6 +52,8 @@ Le partage du travail entre l'IA et le code :
 - L'équipement est stocké dans les réglages et modifiable. Chaque appareil est décrit par un fichier de données : nom, nombre de cuissons simultanées, usages, toujours disponible ou d'appoint. Ajouter un appareil revient à ajouter un fichier.
 
 > **Note du 2026-11-13 (lot 3)** : jusqu'au lot 5, l'équipement est la constante gelée `HOUSEHOLD_EQUIPMENT` (`packages/core/src/equipment/household.ts`), sans option de ligne de commande. L'écart avec ce qui précède : il n'y a pas un fichier par appareil, mais une seule table. Les capacités sont des maximums, pas un objectif : four 2 plats, plaque 4 feux, Thermomix 1, Kenwood 1, et 1 pour chaque appareil d'appoint. Une session n'utilise qu'un seul appareil d'appoint. Les réglages modifiables arrivent au lot 5.
+
+> **Note du 15/11/2026 (lot 5).** L'équipement réglable, c'est la **disponibilité** et la **capacité** (entier de 1 à 10) de chaque appareil de la table du code. On ne peut ni ajouter ni retirer d'appareil. Ne valent plus depuis cette date : « chaque appareil est décrit par un fichier de données » et « ajouter un appareil revient à ajouter un fichier » (déjà écartés par la note du lot 3). `applyEquipmentSettings` applique les réglages à la table, mais la composition ne l'utilise pas encore : c'est le lot 6.
 
 ## 4. Périmètre
 
@@ -183,7 +189,7 @@ Deux consignes vont seulement dans le prompt : la viande en quantité moindre qu
   - **La table est l'union de l'ADEME et du calendrier mangerbouger** (décision de l'utilisateur, 2026-11-13) : un mois est de saison s'il l'est pour l'une des deux sources. Une ligne mangerbouger ajoute des mois, elle n'en retire jamais. La carotte et le chou rouge sont ainsi de saison toute l'année, l'endive retrouve mai. Les lignes mangerbouger sont dans `packages/core/src/season/manual-months.ts`, le détail dans `docs/research/saison-fruits-legumes.md`. Ne vaut plus depuis cette date : « une ligne manuelle l'emporte sur l'ADEME » (lot 1), qui retirait des mois à l'endive.
   - Le contrôle porte sur les fruits et légumes de forme `frais` (§7). Un ingrédient hors saison passe s'il est nommé dans la demande.
   - L'ail, l'oignon, l'échalote et le citron sont exemptés du contrôle et proposés toute l'année : ce sont presque des produits du quotidien, qu'on trouve tout le temps en magasin (décision de l'utilisateur, 2026-11-13).
-- **Exclusions** : le contrôle compare les noms normalisés du référentiel, synonymes et variantes compris. Par exemple, « courgette » exclut aussi « courgette jaune ».
+- **Exclusions** : le contrôle compare les noms normalisés du référentiel, synonymes et variantes compris. Par exemple, « courgette » exclut aussi « courgette jaune ». *Note du 15/11/2026 : il n'y a pas de groupes d'allergènes (décision du 2026-11-14, voir §3.1). `--exclude lait` n'exclut pas le beurre : on exclut chaque ingrédient par son nom.*
 
 ### 6.6 Quantités (règles souples) et budget
 - Le code donne, par groupe de catégories, une fourchette de quantité plausible par portion adulte, en poids cru. Par exemple, 100 à 200 g de viande (bœuf, porc, volaille). Elle se calcule par plat : le total du groupe divisé par 4 portions. Une quantité hors fourchette donne un constat `warning`. Les ingrédients de placard (sel, huile, farine…) ne comptent pas.
@@ -252,7 +258,7 @@ Il n'existe pas d'API publique de prix pour les enseignes françaises, et les CG
 **L'interface** :
 - **Nouvelle session** : la conversation avec l'IA, et le menu courant affiché à côté, mis à jour à chaque modification.
 - **Ingrédients** : la liste de courses par rayon, avec des cases à cocher, les coûts estimés et le total. *Note du 14/11/2026 (lot 4) : les rayons sont retirés ; reste à trancher avant le lot 6 si cet écran reste par rayon (`docs/roadmap.md`, « Questions ouvertes »).*
-- **Réglages** : les ingrédients à éviter, l'équipement, la clé d'API, le modèle, la table de prix.
+- **Réglages** : les ingrédients à éviter, l'équipement, la clé d'API, le modèle, la table de prix. *Note du 15/11/2026 (lot 5) : livrés, trois sections. « Connexion à Claude » (clé d'API et modèle), « Aliments à éviter » et « Équipement ». L'enregistrement est immédiat. La table de prix arrive avec le lot 7. L'interface utilise Mantine.*
 - **Historique** : les 5 derniers menus, avec leur PDF.
 - L'utilisateur veut une app soignée : une interface propre et sobre.
 
@@ -285,16 +291,24 @@ Il n'existe pas d'API publique de prix pour les enseignes françaises, et les CG
 - **TypeScript** partout, dans un monorepo pnpm : `packages/core` et `apps/desktop`.
 - **`core`** reçoit tout accès extérieur par des ports. Pour un serveur web, on fournit d'autres implémentations de ces ports, et `core` ne change pas.
 - **Tauri 2** fournit la fenêtre, SQLite et le trousseau macOS, avec ses plugins officiels. Le Rust se limite à ces plugins et à leur configuration.
-- **React + Vite** pour l'interface.
+  > **Note du 15/11/2026 (lot 5) : ne vaut plus depuis cette date.** Le Rust de l'app contient du code :
+  > - les commandes de réglages (`settings_read`, `settings_write`) : `rusqlite`, une base et des requêtes fixes, migrations par `PRAGMA user_version`, verrou de fichier pour qu'une seule instance accède aux réglages ;
+  > - les commandes du trousseau (`secret_status`, `secret_set`, `secret_delete`), par la crate `keyring` : ancien trousseau macOS avec ACL, qui fait confiance à la signature du binaire. Il n'existe pas de plugin officiel pour ce trousseau ;
+  > - une garde de navigation (`navigation.rs`), qui n'accepte que les pages de l'app.
+  >
+  > La raison : les plugins SQL et HTTP n'ont pas de portée assez fine. Le plugin SQL accepte n'importe quel chemin de base, et le plugin HTTP installe un proxy choisi par la vue web ; ils auraient laissé la vue web écrire dans n'importe quelle base ou envoyer la clé n'importe où. Aucun plugin SQL ni HTTP n'est installé.
+- **React + Vite** pour l'interface. *Note du 15/11/2026 (lot 5) : Mantine pour les composants.*
 - **L'API Claude**, avec le SDK TypeScript officiel d'Anthropic. Les sorties de l'IA sont structurées et validées par des schémas **Zod**. Le modèle est configurable, `claude-sonnet-5-5` par défaut.
-- **SQLite** stocke les réglages, les exclusions, l'équipement, l'historique, la table de prix et le résumé Open Prices. La même interface pourra plus tard s'appuyer sur PostgreSQL.
-- **Vitest** pour les tests, concentrés sur `core`.
+- **SQLite** stocke les réglages, les exclusions, l'équipement, l'historique, la table de prix et le résumé Open Prices. La même interface pourra plus tard s'appuyer sur PostgreSQL. *Note du 15/11/2026 (lot 5) : les réglages sont un document JSON versionné (`version: 1`) dans une seule ligne, validé par `core`. Les autres tables arrivent avec les lots 6 et 7, par des commandes Rust.*
+- **Vitest** pour les tests, concentrés sur `core`. *Note du 15/11/2026 (lot 5) : l'app a aussi ses tests Vitest (jsdom), et le Rust ses tests `cargo test`.*
 
 **Clé d'API et appels à Claude** :
 - Au démarrage, l'app lit la clé dans le trousseau macOS et la garde en mémoire.
 - Les requêtes partent par le plugin HTTP de Tauri, côté Rust, ce qui évite les problèmes de CORS.
 - `core` ne voit qu'un port `HttpClient`.
 - Pour un site web, la clé passera côté serveur.
+
+> **Note du 15/11/2026 (lot 5) : les deux premières lignes ne valent plus depuis cette date.** La clé ne quitte jamais le Rust, sauf vers l'API Claude, au lot 6. La vue web ne voit que sa présence (`secret_status` rend un booléen) ; elle peut l'enregistrer ou la supprimer, jamais la lire. L'appel à Claude passera par une commande Rust qui ajoute la clé, vers des hôtes fixes, sans plugin HTTP. La CSP et la garde de navigation sont une défense en plus. Limites écrites : WebRTC et la préconnexion ne sont pas bloqués (sans secret à emporter), et la clé tapée dans Réglages passe une fois par la vue web. Le choix entre Anthropic et Mammouth pour l'adresse de l'API se fait avant le lot 6 (`docs/roadmap.md`, « Questions ouvertes »).
 
 **Organisation du code** :
 ```
@@ -309,9 +323,12 @@ packages/core/src/
   shopping/      liste de courses (ajouté au lot 4, note du 14/11/2026)
   pricing/       sources de prix et estimation
   pdf/           description de la fiche PDF d'un menu validé (la fiche, sans effet de bord) ; le rendu en octets, l'écriture du fichier et la date sont dans `node/` (note du 14/11/2026, lot 4)
-  ports/         interfaces : stockage, HTTP, horloge, secrets
+  settings/      document de réglages (schéma, validation, versions) et son propriétaire, `createSettingsKeeper` (ajouté au lot 5, note du 15/11/2026)
+  ports/         interfaces : stockage, HTTP, horloge, secrets (`SettingsStore` ; `SecretStore`, lecture réservée à l'appel à l'API ; `SecretAdmin`, présence, écriture et suppression sans lecture)
   node/          implémentations Node des ports et commandes de développement (seul dossier, avec les tests, où Node est permis)
 apps/desktop/    Tauri + React : écrans et implémentations des ports
+  src/platform/  implémentations des ports qui appellent les commandes Rust (lot 5)
+  src-tauri/src/ commandes Rust : réglages, trousseau, garde de navigation (lot 5)
 docs/research/   sources des règles (cuisine-addict, mangerbouger, prix)
 ```
 Les règles d'écriture de `core` (frontière du code pur, globales permises, heure par le port `Clock`) sont dans `docs/conventions-core.md`. Chaque module de `core` se teste seul. Les identifiants de code sont en anglais ; les textes affichés, le PDF et les docs sont en français.

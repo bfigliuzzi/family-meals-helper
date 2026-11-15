@@ -17,6 +17,10 @@ Ce fichier dit comment écrire du code dans `packages/core` sans casser la front
 - Scripts du lot 1 : `compose` (composition par l'IA), `smoke` (un seul appel de test de connexion) et `season:import` (régénère `src/season/season-table.ts` depuis l'API ADEME ; voir `docs/research/saison-fruits-legumes.md`). Le script d'import est le seul code qui fait un appel réseau hors de l'IA.
 - Scripts du lot 4 : `batch` (composition, détail, liste de courses et fiche PDF) et `pdf:fixture` (une fiche d'exemple, sans réseau ni clé ; `--fallback` pour la fiche de repli). `batch` passe par `runBatchCommand(argv, io)` (`src/node/batch-command.ts`) : tout ce qui touche à l'extérieur (environnement, modèles, polices, destination, écriture, heure) arrive par l'objet `io`, remplacé dans les tests.
 
+- Scripts et modules du lot 5 : le module `settings/` contient `settings.ts` (schéma, validation, `loadSettings`, `applyEquipmentSettings`, `checkApiKey`) et `settings-keeper.ts` (`createSettingsKeeper`, le propriétaire du document de réglages, qui écrit dans l'ordre). Les ports sont `SettingsStore` (`read` et `write` transportent du **texte** : parsing, validation et sérialisation restent dans `core`), `SecretStore` (`get`, réservé à l'appel à l'API ; son implémentation Node ne change pas) et `SecretAdmin` (`has`, `set`, `delete` : il ne lit jamais la valeur de la clé). Les implémentations pour l'app sont dans `apps/desktop/src/platform/`, pas dans `core`.
+- **Faire évoluer le document de réglages** : la `version` s'incrémente à tout changement de forme, `loadSettings` porte une transformation explicite de chaque version précédente, et une version future est refusée sans écriture. `MAX_DOCUMENT_BYTES` est le même qu'en Rust (`settings_db.rs`), et `MAX_EXCLUSIONS` est choisi pour que le pire document valide tienne dedans (un test le vérifie).
+- Messages de validation en français : chaque schéma Zod porte son `error`, et un test vérifie qu'aucun message ne contient « Invalid », « expected », « Required » ni « received ».
+
 ## 2. SDK Anthropic
 
 Il vit dans `packages/core/src/ai/`, comme la conception le demande. Il reçoit une fonction `fetch` construite à partir du port `HttpClient`, avec `Request` et `Response`. Le SDK ne fait donc aucun appel réseau par lui-même.
@@ -69,6 +73,7 @@ Le `throw` qui suit ce `catch` porte `// eslint-disable-next-line preserve-caugh
 - Pas de `globalThis` : ni `globalThis.X`, ni `globalThis["X"]`, ni `const g = globalThis`, ni déstructuration. Le code pur n'en a jamais besoin.
 - Pas de `console`.
 - Le réseau, le disque, l'horloge, le hasard et l'environnement passent par un port. Le code pur reçoit ces accès par les ports : le SDK reçoit un `fetch` adapté depuis `HttpClient`, les fonctions métier reçoivent une date fournie par `Clock`. Seules les implémentations Node des ports (dans `src/node/`) lisent l'heure et font les requêtes.
+- Le keeper (`settings-keeper.ts`) n'utilise que des promesses. Il n'emploie pas `queueMicrotask` pour relancer l'erreur d'un abonné : elle ferait échouer Vitest sur les tests qui la provoquent (raison écrite en commentaire dans le fichier).
 - On peut ajouter à `portableGlobals` une API sans entrée-sortie. Le plan du lot concerné le dit.
 
 ## 4. Types

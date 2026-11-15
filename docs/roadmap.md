@@ -4,7 +4,7 @@ Ce fichier découpe la conception (`docs/superpowers/specs/2026-11-12-family-mea
 
 Chaque lot se termine sur un **livrable vérifiable** : une commande dont le résultat montre que le lot marche. Quand un lot est livré, son statut passe à `livré` avec la date et le commit.
 
-Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en bout) : à la fin du lot 4, l'utilisateur peut déjà préparer un batch cook en ligne de commande. Les lots 5 à 7 y ajoutent l'app desktop puis les prix.
+Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en bout) : à la fin du lot 4, l'utilisateur peut déjà préparer un batch cook en ligne de commande. Les lots 5 à 7 y ajoutent l'app desktop puis les prix. Le lot 5 bis (signature de l'app) s'insère entre le 5 et le 6, sur décision de l'utilisateur du 2026-11-15.
 
 | Lot | Titre | Dépend de | Statut |
 |---|---|---|---|
@@ -13,8 +13,9 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 | 2 | Conservation, équilibre et quantités | 1 | `livré` (2026-11-13, `908c016` et `52960c8`) |
 | 3 | Équipement et planning de session | 1 | `livré` (2026-11-13, `5b98d7b`) |
 | 4 | Détail, liste de courses et PDF | 2, 3 | `livré` (2026-11-14, `ca72cc6`) ; démonstration réelle non faite |
-| 5 | App desktop : coquille, réglages, persistance | 4 | à faire |
-| 6 | App desktop : session, ingrédients, historique | 5 | à faire |
+| 5 | App desktop : coquille, réglages, persistance | 4 | `livré` (2026-11-15, `63f2bc7`) |
+| 5 bis | Signature stable de l'app | 5 | à faire |
+| 6 | App desktop : session, ingrédients, historique | 5 bis | à faire |
 | 7 | Prix | 4 (affichage dans l'app : 6) | à faire |
 
 ---
@@ -31,7 +32,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 - Une garde ESLint du code pur de `core` (pas de Node, de Tauri, de React, d'horloge ni de globales hors liste dans le code pur) ; le code Node vit dans `packages/core/src/node/`. Les règles d'écriture sont dans `docs/conventions-core.md`.
 - `apps/desktop` : Tauri 2 + React + Vite, qui ouvre une fenêtre affichant une valeur importée de `core` (preuve que le lien entre les deux marche).
 - Scripts racine : `pnpm lint`, `pnpm format:check`, `pnpm typecheck`, `pnpm test`, `pnpm build`. `pnpm build` ne lance aucun Rust (`tsc` puis Vite).
-- Une CI GitHub Actions (Ubuntu, sans Rust) qui lance ces scripts, sur le remote https://github.com/bfigliuzzi/family-meals-helper.
+- Une CI GitHub Actions (Ubuntu, sans Rust) qui lance ces scripts, sur le remote https://github.com/bfigliuzzi/family-meals-helper. *Depuis le lot 5 (2026-11-15), elle a aussi un job Rust sur macOS.*
 
 **Livrable vérifiable** : `pnpm install --frozen-lockfile && pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build` passe ; `pnpm --filter desktop tauri dev` ouvre la fenêtre.
 
@@ -42,8 +43,8 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 **Ce que ça ne fera PAS (visible)** : aucune fonction métier ; la fenêtre n'affiche qu'un texte de contrôle.
 
 **Reliquats du lot 0** (dettes connues, chacune reprise dans le lot qui doit la traiter) :
-- **CSP désactivée** (`"csp": null` dans `apps/desktop/src-tauri/tauri.conf.json`) et **permissions `core:default` trop larges** (`capabilities/default.json`) : à traiter au lot 5, qui réécrit les permissions pour SQLite, le trousseau et HTTP.
-- **Pas de vérification Rust en CI** : décision de cadrage, le Rust ne contient que de la configuration. À revoir au lot 5, quand le Rust fera plus que cela.
+- **CSP désactivée** (`"csp": null` dans `apps/desktop/src-tauri/tauri.conf.json`) et **permissions `core:default` trop larges** (`capabilities/default.json`) : à traiter au lot 5, qui réécrit les permissions pour SQLite, le trousseau et HTTP. **Traité au lot 5 (2026-11-15, `63f2bc7`)** : CSP réelle, `core:default` retiré, la capability ne permet que les 5 commandes de l'app ; les contre-épreuves en console ont été faites sur un `.app` (voir « Bilan de validation » du lot 5). Les permissions ne portent finalement ni sur SQLite ni sur HTTP, qui n'ont plus de plugin.
+- **Pas de vérification Rust en CI** : décision de cadrage, le Rust ne contient que de la configuration. À revoir au lot 5, quand le Rust fera plus que cela. **Traité au lot 5 (2026-11-15, `63f2bc7`)** : un job `rust` sur `macos-15` lance `cargo fmt --check`, `cargo clippy` et `cargo test`.
 - **Arrêt de `tauri dev`** : pnpm 12 place chaque script dans son propre groupe de processus, donc arrêter `pnpm --filter desktop tauri dev` peut laisser Vite ou l'app tourner. Les plans des lots qui relancent `tauri dev` (5 et 6) vérifient après l'arrêt que le port 1420 est libre (`lsof -nP -iTCP:1420 -sTCP:LISTEN`) et que l'app ne tourne plus.
 - **Types Node visibles dans tout `core`** : `tsconfig.json` les charge explicitement, ce choix vient notamment du SDK Anthropic (lot 1). La frontière du code pur tient par ESLint seulement, pas par TypeScript. Un second programme TypeScript sans types Node avait été essayé puis supprimé (voir `docs/conventions-core.md`, §7).
 - **Contournements délibérés non couverts** (`as`, `Reflect.get`, dépendance qui accède à l'extérieur) et lectures implicites résiduelles (`Math.random()`, fuseau par défaut d'`Intl`, `format(at)` avec `at` à `undefined`) : dette assumée, jugée en relecture. Le principe d'arrêt est dans `docs/conventions-core.md`, §6.
@@ -110,7 +111,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
   - **Conclusion** : Mammouth accepte l'API Messages, la sortie structurée, `effort` et le cache de prompt (2499 jetons écrits par la fumée, relus par la démo). Aucun `FMH_DISABLE` n'a été nécessaire.
 
 **Reliquats du lot 1** (dettes connues, chacune reprise dans le lot qui doit la traiter) :
-- **`ai/` n'est pas réexporté par `src/index.ts`** : l'app desktop n'a pas besoin du SDK dans son bundle. Le lot 5 ou 6 décidera comment l'app y accède.
+- **`ai/` n'est pas réexporté par `src/index.ts`** : l'app desktop n'a pas besoin du SDK dans son bundle. Le lot 5 ou 6 décidera comment l'app y accède. **Précisé le 2026-11-15 (lot 5)** : le lot 5 n'appelle pas Claude et n'importe pas `ai/`. L'appel passera par une commande Rust qui ajoute la clé (lot 6) ; l'emplacement du SDK reste à décider dans le plan du lot 6, et `ai/` ne sera réexporté que si la vue web garde le SDK.
 - **Dette `ANTHROPIC_CUSTOM_HEADERS`** : le constructeur du SDK Anthropic lit toujours cette variable, aucune option ne l'empêche (voir `docs/conventions-core.md`, §2).
 - **`FMH_DISABLE`** (`format`, `effort`, `cache`) : prévu pour un proxy qui refuse une de ces fonctions. Mammouth les accepte toutes (démo du 2026-11-13) ; la variable reste disponible pour un autre proxy.
 - **Pas de repli automatique** sur un autre modèle en cas de refus (`fallbacks`).
@@ -209,7 +210,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 - **Capacités** au plus : four 2, plaque 4, Thermomix 1, Kenwood 1, chaque appareil d'appoint 1 ; un seul appareil d'appoint par session.
 - **Des maximums, pas un idéal** : le prompt le dit, pour que l'IA n'utilise pas tous les appareils par principe.
 - **Plus de 3 h = `error`** ; **2 h 30 : objectif demandé dans le prompt et rappelé dans l'affichage, sans constat** : entre 2 h 30 et 3 h, aucun constat.
-- **Équipement constant, sans option de ligne de commande** : `HOUSEHOLD_EQUIPMENT` (`equipment/household.ts`) jusqu'au lot 5. Pas un fichier par appareil, contrairement à ce que prévoyait « Contenu » (note datée dans la conception, §3.2).
+- **Équipement constant, sans option de ligne de commande** : `HOUSEHOLD_EQUIPMENT` (`equipment/household.ts`) jusqu'au lot 5. Pas un fichier par appareil, contrairement à ce que prévoyait « Contenu » (note datée dans la conception, §3.2). *Note du 2026-11-15 : les réglages d'équipement sont livrés au lot 5, mais la composition utilise toujours `HOUSEHOLD_EQUIPMENT` ; leur application vient au lot 6.*
 - **Plats entièrement `sameDay` hors planning** : ils se font le soir.
 - **Plafond de jetons par défaut passé de 4000 à 8000** (`max_tokens` dans `anthropic-client.ts`, une option `maxTokens` peut le remplacer) : la réponse porte maintenant les phases de chaque plat.
 - **Planificateur à deux ordres** (révision après relecture) : glouton par insertion, il essaie deux ordres et garde le plus court. La première version n'en essayait qu'un.
@@ -235,7 +236,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 - ~~Les séparateurs Unicode et les caractères de direction ne sont pas neutralisés dans la sortie de `compose`.~~ **Fermé au lot 4 (2026-11-14)** : `printable` retire les caractères `Default_Ignorable_Code_Point` et remplace les contrôles C0/C1 et U+2028/2029 par une espace, pour `compose` comme pour le PDF.
 
 **Reliquats du lot 3** (dettes connues, chacune reprise dans le lot qui doit la traiter) :
-- **Validation d'un équipement modifiable** (capacités entières ≥ 1, `id` uniques) : reportée au lot 5, qui rend l'équipement modifiable (ajoutée à son contenu).
+- **Validation d'un équipement modifiable** (capacités entières ≥ 1, `id` uniques) : reportée au lot 5, qui rend l'équipement modifiable (ajoutée à son contenu). **Traitée au lot 5 (2026-11-15, `63f2bc7`)** : `settings/settings.ts` valide la capacité (entier de 1 à 10) ; la table du code garde ses `id` uniques, puisqu'on ne peut ni ajouter ni retirer d'appareil.
 - **Démonstration réelle** : à faire avec la clé Mammouth (appels rares), à la première occasion. **Toujours à faire au 2026-11-14** : couverte par la démonstration de `batch` du lot 4 (voir « Reliquats du lot 4 »).
 
 ## Lot 4 : détail, liste de courses et PDF
@@ -311,13 +312,13 @@ Contenu prévu à l'origine : recettes, conversion en unités d'achat, rayons, P
 - (V) peut se tromper pour un ingrédient animal mal classé ou absent du référentiel. La conservation vient des tables par catégorie du lot 2, avec leurs limites.
 - Exclusions :
   - contrôlées par des mots entiers et par les groupes du référentiel ; elles peuvent refuser à tort un texte qui contient le mot ailleurs (« noix de muscade » avec `--exclude noix`), ce qui est voulu, par prudence ;
-  - **pas de groupes d'allergènes** : `--exclude lait` n'exclut ni le beurre ni la crème, `--exclude arachide` n'exclut pas les cacahuètes, `--exclude soja` n'exclut pas la sauce soja ; il faut exclure chaque ingrédient par son nom ;
+  - **pas de groupes d'allergènes** (sujet **abandonné le 2026-11-14** : personne n'est allergique dans le foyer, voir « Questions ouvertes ») : `--exclude lait` n'exclut ni le beurre ni la crème, `--exclude arachide` n'exclut pas les cacahuètes, `--exclude soja` n'exclut pas la sauce soja ; il faut exclure chaque ingrédient par son nom ;
   - un nom écrit avec une lettre d'un autre alphabet qui ressemble à une lettre latine (homoglyphe) n'est pas détecté.
 - Un émoji s'affiche comme un carré vide. La note de sécurité peut être coupée entre deux pages.
 
 **Reliquats du lot 4** (dettes connues, chacune reprise dans le lot qui doit la traiter)
 - **Démonstration réelle** de `batch` avec la clé Mammouth, à lancer par l'utilisateur. Elle couvre aussi les lots 2 et 3. Vérifier que Mammouth accepte le schéma du détail ; sinon `FMH_DISABLE=format`. Noter les jetons affichés, pour le budget de 2 $/mois. L'utilisateur n'a pas vu les fiches finales : regarder les deux fiches de fixture (`pdf:fixture` et `pdf:fixture --fallback`) avant la démonstration.
-- **Groupes d'allergènes** absents du référentiel (voir « Questions ouvertes »).
+- **Groupes d'allergènes** absents du référentiel (voir « Questions ouvertes »). **Abandonné le 2026-11-14** : décision de l'utilisateur, personne n'est allergique ; on exclut chaque ingrédient par son nom.
 - **Homoglyphes** non détectés par les exclusions (il faudrait la table des confusables d'Unicode, UTS #39).
 - **Préparation réservée sans dépendance déclarée** par l'IA : pas de consigne de conservation propre (le code ne sait pas quelle étape utilise vraiment une préparation ; la note générale s'applique).
 - **ACL** : le remplacement d'un `--out` existant garde les droits POSIX, pas les ACL ni les attributs étendus.
@@ -329,20 +330,91 @@ Contenu prévu à l'origine : recettes, conversion en unités d'achat, rayons, P
 
 ## Lot 5 : app desktop, coquille, réglages et persistance
 
+**Statut** : `livré` le 2026-11-15, commit `63f2bc7` (branche `lot-5-app-reglages`), CI GitHub verte (jobs `check` et `rust`).
+
 **Objectif** : l'app desktop existe, garde ses données et ses secrets.
 
 **Contenu** (conception §3, §9 Réglages, §10)
-- Implémentations Tauri des ports : SQLite (plugin officiel), trousseau macOS pour la clé d'API, plugin HTTP.
+- Implémentations Tauri des ports : SQLite (plugin officiel), trousseau macOS pour la clé d'API, plugin HTTP. *Ne vaut plus pour les trois : voir « Ce qui a changé en cours de lot ».*
 - Stockage des réglages : exclusions avec raison, équipement disponible, modèle Claude.
 - Validation de l'équipement modifiable (reportée du lot 3) : capacités entières ≥ 1, `id` uniques.
 - Écran Réglages et navigation entre les quatre écrans (vides pour Nouvelle session, Ingrédients, Historique).
-- Une interface sobre et soignée ; le choix du système de composants est à trancher avant ce lot (voir « Questions ouvertes »).
-- Reliquats du lot 0 à traiter ici : CSP (`"csp": null`) et permissions `core:default` remplacées par des permissions minimales ; décider d'une vérification Rust en CI (lot 0, « Reliquats »).
+- Une interface sobre et soignée ; le choix du système de composants est à trancher avant ce lot (voir « Questions ouvertes »). *Tranché : Mantine.*
+- Reliquats du lot 0 à traiter ici : CSP (`"csp": null`) et permissions `core:default` remplacées par des permissions minimales ; décider d'une vérification Rust en CI (lot 0, « Reliquats »). *Fait.*
 - Si le plan relance `tauri dev` : vérifier après l'arrêt que le port 1420 est libre et que l'app ne tourne plus (pnpm 12, un groupe de processus par script).
 
 **Livrable vérifiable** : tests des implémentations de ports qui le permettent ; l'app lancée enregistre une exclusion et la clé, puis les retrouve après redémarrage.
 
-**Ce que ça ne fera PAS (visible)** : pas encore de composition dans l'app.
+**Ce qui a changé en cours de lot** (décisions de l'utilisateur au cadrage du 2026-11-14, puis arbitrages du décideur après chaque relecture croisée ; le contenu ci-dessus est le contenu prévu)
+- **Mantine 9.8.0** (décision de l'utilisateur) pour l'interface, sans Storybook, sans procédure Claude Design, sans plugins PostCSS ni fichier CSS. Raison : une bibliothèque existante suffit à une interface sobre. La CSP garde `style-src 'unsafe-inline'`, parce que Mantine injecte ses styles à l'exécution.
+- **Plugin SQL retiré**, remplacé par deux commandes Rust, `settings_read` et `settings_write` (`apps/desktop/src-tauri/src/settings_db.rs`), sur `rusqlite` 0.42 (fonction `bundled`).
+  - Raison : le plugin accepte n'importe quel chemin de base, donc la vue web pouvait ouvrir ou écrire n'importe quel fichier SQLite de l'utilisateur, et sa permission ne se limite pas à une table. Écart à la décision de cadrage « SQLite, plugin officiel ».
+  - La base est un fichier fixe, `~/Library/Application Support/com.familymealshelper.desktop/family-meals-helper.db`. Les réglages y sont un seul document JSON, limité à 256 Kio.
+  - Les migrations passent par `PRAGMA user_version`, dans une transaction : version 0 vers 1 ; version 1 inchangée ; version supérieure ou négative refusée sans écriture.
+  - Le travail bloquant (SQLite et trousseau) passe par `spawn_blocking`.
+- **Plugin HTTP retiré** : le lot 5 n'a aucun transport réseau. Raison : `tauri-plugin-http` installe un proxy fourni par la vue web, sans contrôle ; une clé lue par le front pouvait partir vers n'importe quel hôte. Le transport vers Claude est reporté au lot 6 (voir ses obligations). Écart à la roadmap d'origine.
+- **Pas de plugin `single-instance`, mais un verrou de fichier** : `family-meals-helper.lock`, pris par `File::try_lock` au premier accès aux réglages et gardé jusqu'à la fin du processus. Raison : sur macOS, le plugin laisse passer deux démarrages simultanés (course constatée). Le verrou est coopératif : il n'arrête ni `sqlite3` ni un autre programme.
+- **Trousseau par la crate `keyring` 4.2**, derrière trois commandes Rust. Raison : il n'existe pas de plugin officiel pour le trousseau macOS (écart à la conception §10, qui l'annonçait). C'est l'ancien trousseau macOS, avec ACL : il fait confiance au binaire qui a créé l'entrée.
+- **`secret_status` à la place d'un `secret_get`** : la commande ne rend qu'un booléen (la clé est-elle enregistrée ?), les deux autres sont `secret_set` et `secret_delete`. Raison : tant que le front pouvait lire la clé, chaque faille de la vue web (proxy HTTP, navigation, WebRTC, préconnexion) pouvait la faire sortir. Maintenant, la clé ne sort plus du Rust. Côté `core`, `SecretAdmin` (`has`, `set`, `delete`) remplace le `WritableSecretStore` prévu au plan ; il n'étend pas `SecretStore`, dont `get` reste réservé à l'appel à l'API. Le Rust valide la clé comme `core` : ASCII visible, de 1 à 500 octets.
+- **Garde de navigation** : le plugin local `navigation-guard` (`apps/desktop/src-tauri/src/navigation.rs`) n'accepte que les pages de l'app, `about:blank` et, en dev, `http://localhost:1420`. Raison : la CSP ne couvre pas la navigation de la page principale, qui aurait permis d'envoyer des données vers un hôte externe. `window.open` n'ouvre rien (comportement par défaut de wry), et `index.html` coupe le préchargement DNS.
+- **CSP réelle et permissions minimales** : `core:default` est retiré, la capability ne permet que les 5 commandes de l'app, `connect-src` est limité à l'IPC. Les fichiers `permissions/autogenerated/*.toml` sont committés : leur contenu est le même sur toutes les machines, et un changement de droit se voit dans le diff.
+- **Réglages en un document JSON versionné** (`version: 1`), validé dans `core` (`settings/settings.ts`). Un seul propriétaire au-dessus des écrans, `createSettingsKeeper` (`settings/settings-keeper.ts`) : il écrit dans l'ordre, ne relit jamais après un échec, et l'erreur s'affiche avec « Réessayer ». L'enregistrement est immédiat. Raison : deux écrans qui écrivent chacun de leur côté s'écraseraient.
+- **Équipement** : chaque appareil du code a une disponibilité et une capacité (entier de 1 à 10) ; on ne peut ni ajouter ni retirer d'appareil (décision de l'utilisateur). Les textes `uses` du four et de la plaque ne contiennent plus de nombre, puisque la capacité varie. `applyEquipmentSettings` existe mais n'est pas branché dans la composition (lot 6).
+- **CI** : un job `rust` sur `macos-15` lance `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings` et `cargo test --locked`. Raison : le Rust contient maintenant la logique des réglages et du trousseau. Les tests de l'app (Vitest et jsdom) tournent dans `pnpm test`.
+- **Allergènes abandonnés** (décision de l'utilisateur, 2026-11-14) : personne n'est allergique ; il n'y aura pas de groupes d'allergènes. Les exclusions sont un terme et une raison facultative, au plus 200.
+
+**Bilan de validation du livrable**
+- **Tests** : 895 tests `core`, 53 tests de l'app (Vitest, jsdom) et 19 tests Rust (`cargo test` : navigation, trousseau, et réglages SQLite sur une base en mémoire ou un fichier temporaire). `lint`, `format:check`, `typecheck`, `build`, `clippy` et `fmt` passent en local, et la CI GitHub est verte (jobs `check` et `rust`).
+- **Relectures** : 6 cycles de relecture croisée (Opus et Codex), jusqu'au consensus. Après deux cycles de corrections régressives de l'exécutant Sonnet, la règle de bascule a été appliquée : un exécutant Opus a fini le travail.
+- **Contre-épreuves manuelles de l'utilisateur (2026-11-15), toutes conformes**, sur l'app lancée puis sur un `.app` construit par `tauri build --debug --bundles app` (CSP de production, inspecteur web) :
+  - un aliment, l'airfryer décoché et la clé sont retrouvés après un redémarrage, sans nouvelle demande d'accès au trousseau ;
+  - le `.app`, de signature différente, demande l'accès au trousseau : refuser donne une alerte, autoriser fonctionne ;
+  - 8 contre-épreuves en console : `secret_get` refusé, `secret_status` rend vrai, une commande inconnue refusée, `plugin:app|version` refusé, script en ligne bloqué, `fetch` refusé, `window.open` rend `null`, `location.assign` vers un hôte externe bloqué ;
+  - seconde instance : « Réglages indisponibles », et la clé reste modifiable (voulu).
+- **Défaut trouvé à cette occasion** : dans le `.app`, « Supprimer la clé » échouait avec « Invalid attempt to change the owner of this item », sur une clé créée par le binaire de développement (autre signature). Cause : l'ACL de l'ancien trousseau est liée à la signature du binaire. Correction : un message clair (comment supprimer l'entrée dans Trousseaux d'accès) et la limite écrite ci-dessous. Une entrée factice créée par `security add-generic-password` a ensuite servi à le reproduire : le remplacement de la clé réussit, la suppression affiche ce message.
+- **Aucun appel réel à l'IA** dans ce lot.
+
+**Ce que ça ne fera PAS (visible)**
+- Pas de composition dans l'app : « Nouvelle session », « Ingrédients » et « Historique » affichent seulement « À venir ». **Les réglages ne servent encore à rien** : l'équipement, les exclusions et le modèle ne sont lus par aucune commande (`compose` et `batch` gardent `HOUSEHOLD_EQUIPMENT` et `--exclude`), ils serviront au lot 6.
+- **200 aliments à éviter au plus** ; **capacité de 1 à 10** : le champ borne la saisie, le plafond protège surtout la taille du document.
+- **Brouillons perdus** : un aliment, un modèle ou une clé tapés sans être enregistrés sont oubliés quand on quitte Réglages (c'est dit à l'écran). Si un enregistrement échoue et qu'on quitte l'app, les changements non enregistrés sont perdus.
+- **Seconde instance refusée** : elle s'ouvre, mais ses réglages sont refusés (« Réglages indisponibles »), avec un message qui dit de fermer l'autre fenêtre. Sa section « Clé d'API » reste utilisable. La « première » est celle qui a accédé aux réglages la première, pas celle qui a démarré la première ; l'autre fenêtre n'est pas remise au premier plan.
+- **Suppression de la clé impossible depuis une autre version de l'app** : l'app n'est pas signée, donc chaque nouvelle version (ou recompilation en développement) demande d'autoriser la lecture de la clé. Elle peut ensuite remplacer la clé, mais pas la supprimer, même après « Toujours autoriser » ; l'app explique alors comment supprimer l'entrée dans Trousseaux d'accès. Le message parle d'une « autre version de l'app » même quand la cause est un refus d'accès (code -25299) ; la marche à suivre répare quand même. Repris au lot 5 bis.
+- La clé tapée passe une fois par la vue web ; ensuite, seul le Rust la voit.
+- WebRTC et la préconnexion ne sont pas bloqués : ils n'ont aucun secret à emporter.
+- Le verrou des réglages n'arrête pas `sqlite3` ni un autre programme.
+- Pas de bouton « Tester la clé », pas d'adresse d'API réglable (la clé Mammouth demande `https://api.mammouth.ai`) : le fournisseur sera choisi avant le lot 6, voir « Questions ouvertes ».
+- Pas d'ajout ni de suppression d'appareil, pas d'ustensiles. Pas de modification d'une exclusion (on la retire puis on l'ajoute de nouveau). Pas d'annulation, d'import ni d'export. Pas de table de prix (lot 7).
+- Un document de réglages abîmé à la main, une migration ratée ou un document d'une version future laissent l'écran en erreur, sans bouton pour repartir des valeurs par défaut.
+- Le mode clair ou sombre suit macOS, sans réglage. La fenêtre ne garde ni sa taille ni sa position. L'app n'est pas signée.
+
+**Reliquats du lot 5** (dettes connues, chacune reprise dans le lot qui doit la traiter)
+- (lot 6) **Brancher `applyEquipmentSettings`, les exclusions enregistrées et le modèle choisi** partout où `HOUSEHOLD_EQUIPMENT`, `--exclude` et le modèle par défaut servent en dur : `rules/check-menu.ts`, `ai/prompt.ts`, `ai/batch.ts`, `pdf/sheet.ts`.
+- (lot 6) **Brouillon de capacité jamais remis à jour, et retrait d'un aliment par sa position**, à revoir quand le keeper sera partagé avec l'action « éviter cet ingrédient ».
+- (lot 6) **Un abonné du keeper qui lève une erreur est ignoré sans trace** (choix écrit en commentaire).
+- (lot 5 bis) **Demande d'accès au trousseau et suppression impossible après une nouvelle version.**
+- (non planifié) Un échec de `app_config_dir()` empêche l'app de démarrer ; seulement sans `HOME`.
+- (non planifié) Le paquet JS fait environ 517 kB (avertissement de Vite).
+- (non planifié) En dev, `StrictMode` lit deux fois le trousseau : deux demandes d'accès sont possibles.
+- (non planifié) Dans les messages d'erreur, le détail technique reste en anglais (en petit, sous la phrase française).
+- (non planifié) Un document de plus de 200 aliments écrit avant la borne serait illisible ; aucune base réelle n'est concernée.
+
+## Lot 5 bis : signature stable de l'app
+
+**Statut** : à faire. Ajouté le 2026-11-15, sur décision de l'utilisateur, avant le lot 6.
+
+**Objectif** : la clé d'API enregistrée dans le trousseau se lit sans demande d'accès après une reconstruction de l'app, et on peut la supprimer depuis l'app.
+
+**Pourquoi** : l'app n'est pas signée, et le trousseau macOS lie l'accès à une entrée à la signature du binaire qui l'a créée. Chaque nouvelle version demande donc d'autoriser la lecture, et ne peut pas supprimer la clé d'une version précédente (voir « Ce que ça ne fera PAS » du lot 5). Le lot 6 lira la clé à chaque appel à Claude : il vaut mieux régler cela avant.
+
+**Contenu**
+- Signer l'app avec une identité stable : un certificat de signature de code auto-signé créé dans Trousseaux d'accès, ou un certificat Apple Development. L'identité est passée par `APPLE_SIGNING_IDENTITY` à `tauri build`.
+- `tauri dev` reste en signature ad hoc (chaque recompilation change la signature) : la demande d'accès au trousseau continue d'y apparaître. À écrire dans `CLAUDE.md`.
+- Dire dans `CLAUDE.md` comment créer l'identité et construire le `.app` signé.
+
+**Livrable vérifiable** : après deux reconstructions du `.app` avec la même identité, la clé se lit sans demande d'accès et « Supprimer la clé » réussit depuis l'app.
+
+**Ce que ça ne fera PAS (visible)** : pas de notarisation, pas de distribution à d'autres machines ; une clé enregistrée par une version non signée (ou signée autrement) reste à supprimer à la main dans Trousseaux d'accès, une seule fois.
 
 ## Lot 6 : app desktop, session, ingrédients et historique
 
@@ -357,6 +429,16 @@ Contenu prévu à l'origine : recettes, conversion en unités d'achat, rayons, P
 - Historique des 5 derniers menus, transmis à l'IA, avec réouverture du PDF.
 - Si le plan relance `tauri dev` : vérifier après l'arrêt que le port 1420 est libre et que l'app ne tourne plus (pnpm 12, un groupe de processus par script).
 
+**Obligations reportées du lot 5** (2026-11-15)
+- **Transport vers Claude par une commande Rust qui ajoute elle-même la clé** (`Authorization: Bearer`, que Mammouth attend aussi), vers des hôtes fixes (Anthropic ou Mammouth, selon le choix du fournisseur : voir « Questions ouvertes »). La clé ne passe jamais par la vue web. Décidé : le transport, c'est-à-dire que la clé reste côté Rust. Reste à décider (point suivant) : où vit le SDK, dans la vue web avec un `fetch` adapté, ou plus du tout. Le reliquat du lot 1 « `ai/` n'est pas réexporté » se règle avec ce choix : si la vue web garde le SDK, `ai/` devra être réexporté.
+- Aucune commande ne rend la clé (`secret_status` ne rend qu'un booléen) et la vue web ne fournit pas de proxy. Les redirections sont refusées hors des hôtes permis, ou il n'y en a pas du tout.
+- **Le SDK Anthropic dans une vue web** : il détecte `window`, donc il faudrait `dangerouslyAllowBrowser: true`. Son `fetch` serait adapté vers la commande Rust, avec une `apiKey` factice que le Rust remplace. L'autre voie : la commande Rust fait l'appel sans SDK. À trancher dans le plan du lot 6. Si l'appel garde une `Origin`, vérifier l'en-tête `anthropic-dangerous-direct-browser-access`.
+- **Masquage de la clé** dans les erreurs et les journaux : le Rust refait ce que fait `redact` dans `core`, et aucune erreur renvoyée à la vue web ne contient la clé.
+- **Nouvelles tables** (historique) : de nouvelles commandes Rust dans `settings_db.rs` ou un module voisin, avec une migration `user_version` 2. Jamais de SQL fourni par la vue web.
+- **Le keeper partagé** par les écrans (action « éviter cet ingrédient ») ; reprendre les reliquats du lot 5 (brouillon de capacité, retrait par position, abonné qui lève une erreur).
+- **Brancher les réglages** : `applyEquipmentSettings`, les exclusions enregistrées et le modèle choisi (reliquat du lot 5).
+- Toute nouvelle commande est ajoutée à `AppManifest::commands` (`build.rs`), à `capabilities/default.json` et à `generate_handler!` (`src/main.rs`), et son fichier `permissions/autogenerated/*.toml` est committé ; le `.toml` d'une commande retirée se supprime à la main.
+
 **Livrable vérifiable** : tests de la modification du menu courant avec un faux client IA, dont un test où l'IA tente de retirer un plat épinglé ; dans l'app, l'utilisateur compose, modifie un plat, valide et obtient le PDF ; le menu apparaît dans l'historique.
 
 **Ce que ça ne fera PAS (visible)** : pas de prix.
@@ -367,6 +449,7 @@ Contenu prévu à l'origine : recettes, conversion en unités d'achat, rayons, P
 
 **Contenu** (conception §8, `docs/research/sources-prix.md`)
 - `pricing/` : table manuelle, INSEE, résumé Open Prices (téléchargement hebdomadaire en tâche de fond, lecture en flux, médiane par ingrédient du référentiel), ordre de priorité, source affichée.
+- Le résumé Open Prices et la table de prix passent par des commandes Rust dédiées (comme les réglages), pas par un plugin SQL (décision du lot 5).
 - Affichage du coût dans le menu courant, la page Ingrédients (avec modification de la table manuelle) et le PDF ; mention de la licence ODbL.
 - **Plafond de budget** (reporté du lot 2, décision de l'utilisateur du 2026-11-13) : quand la demande fixe un plafond, un dépassement donne un constat `warning` (conception §6.6). Aucun constat de budget avant ce lot.
 
@@ -381,6 +464,7 @@ Contenu prévu à l'origine : recettes, conversion en unités d'achat, rayons, P
 ## Questions ouvertes (à trancher avant le lot concerné)
 
 - ~~**Avant le lot 0** : le remote git et la branche de travail ; le profil Codex du projet.~~ Tranché : remote GitHub public https://github.com/bfigliuzzi/family-meals-helper, une branche par lot (`lot-0-socle`) ; profil Codex `~/.codex/family-meals-helper.config.toml` en gpt-6.1-sol, effort high.
-- **Avant le lot 5** : nico-build-plan suppose un Storybook (`packages/design-system`) et une procédure Claude Design pour tout composant d'interface. Ce projet n'en a pas : décider s'il en crée un, ou si les lots UI utilisent une bibliothèque de composants existante.
-- **Avant le lot 5** : groupes d'allergènes dans le référentiel, par exemple les 14 allergènes de l'étiquetage européen, rattachés à chaque entrée, avec une source dans `docs/research/`. Recommandation du décideur : un petit lot dédié. (Voir « Reliquats du lot 4 ».)
+- ~~**Avant le lot 5** : nico-build-plan suppose un Storybook (`packages/design-system`) et une procédure Claude Design pour tout composant d'interface. Ce projet n'en a pas : décider s'il en crée un, ou si les lots UI utilisent une bibliothèque de composants existante.~~ Tranché le 2026-11-14 : Mantine 9.8.0, sans Storybook ni procédure Claude Design.
+- ~~**Avant le lot 5** : groupes d'allergènes dans le référentiel, par exemple les 14 allergènes de l'étiquetage européen, rattachés à chaque entrée, avec une source dans `docs/research/`. Recommandation du décideur : un petit lot dédié. (Voir « Reliquats du lot 4 ».)~~ Abandonné le 2026-11-14 : personne n'est allergique dans le foyer, il n'y aura pas de groupes d'allergènes. On exclut chaque ingrédient par son nom.
+- **Avant le lot 6** : l'adresse de l'API dans l'app. La clé de l'utilisateur est une clé Mammouth, qui demande `https://api.mammouth.ai` ; sans réglage, l'app appellerait `api.anthropic.com` avec cette clé, et l'appel échouerait. Recommandation du décideur : un choix « Fournisseur : Anthropic ou Mammouth » dans Réglages, qui fixe les deux seuls hôtes permis à la commande Rust ; pas d'adresse libre, qui ouvrirait la clé à n'importe quel hôte. À trancher par l'utilisateur.
 - **Avant le lot 6** : l'écran Ingrédients reste-t-il par rayon ? Les rayons ont été retirés du référentiel au lot 4 (courses en drive) ; les rajouter serait une donnée par entrée.
