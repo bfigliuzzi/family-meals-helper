@@ -43,6 +43,9 @@ describe("équipement gelé et cohérent", () => {
     for (const spec of HOUSEHOLD_EQUIPMENT) expect(Object.isFrozen(spec)).toBe(true);
     expect(Object.isFrozen(APPLIANCE_LABELS)).toBe(true);
   });
+  it("ne met aucun nombre dans les textes d'usage : la capacité vient de `slots`", () => {
+    for (const spec of HOUSEHOLD_EQUIPMENT) expect(spec.uses).not.toMatch(/\d/);
+  });
   it("a des capacités entières d'au moins 1 et des id uniques", () => {
     for (const spec of HOUSEHOLD_EQUIPMENT) {
       expect(Number.isInteger(spec.slots)).toBe(true);

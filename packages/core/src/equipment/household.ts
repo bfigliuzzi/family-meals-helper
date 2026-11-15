@@ -28,10 +28,11 @@ export function phaseUseText(phase: Phase): string {
   return `${APPLIANCE_LABELS[phase.appliance]}${phase.attended ? "" : ", tourne seul"}`;
 }
 
-// Équipement du foyer (conception §3.2). Constante jusqu'au lot 5, qui le mettra dans les réglages.
+// Table de base de l'équipement (conception §3.2). Les réglages de l'utilisateur s'y appliquent par
+// `applyEquipmentSettings` (`settings/settings.ts`) ; le branchement dans la composition est prévu au lot 6.
 const HOUSEHOLD_SPECS: ApplianceSpec[] = [
-  { id: "oven", slots: 2, extra: false, uses: "2 plats en même temps, chaleur tournante" },
-  { id: "induction", slots: 4, extra: false, uses: "4 feux" },
+  { id: "oven", slots: 2, extra: false, uses: "chaleur tournante" },
+  { id: "induction", slots: 4, extra: false, uses: "un feu par cuisson" },
   { id: "thermomix", slots: 1, extra: false, uses: "cuisson, mixage" },
   { id: "kenwood", slots: 1, extra: false, uses: "mijotage, sauces ; tranche et râpe" },
   { id: "cookeo", slots: 1, extra: true, uses: "cuisson sous pression" },

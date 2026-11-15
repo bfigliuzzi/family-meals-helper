@@ -1,7 +1,13 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissions de la fenêtre principale",
+  "description": "Permissions de la fenêtre principale : réglages (base de l'app), clé d'API (trousseau)",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": [
+    "allow-settings-read",
+    "allow-settings-write",
+    "allow-secret-status",
+    "allow-secret-set",
+    "allow-secret-delete"
+  ]
 }
