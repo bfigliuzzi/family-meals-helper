@@ -376,9 +376,11 @@ describe("clé d'API", () => {
   });
   it("16. clé présente, suppression refusée : alerte avec le message reçu, état « présente »", async () => {
     const { secrets, user } = setup({ key: "sk-ancienne" });
-    // Message que `secret_delete` rend quand l'entrée appartient à une autre version de l'app (secrets.rs).
+    // Message que `secret_delete` rend quand l'entrée appartient à une autre version de l'app.
+    // Copie du texte figé par le test Rust
+    // `owner_refusal_text_is_the_one_shown_in_the_settings_test` (secrets.rs) : à modifier ensemble.
     const ownerRefusal =
-      "Le trousseau refuse la suppression : la clé a été enregistrée par une autre version de l'app. Ouvrez l'app Trousseaux d'accès, cherchez « com.familymealshelper.desktop », supprimez cette entrée, puis enregistrez la clé ici. Détail : Couldn't access platform storage: Invalid attempt to change the owner of this item.";
+      "Le trousseau refuse la suppression : la clé a été enregistrée par une autre version de l'app (par exemple celle de développement). Ouvrez l'app Trousseaux d'accès, cherchez « com.familymealshelper.desktop », supprimez cette entrée, puis enregistrez la clé ici. Détail : Couldn't access platform storage: Invalid attempt to change the owner of this item.";
     secrets.state.deleteError = ownerRefusal;
     await screen.findByText("Clé enregistrée");
     await user.click(button("Supprimer la clé"));

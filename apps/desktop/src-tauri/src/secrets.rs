@@ -57,12 +57,16 @@ fn platform_code(_error: &keyring::Error) -> Option<i32> {
     None
 }
 
-// errSecInvalidOwnerEdit : l'entrée appartient à un autre binaire. Sans signature stable, chaque reconstruction
-// de l'app est un autre binaire pour l'ancien trousseau macOS (ACL sur le CDHash) : « Autoriser » donne le droit
-// de lire l'entrée, pas celui de la modifier ou de la supprimer.
+// errSecInvalidOwnerEdit : l'ancien trousseau macOS refuse de modifier ou de supprimer l'entrée, parce qu'il la
+// considère comme celle d'une autre app. Il reconnaît une app à son exigence désignée (DR, la règle de signature que
+// `codesign -d -r-` affiche) et à sa partition. Une app ad hoc (`tauri dev`, `.app` construit sans
+// `APPLE_SIGNING_IDENTITY`) devient une autre app dès que son binaire change. Un `.app` signé par la même identité
+// Apple Development devrait rester la même app : c'est le but du lot 5 bis, à confirmer par sa contre-épreuve.
+// Constaté au lot 5 : depuis une autre app, après « Autoriser », remplacer la valeur réussit, supprimer l'entrée
+// échoue avec ce code.
 const INVALID_OWNER_EDIT: i32 = -25244;
-// errSecDuplicateItem : `set_password` n'a pas pu lire l'entrée existante (refus), il tente un ajout, et l'entrée
-// de l'autre binaire est déjà là.
+// errSecDuplicateItem : `set_password` n'a pas pu lire l'entrée existante (l'utilisateur a refusé l'accès quand
+// macOS l'a demandé, ou l'entrée est celle d'une autre app), il tente un ajout, et l'entrée est déjà là.
 const DUPLICATE_ITEM: i32 = -25299;
 
 // Message d'échec d'une écriture ou d'une suppression dans le trousseau. Il ne contient jamais la valeur du secret :
@@ -74,15 +78,21 @@ fn write_error_message(action: WriteAction, error: &keyring::Error) -> String {
         _ => false,
     };
     if owned_elsewhere {
-        let action = match action {
-            WriteAction::Set => "l'enregistrement",
-            WriteAction::Delete => "la suppression",
+        return match action {
+            WriteAction::Set => format!(
+                "Le trousseau refuse l'enregistrement : l'accès à la clé a été refusé, ou elle a été \
+                 enregistrée par une autre version de l'app (par exemple celle de développement). \
+                 Réessayez et cliquez « Autoriser » quand macOS le demande. Si le refus revient, ouvrez \
+                 l'app Trousseaux d'accès, cherchez « com.familymealshelper.desktop », supprimez cette \
+                 entrée, puis enregistrez la clé ici. Détail : {error}"
+            ),
+            WriteAction::Delete => format!(
+                "Le trousseau refuse la suppression : la clé a été enregistrée par une autre version de \
+                 l'app (par exemple celle de développement). Ouvrez l'app Trousseaux d'accès, cherchez \
+                 « com.familymealshelper.desktop », supprimez cette entrée, puis enregistrez la clé ici. \
+                 Détail : {error}"
+            ),
         };
-        return format!(
-            "Le trousseau refuse {action} : la clé a été enregistrée par une autre version de l'app. \
-             Ouvrez l'app Trousseaux d'accès, cherchez « com.familymealshelper.desktop », supprimez cette \
-             entrée, puis enregistrez la clé ici. Détail : {error}"
-        );
     }
     match action {
         WriteAction::Set => format!("Écriture dans le trousseau impossible : {error}"),
@@ -175,6 +185,26 @@ mod tests {
                 assert!(message.contains(hint), "{message}");
             }
             assert!(
+                message.contains("une autre version de l'app (par exemple celle de développement)"),
+                "{message}"
+            );
+            if matches!(action, WriteAction::Set) {
+                assert!(
+                    message.contains("l'accès à la clé a été refusé"),
+                    "{message}"
+                );
+                assert!(
+                    message.contains("Réessayez et cliquez « Autoriser »"),
+                    "{message}"
+                );
+            } else {
+                assert!(
+                    !message.contains("l'accès à la clé a été refusé"),
+                    "{message}"
+                );
+                assert!(!message.contains("Réessayez"), "{message}");
+            }
+            assert!(
                 message.ends_with(&format!("Détail : {detail}")),
                 "{message}"
             );
@@ -188,9 +218,39 @@ mod tests {
         let error = keyring::Error::PlatformFailure(macos_error(DUPLICATE_ITEM));
         let set = write_error_message(WriteAction::Set, &error);
         assert!(set.contains(OWNER_HINT[0]), "{set}");
+        // Même texte que pour -25244, au détail près.
+        let owner_edit = keyring::Error::NoStorageAccess(macos_error(INVALID_OWNER_EDIT));
+        let set_owner_edit = write_error_message(WriteAction::Set, &owner_edit);
+        let before_detail = |message: &str| {
+            message
+                .split("Détail : ")
+                .next()
+                .expect("texte avant le détail")
+                .to_string()
+        };
+        assert_eq!(before_detail(&set), before_detail(&set_owner_edit));
+        assert_eq!(
+            before_detail(&set),
+            "Le trousseau refuse l'enregistrement : l'accès à la clé a été refusé, ou elle a été enregistrée par une autre version de l'app (par exemple celle de développement). Réessayez et cliquez « Autoriser » quand macOS le demande. Si le refus revient, ouvrez l'app Trousseaux d'accès, cherchez « com.familymealshelper.desktop », supprimez cette entrée, puis enregistrez la clé ici. "
+        );
         let delete = write_error_message(WriteAction::Delete, &error);
         assert!(delete.starts_with("Suppression dans le trousseau impossible : "));
         assert!(!delete.contains(OWNER_HINT[0]));
+    }
+
+    // Ce texte est copié dans le test 16 de apps/desktop/src/screens/SettingsScreen.test.tsx : à modifier ensemble,
+    // rien ne détecte un écart entre les deux.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn owner_refusal_text_is_the_one_shown_in_the_settings_test() {
+        let error = keyring::Error::NoStorageAccess(macos_error(INVALID_OWNER_EDIT));
+        let detail = error.to_string();
+        assert_eq!(
+            write_error_message(WriteAction::Delete, &error),
+            format!(
+                "Le trousseau refuse la suppression : la clé a été enregistrée par une autre version de l'app (par exemple celle de développement). Ouvrez l'app Trousseaux d'accès, cherchez « com.familymealshelper.desktop », supprimez cette entrée, puis enregistrez la clé ici. Détail : {detail}"
+            )
+        );
     }
 
     #[test]
