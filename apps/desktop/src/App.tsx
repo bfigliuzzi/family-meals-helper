@@ -11,6 +11,7 @@ import {
 import { useState } from "react";
 import type { Services } from "./platform/services.ts";
 import { SaveFailure, SaveSuccess } from "./SaveStatus.tsx";
+import { HistoryScreen } from "./screens/HistoryScreen.tsx";
 import { NewSessionScreen } from "./screens/NewSessionScreen.tsx";
 import { PlaceholderScreen } from "./screens/PlaceholderScreen.tsx";
 import { SettingsScreen } from "./screens/SettingsScreen.tsx";
@@ -30,7 +31,7 @@ const COMING_SOON = "Cet écran arrive dans une prochaine version.";
 export function App({
   services,
 }: {
-  services: Pick<Services, "settings" | "secretAdmin" | "session">;
+  services: Pick<Services, "settings" | "secretAdmin" | "session" | "history">;
 }) {
   // Pas de routeur : pas d'URL, pas de lien profond, pas de retour arrière. Seul l'écran actif est monté.
   const [screen, setScreen] = useState<ScreenId>("new-session");
@@ -110,9 +111,12 @@ export function App({
               />
             )}
             {screen === "history" && (
-              <PlaceholderScreen
-                title="Historique"
-                text={`Ici s'afficheront les cinq derniers menus validés, avec leur fiche PDF. ${COMING_SOON}`}
+              <HistoryScreen
+                history={services.history}
+                refresh={session.outcomes}
+                onNewSession={() => {
+                  go("new-session");
+                }}
               />
             )}
             {screen === "settings" && (

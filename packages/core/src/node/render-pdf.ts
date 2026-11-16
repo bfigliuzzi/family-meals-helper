@@ -1,28 +1,12 @@
 import pdfmake from "pdfmake";
 import type { TDocumentDefinitions } from "pdfmake/interfaces.js";
+import { pdfmakeInput } from "../pdf/pdfmake-input.ts";
 
 export interface PdfFonts {
   normal: Uint8Array;
   bold: Uint8Array;
   italics: Uint8Array;
   bolditalics: Uint8Array;
-}
-
-// pdfmake modifie la définition qu'il reçoit (positions, vecteurs des cases à cocher…) : un second rendu de la même
-// définition échouerait. Il reçoit donc une copie ; les fonctions (pied de page, dispositions) sont gardées telles
-// quelles.
-function copyDefinition<T>(value: T): T {
-  if (Array.isArray(value)) return value.map((item: unknown) => copyDefinition(item)) as T;
-  if (
-    value !== null &&
-    typeof value === "object" &&
-    Object.getPrototypeOf(value) === Object.prototype
-  ) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, copyDefinition(item)]),
-    ) as T;
-  }
-  return value;
 }
 
 // Rend la fiche en octets. La date du document vient de l'appelant (port `Clock`), pour que
@@ -38,6 +22,5 @@ export async function renderPdf(
   pdfmake.setUrlAccessPolicy(() => false);
   pdfmake.setLocalAccessPolicy(() => false);
   pdfmake.setFonts({ Roboto: fonts });
-  const info = { ...doc.info, title: "Fiche de batch cooking", creationDate: at };
-  return new Uint8Array(await pdfmake.createPdf({ ...copyDefinition(doc), info }).getBuffer());
+  return new Uint8Array(await pdfmake.createPdf(pdfmakeInput(doc, at)).getBuffer());
 }

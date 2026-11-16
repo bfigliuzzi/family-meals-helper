@@ -6,6 +6,7 @@ import { App } from "./App.tsx";
 import { createKeychainSecretAdmin } from "./platform/keychain-secret-admin.ts";
 import type { Invoke } from "./platform/tauri-error.ts";
 import {
+  fakeHistoryStore,
   fakeMenuModel,
   fakeSecretAdmin,
   fakeSettingsStore,
@@ -20,14 +21,21 @@ function setup(replies: string[] = []) {
   const secrets = fakeSecretAdmin();
   const keeper = createSettingsKeeper(settings.store);
   const model = fakeMenuModel(replies);
+  const history = fakeHistoryStore();
   const session = createSession({
     settings: keeper,
     clock: fixedClock,
+    history: history.store,
     createModel: model.createModel,
   });
-  const services = { settings: keeper, secretAdmin: secrets.admin, session };
+  const services = {
+    settings: keeper,
+    secretAdmin: secrets.admin,
+    session,
+    history: history.store,
+  };
   const { unmount } = renderWithMantine(<App services={services} />);
-  return { settings, secrets, model, session, services, unmount, user: userEvent.setup() };
+  return { settings, secrets, model, session, services, history, unmount, user: userEvent.setup() };
 }
 
 const nav = (name: string) => screen.getByRole("button", { name });
@@ -54,7 +62,8 @@ describe("navigation", () => {
     expect(nav("Nouvelle session").hasAttribute("aria-current")).toBe(false);
 
     await user.click(nav("Historique"));
-    expect(screen.getByText(/Cet écran arrive dans une prochaine version\./)).toBeTruthy();
+    expect(await screen.findByText(/Aucun menu validé pour l'instant/)).toBeTruthy();
+    expect(screen.queryByText("À venir")).toBeNull();
     expect(heading("Historique")).toBeTruthy();
     expect(nav("Historique").getAttribute("aria-current")).toBe("page");
 
@@ -251,14 +260,21 @@ describe("aller-retour d'écran pendant une écriture", () => {
       }
       return Promise.resolve((stored.value !== null) as T);
     };
+    const history = fakeHistoryStore().store;
     const session = createSession({
       settings: keeper,
       clock: fixedClock,
+      history,
       createModel: fakeMenuModel([]).createModel,
     });
     renderWithMantine(
       <App
-        services={{ settings: keeper, secretAdmin: createKeychainSecretAdmin(invoke), session }}
+        services={{
+          settings: keeper,
+          secretAdmin: createKeychainSecretAdmin(invoke),
+          session,
+          history,
+        }}
       />,
     );
     const user = userEvent.setup();

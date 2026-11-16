@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod ai_transport;
+mod history;
 mod navigation;
 mod secrets;
 mod settings_db;
@@ -23,7 +24,11 @@ fn main() {
             secrets::secret_delete,
             settings_db::settings_read,
             settings_db::settings_write,
-            ai_transport::ai_send
+            ai_transport::ai_send,
+            history::history_add,
+            history::history_list,
+            history::history_open_pdf,
+            history::history_export_pdf
         ])
         .run(tauri::generate_context!())
         .expect("échec du lancement de l'application Tauri");

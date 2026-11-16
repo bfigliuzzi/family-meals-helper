@@ -8,7 +8,13 @@ import type { Model, Settings } from "core";
 import { StrictMode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { createAppModel } from "../platform/ai-model.ts";
-import { fakeMenuModel, fakeSettingsStore, fixedClock, lastWritten } from "../test/fakes.ts";
+import {
+  fakeHistoryStore,
+  fakeMenuModel,
+  fakeSettingsStore,
+  fixedClock,
+  lastWritten,
+} from "../test/fakes.ts";
 import menuReply from "../test/fixtures/menu-reply.json";
 import { renderWithMantine } from "../test/render.tsx";
 import { NewSessionScreen } from "./NewSessionScreen.tsx";
@@ -38,6 +44,7 @@ function setup(replies: string[], options: Options = {}) {
   const session = createSession({
     settings: keeper,
     clock: fixedClock,
+    history: fakeHistoryStore().store,
     createModel: options.createModel ?? model.createModel,
   });
   const onOpenSettings = vi.fn();

@@ -7,6 +7,10 @@ fn main() {
             "settings_read",
             "settings_write",
             "ai_send",
+            "history_add",
+            "history_list",
+            "history_open_pdf",
+            "history_export_pdf",
         ]),
     ))
     .expect("échec de tauri-build");

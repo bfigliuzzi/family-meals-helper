@@ -1,4 +1,4 @@
-import type { Model, SecretAdmin, Settings, SettingsStore } from "core";
+import type { HistoryRow, HistoryStore, Model, SecretAdmin, Settings, SettingsStore } from "core";
 
 export interface HeldWrite {
   document: string;
@@ -139,6 +139,167 @@ export function fakeMenuModel(replies: string[], stopReasons: (string | null)[] 
       const call = waiting[index];
       if (call === undefined) throw new Error(`aucun appel ${String(index)} en attente`);
       call.reject(error);
+    },
+  };
+}
+
+type HistoryCall = "add" | "list" | "open" | "export";
+
+const SAVE_REFUSED = "Enregistrement dans l'historique impossible.";
+const ENTRY_UNREADABLE = "Entrée d'historique illisible.";
+const NOT_A_PDF = "Fiche refusée : ce n'est pas un PDF.";
+export const PDF_GONE = "Cette fiche n'existe plus : elle a été retirée de l'historique.";
+
+interface StoredEntry {
+  id: number;
+  token: string;
+  entry: string;
+  pdf: Uint8Array;
+  checked: string;
+}
+
+// Les mêmes refus que le Rust (history.rs : `check_token`, `entry_date`, `check_pdf`).
+function isRealDate(text: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (match === null) return false;
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const date = new Date(2000, 0, 1);
+  date.setFullYear(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+}
+
+function checkAdd(token: string, entry: string, pdf: Uint8Array): void {
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(token)) throw new Error(SAVE_REFUSED);
+  let date: unknown;
+  try {
+    date = (JSON.parse(entry) as { date?: unknown } | null)?.date;
+  } catch {
+    throw new Error(ENTRY_UNREADABLE);
+  }
+  if (typeof date !== "string" || !isRealDate(date)) throw new Error(ENTRY_UNREADABLE);
+  const magic = [37, 80, 68, 70, 45];
+  if (pdf.length < magic.length || !magic.every((byte, index) => pdf[index] === byte)) {
+    throw new Error(NOT_A_PDF);
+  }
+}
+
+const sameBytes = (a: Uint8Array, b: Uint8Array): boolean =>
+  a.length === b.length && a.every((byte, index) => byte === b[index]);
+
+// Faux historique en mémoire, qui se comporte comme le Rust : ajout en tête, purge à 5, un jeton déjà vu rend son id
+// avec le même contenu et est refusé avec un autre. Il enregistre les appels (`added`, `opened`, `exported`).
+// `failNext` fait échouer le prochain appel du genre ; `loseNextReply` enregistre le prochain `add` puis rejette
+// (l'accusé IPC perdu) ; `hold` retient le prochain appel du genre jusqu'à `release()` : il répond alors ce qu'il
+// aurait répondu au moment de l'appel.
+export function fakeHistoryStore(initial: HistoryRow[] = []) {
+  const entries: StoredEntry[] = initial.map((row) => ({
+    id: row.id,
+    token: `initial-${String(row.id)}`,
+    entry: row.entry,
+    pdf: new Uint8Array(),
+    checked: row.checked,
+  }));
+  let nextId = Math.max(0, ...initial.map((row) => row.id)) + 1;
+  const failures = new Map<HistoryCall, string>();
+  const holds = new Set<HistoryCall>();
+  const state = { loseReply: false };
+  const added: { token: string; entry: string; pdf: Uint8Array }[] = [];
+  const opened: number[] = [];
+  const exported: number[] = [];
+  const lists = { count: 0 };
+  const exportsPerDate = new Map<string, number>();
+  const pendingReleases: (() => void)[] = [];
+
+  // Applique un échec ou une retenue demandés, puis rend le résultat calculé tout de suite.
+  function respond<T>(call: HistoryCall, compute: () => T): Promise<T> {
+    const message = failures.get(call);
+    if (message !== undefined) {
+      failures.delete(call);
+      return Promise.reject(new Error(message));
+    }
+    let outcome: { ok: true; value: T } | { ok: false; error: Error };
+    try {
+      outcome = { ok: true, value: compute() };
+    } catch (error) {
+      outcome = { ok: false, error: error instanceof Error ? error : new Error("erreur") };
+    }
+    const settle = (): Promise<T> =>
+      outcome.ok ? Promise.resolve(outcome.value) : Promise.reject(outcome.error);
+    if (!holds.has(call)) return settle();
+    holds.delete(call);
+    return new Promise<T>((resolve, reject) => {
+      pendingReleases.push(() => {
+        settle().then(resolve, reject);
+      });
+    });
+  }
+  const rows = (): HistoryRow[] =>
+    entries.map(({ id, entry, checked }) => ({ id, entry, checked }));
+
+  const store: HistoryStore = {
+    add(token, entry, pdf) {
+      added.push({ token, entry, pdf });
+      return respond("add", () => {
+        checkAdd(token, entry, pdf);
+        const known = entries.find((stored) => stored.token === token);
+        if (known !== undefined) {
+          if (known.entry === entry && sameBytes(known.pdf, pdf)) return known.id;
+          throw new Error(SAVE_REFUSED);
+        }
+        const id = nextId;
+        nextId += 1;
+        entries.unshift({ id, token, entry, pdf, checked: "[]" });
+        entries.length = Math.min(entries.length, 5);
+        if (state.loseReply) {
+          state.loseReply = false;
+          throw new Error("Erreur inconnue de l'historique.");
+        }
+        return id;
+      });
+    },
+    list() {
+      lists.count += 1;
+      return respond("list", rows);
+    },
+    openPdf(id) {
+      opened.push(id);
+      return respond("open", () => {
+        if (!entries.some((stored) => stored.id === id)) throw new Error(PDF_GONE);
+      });
+    },
+    exportPdf(id) {
+      exported.push(id);
+      return respond("export", () => {
+        const stored = entries.find((candidate) => candidate.id === id);
+        if (stored === undefined) throw new Error(PDF_GONE);
+        const date = (JSON.parse(stored.entry) as { date?: string }).date ?? "2026-11-16";
+        const count = (exportsPerDate.get(date) ?? 0) + 1;
+        exportsPerDate.set(date, count);
+        return `/Users/test/Downloads/menu-batch-${date}${count > 1 ? `-${String(count)}` : ""}.pdf`;
+      });
+    },
+  };
+  return {
+    store,
+    added,
+    opened,
+    exported,
+    lists,
+    rows,
+    failNext(call: HistoryCall, message: string) {
+      failures.set(call, message);
+    },
+    loseNextReply() {
+      state.loseReply = true;
+    },
+    // Retient le prochain appel du genre ; chaque `release()` libère le plus ancien appel retenu.
+    hold(call: HistoryCall) {
+      holds.add(call);
+    },
+    release() {
+      const next = pendingReleases.shift();
+      if (next === undefined) throw new Error("aucun appel retenu");
+      next();
     },
   };
 }

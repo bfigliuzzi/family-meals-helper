@@ -1,10 +1,18 @@
 import { composeMenu, reviseMenu } from "../ai/compose.ts";
-import type { ComposeInput, ComposeResult, ReviseInput, StopCause } from "../ai/compose.ts";
+import type {
+  ComposeInput,
+  ComposeResult,
+  PastMenu,
+  ReviseInput,
+  StopCause,
+} from "../ai/compose.ts";
 import type { Model } from "../ai/model.ts";
+import { pastMenus, readHistory } from "../history/history.ts";
 import { SESSION_DAYS } from "../domain/menu.ts";
 import type { Menu, SessionDay } from "../domain/menu.ts";
 import { REFERENTIAL } from "../ingredients/referential.ts";
 import type { Clock } from "../ports/clock.ts";
+import type { HistoryStore } from "../ports/history-store.ts";
 import { dishKey } from "../rules/check-pinned.ts";
 import type { MenuCheck } from "../rules/check-menu.ts";
 import { monthOf } from "../season/months.ts";
@@ -23,6 +31,8 @@ const MAX_DINNERS = 5;
 export interface SessionDeps {
   settings: SettingsKeeper;
   clock: Clock;
+  // Lu au clic pour donner à l'IA les plats des derniers menus ; une lecture qui échoue n'arrête rien.
+  history: HistoryStore;
   // Appelé au clic, une fois par opération, avec les réglages du moment.
   createModel: (settings: Settings) => Promise<Model>;
   onListenerError?: (error: unknown) => void;
@@ -212,6 +222,16 @@ export function createSession(deps: SessionDeps): Session {
     };
   }
 
+  // Les plats des 5 derniers menus, ou rien si la lecture échoue : la composition marche, elle perd seulement la
+  // consigne « ne pas reprendre ».
+  async function pastHistory(): Promise<PastMenu[]> {
+    try {
+      return pastMenus(readHistory(await deps.history.list()).items);
+    } catch {
+      return [];
+    }
+  }
+
   async function run(prepared: Prepared): Promise<SendOutcome> {
     // Publié dans le `finally`, quoi qu'il arrive : `pending` repasse toujours à `null`.
     let patch: Partial<SessionSnapshot> = {
@@ -219,6 +239,8 @@ export function createSession(deps: SessionDeps): Session {
     };
     let outcome: SendOutcome = { ok: false, reason: "failed" };
     try {
+      // Lue après la prise du verrou, avant l'appel : l'entrée est gelée une fois, comme le reste.
+      const input = deepFreeze({ ...prepared.input, history: await pastHistory() });
       const model = await deps.createModel(prepared.settings);
       let attempts = 0;
       // Un essai n'est annoncé qu'au moment où son appel part, jamais d'avance.
@@ -235,7 +257,6 @@ export function createSession(deps: SessionDeps): Session {
         seasonTable: SEASON_TABLE,
         equipment: prepared.equipment,
       };
-      const { input } = prepared;
       const result: ComposeResult =
         "initialRequest" in input
           ? await reviseMenu(input, modelDeps)

@@ -1,5 +1,5 @@
 use std::fs::{File, OpenOptions, TryLockError};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use rusqlite::{Connection, OptionalExtension};
@@ -10,8 +10,9 @@ use tauri::{AppHandle, Manager};
 const DATABASE_FILE: &str = "family-meals-helper.db";
 const LOCK_FILE: &str = "family-meals-helper.lock";
 const MAX_DOCUMENT_BYTES: usize = 256 * 1024;
-const SCHEMA_VERSION: i64 = 1;
 const MIGRATION_1: &str = include_str!("../migrations/0001_settings.sql");
+const MIGRATION_2: &str = include_str!("../migrations/0002_history.sql");
+const MIGRATIONS: [&str; 2] = [MIGRATION_1, MIGRATION_2];
 
 const ALREADY_OPEN: &str = "Family Meals Helper est déjà ouverte dans une autre fenêtre : fermez celle-ci et utilisez l'autre.";
 
@@ -33,12 +34,20 @@ pub struct SettingsDb {
     opened: Mutex<Option<Opened>>,
 }
 
-// Contrat de migration, dans une seule transaction :
-//   user_version 0 : exécute 0001_settings.sql, puis user_version = 1 ;
-//   user_version 1 : ne change rien ;
-//   user_version > 1 : refus, sans rien écrire ;
+// Contrat de migration, dans une seule transaction (la version voulue est le nombre de scripts) :
+//   user_version 0 : exécute 0001_settings.sql puis 0002_history.sql, puis user_version = 2 ;
+//   user_version 1 : exécute 0002_history.sql, puis user_version = 2 ;
+//   user_version 2 : ne change rien ;
+//   user_version > 2 : refus, sans rien écrire ;
 //   user_version négatif : refus, sans rien écrire (base inconnue).
+// Un script en échec annule tout : ni table créée, ni version écrite.
 pub fn migrate(connection: &mut Connection) -> Result<(), String> {
+    migrate_with(connection, &MIGRATIONS)
+}
+
+// `scripts` est une liste de scripts à rejouer depuis la version trouvée ; `migrate` passe `MIGRATIONS`, les
+// tests passent des scripts qui échouent.
+fn migrate_with(connection: &mut Connection, scripts: &[&str]) -> Result<(), String> {
     let failure =
         |error: rusqlite::Error| format!("Migration de la base des réglages impossible : {error}");
     let transaction = connection.transaction().map_err(failure)?;
@@ -48,13 +57,17 @@ pub fn migrate(connection: &mut Connection) -> Result<(), String> {
     if version < 0 {
         return Err(format!("Base des réglages inconnue (version {version})."));
     }
-    if version > SCHEMA_VERSION {
+    let target = scripts.len();
+    let current = usize::try_from(version).unwrap_or(usize::MAX);
+    if current > target {
         return Err("Base créée par une version plus récente de l'app.".to_string());
     }
-    if version == 0 {
-        transaction.execute_batch(MIGRATION_1).map_err(failure)?;
+    if current < target {
+        for script in &scripts[current..] {
+            transaction.execute_batch(script).map_err(failure)?;
+        }
         transaction
-            .pragma_update(None, "user_version", SCHEMA_VERSION)
+            .pragma_update(None, "user_version", target as i64)
             .map_err(failure)?;
     }
     transaction.commit().map_err(failure)
@@ -124,10 +137,11 @@ impl SettingsDb {
         })
     }
 
-    // Ouvre si besoin, puis appelle `f` sur la connexion.
-    pub fn with_connection<T>(
+    // Ouvre si besoin, puis appelle `f` sur la connexion et le dossier de l'app. Les erreurs de `f` sont rendues
+    // telles quelles : chaque appelant choisit ses phrases.
+    pub fn with_db<T>(
         &self,
-        f: impl FnOnce(&Connection) -> rusqlite::Result<T>,
+        f: impl FnOnce(&Connection, &Path) -> Result<T, String>,
     ) -> Result<T, String> {
         let mut guard = self.opened.lock().map_err(|_| {
             "Base des réglages indisponible : verrou interne empoisonné.".to_string()
@@ -138,7 +152,17 @@ impl SettingsDb {
         let opened = guard
             .as_ref()
             .ok_or_else(|| "Base des réglages indisponible.".to_string())?;
-        f(&opened.connection).map_err(|error| format!("Base des réglages indisponible : {error}"))
+        f(&opened.connection, &self.dir)
+    }
+
+    // Ouvre si besoin, puis appelle `f` sur la connexion.
+    pub fn with_connection<T>(
+        &self,
+        f: impl FnOnce(&Connection) -> rusqlite::Result<T>,
+    ) -> Result<T, String> {
+        self.with_db(|connection, _| {
+            f(connection).map_err(|error| format!("Base des réglages indisponible : {error}"))
+        })
     }
 }
 
@@ -171,6 +195,8 @@ mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    const SCHEMA_VERSION: i64 = MIGRATIONS.len() as i64;
+
     // Dossier temporaire propre au test, supprimé à la fin.
     struct TempDir(PathBuf);
     impl TempDir {
@@ -202,15 +228,30 @@ mod tests {
             .expect("user_version")
     }
 
-    fn table_exists(connection: &Connection) -> bool {
+    fn has_table(connection: &Connection, name: &str) -> bool {
         connection
             .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'settings'",
-                [],
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+                [name],
                 |row| row.get::<_, i64>(0),
             )
             .expect("sqlite_master")
             == 1
+    }
+
+    fn table_exists(connection: &Connection) -> bool {
+        has_table(connection, "settings")
+    }
+
+    // Base de version 1 construite à la main : la seule table de 0001, et un réglage.
+    fn version_one() -> Connection {
+        let connection = Connection::open_in_memory().expect("base en mémoire");
+        connection.execute_batch(MIGRATION_1).expect("0001");
+        connection
+            .pragma_update(None, "user_version", 1)
+            .expect("user_version");
+        write(&connection, "{\"version\":1}").expect("réglage");
+        connection
     }
 
     #[test]
@@ -244,22 +285,70 @@ mod tests {
     }
 
     #[test]
-    fn migrating_twice_is_harmless_and_sets_version_one() {
+    fn migrating_twice_is_harmless_and_sets_the_current_version() {
         let mut connection = memory();
         migrate(&mut connection).expect("seconde migration");
+        assert_eq!(user_version(&connection), 2);
+    }
+
+    #[test]
+    fn migrate_0_to_2_creates_both_tables() {
+        let connection = memory();
+        assert_eq!(user_version(&connection), 2);
+        assert!(has_table(&connection, "settings"));
+        assert!(has_table(&connection, "history"));
+    }
+
+    #[test]
+    fn failed_0_to_2_rolls_back_everything() {
+        let mut connection = Connection::open_in_memory().expect("base en mémoire");
+        let error = migrate_with(&mut connection, &[MIGRATION_1, "CREATE TABLE settings (x)"])
+            .expect_err("échec attendu");
+        assert!(error.contains("Migration"), "{error}");
+        assert!(!has_table(&connection, "settings"));
+        assert_eq!(user_version(&connection), 0);
+    }
+
+    #[test]
+    fn migrate_1_to_2_keeps_settings() {
+        let mut connection = version_one();
+        migrate(&mut connection).expect("migration");
+        assert_eq!(user_version(&connection), 2);
+        assert_eq!(
+            read(&connection).expect("lecture").as_deref(),
+            Some("{\"version\":1}")
+        );
+        let rows: i64 = connection
+            .query_row("SELECT COUNT(*) FROM history", [], |row| row.get(0))
+            .expect("compte");
+        assert_eq!(rows, 0);
+    }
+
+    #[test]
+    fn failed_1_to_2_leaves_version_1() {
+        let mut connection = version_one();
+        connection
+            .execute_batch("CREATE TABLE history (x)")
+            .expect("table déjà là");
+        let error = migrate(&mut connection).expect_err("échec attendu");
+        assert!(error.contains("Migration"), "{error}");
         assert_eq!(user_version(&connection), 1);
+        assert_eq!(
+            read(&connection).expect("lecture").as_deref(),
+            Some("{\"version\":1}")
+        );
     }
 
     #[test]
     fn newer_database_is_refused_without_writing() {
         let mut connection = Connection::open_in_memory().expect("base en mémoire");
         connection
-            .pragma_update(None, "user_version", 2)
+            .pragma_update(None, "user_version", SCHEMA_VERSION + 1)
             .expect("user_version");
         let error = migrate(&mut connection).expect_err("refus attendu");
         assert_eq!(error, "Base créée par une version plus récente de l'app.");
         assert!(!table_exists(&connection));
-        assert_eq!(user_version(&connection), 2);
+        assert_eq!(user_version(&connection), SCHEMA_VERSION + 1);
     }
 
     #[test]
@@ -295,7 +384,7 @@ mod tests {
         let database = temp.0.join(DATABASE_FILE);
         Connection::open(&database)
             .expect("base")
-            .pragma_update(None, "user_version", 2)
+            .pragma_update(None, "user_version", SCHEMA_VERSION + 1)
             .expect("user_version");
 
         let db = SettingsDb::new(temp.0.clone());
@@ -315,7 +404,7 @@ mod tests {
         );
         let check = Connection::open(&database).expect("base");
         assert!(table_exists(&check));
-        assert_eq!(user_version(&check), 1);
+        assert_eq!(user_version(&check), SCHEMA_VERSION);
     }
 
     #[test]

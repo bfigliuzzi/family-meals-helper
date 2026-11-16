@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { Model, ModelReply } from "../ai/model.ts";
 import type { Menu, MenuIngredient } from "../domain/menu.ts";
 import { asReply, balancedMenu } from "../rules/fixtures/menus.ts";
+import { serializeHistoryEntry } from "../history/history.ts";
+import type { HistoryEntry } from "../history/history.ts";
+import type { HistoryRow, HistoryStore } from "../ports/history-store.ts";
 import type { SettingsStore } from "../ports/settings-store.ts";
 import { createSettingsKeeper } from "../settings/settings-keeper.ts";
 import type { Settings } from "../settings/settings.ts";
@@ -42,11 +45,38 @@ function withDishes(count: number): string {
 
 const clockAt = (date: Date) => ({ now: () => date });
 
+// Historique de lecture seule : `list` rend les lignes, le reste n'est pas utilisé avant 6.5b.
+function listOnly(list: () => Promise<HistoryRow[]>): HistoryStore {
+  return {
+    add: () => Promise.reject(new Error("jamais appelé")),
+    list,
+    openPdf: () => Promise.reject(new Error("jamais appelé")),
+    exportPdf: () => Promise.reject(new Error("jamais appelé")),
+  };
+}
+
+const emptyHistory = listOnly(() => Promise.resolve([]));
+
+function pastRow(id: number, date: string, dishName: string): HistoryRow {
+  const menu = balancedMenu();
+  menu.dishes[0]!.name = dishName;
+  const entry: HistoryEntry = {
+    version: 1,
+    date,
+    request: "x",
+    sessionDay: "sun",
+    menu,
+    sheet: "detail",
+  };
+  return { id, entry: serializeHistoryEntry(entry), checked: "[]" };
+}
+
 interface Options {
   // Avec `hold`, chaque `complete` attend `release` ou `fail`.
   hold?: boolean;
   clock?: { now: () => Date };
   createModel?: (settings: Settings) => Promise<Model>;
+  history?: HistoryStore;
 }
 
 // Faux modèle : chaque `complete` répond la réponse suivante de `replies`, la dernière se répétant.
@@ -88,6 +118,7 @@ async function harness(replies: string[], options: Options = {}) {
   const session = createSession({
     settings: keeper,
     clock: options.clock ?? clockAt(new Date(2026, 10, 16)),
+    history: options.history ?? emptyHistory,
     createModel:
       options.createModel ??
       ((settings) => {
@@ -158,6 +189,7 @@ describe("verrou", () => {
     const session = createSession({
       settings: createSettingsKeeper(store),
       clock: clockAt(new Date(2026, 10, 16)),
+      history: emptyHistory,
       createModel: () => {
         created += 1;
         return Promise.reject(new Error("jamais appelé"));
@@ -357,6 +389,7 @@ describe("publications", () => {
     const session = createSession({
       settings: createSettingsKeeper(store),
       clock: clockAt(new Date(2026, 10, 16)),
+      history: emptyHistory,
       createModel: () => Promise.reject(new Error("inutile")),
       onListenerError: (error) => {
         errors.push(error);
@@ -506,6 +539,51 @@ describe("composition et révision", () => {
     expect(snapshotOf(h).pinned).toEqual([B]);
     await h.say(SECOND);
     expect(h.calls[1]?.user).toContain(`Plats épinglés, à garder sous ce nom : ${B}.`);
+  });
+});
+
+describe("plats passés", () => {
+  const rows = [
+    pastRow(2, "2026-11-09", "Curry de pois chiches"),
+    { id: 9, entry: "{pas du json", checked: "[]" },
+    pastRow(1, "2026-11-02", "Gratin de courge"),
+  ];
+
+  it("2 entrées lisibles et 1 illisible : le prompt de la composition donne leurs plats", async () => {
+    const h = await harness([valid()], { history: listOnly(() => Promise.resolve(rows)) });
+    expect(await h.say(FIRST)).toEqual({ ok: true });
+    const user = h.calls[0]!.user;
+    expect(user).toContain("Plats des semaines passées");
+    expect(user).toContain("Curry de pois chiches");
+    expect(user).toContain("Gratin de courge");
+    expect(user).not.toContain("pas du json");
+  });
+
+  it("la révision les donne aussi", async () => {
+    const h = await harness([valid(), valid()], {
+      history: listOnly(() => Promise.resolve(rows)),
+    });
+    await h.say(FIRST);
+    await h.say(SECOND);
+    expect(h.calls[1]!.user).toContain("Curry de pois chiches");
+  });
+
+  it("une lecture qui rejette : la composition part, sans cette ligne", async () => {
+    const h = await harness([valid()], {
+      history: listOnly(() => Promise.reject(new Error("base fermée"))),
+    });
+    expect(await h.say(FIRST)).toEqual({ ok: true });
+    expect(h.calls[0]!.user).not.toContain("Plats des semaines passées");
+  });
+
+  it("une lecture qui lève tout de suite : la composition part aussi", async () => {
+    const h = await harness([valid()], {
+      history: listOnly(() => {
+        throw new Error("lecture cassée");
+      }),
+    });
+    expect(await h.say(FIRST)).toEqual({ ok: true });
+    expect(h.calls[0]!.user).not.toContain("Plats des semaines passées");
   });
 });
 

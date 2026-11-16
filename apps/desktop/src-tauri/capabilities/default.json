@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissions de la fenêtre principale : réglages (base de l'app), clé d'API (trousseau), appel à Claude par Mammouth (ai_send)",
+  "description": "Permissions de la fenêtre principale : réglages (base de l'app), clé d'API (trousseau), appel à Claude par Mammouth (ai_send), historique des menus validés et de leurs fiches (base de l'app)",
   "windows": ["main"],
   "permissions": [
     "allow-settings-read",
@@ -9,6 +9,10 @@
     "allow-secret-status",
     "allow-secret-set",
     "allow-secret-delete",
-    "allow-ai-send"
+    "allow-ai-send",
+    "allow-history-add",
+    "allow-history-list",
+    "allow-history-open-pdf",
+    "allow-history-export-pdf"
   ]
 }

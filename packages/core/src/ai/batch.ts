@@ -1,16 +1,19 @@
 import type { TDocumentDefinitions } from "pdfmake/interfaces.js";
 import type { RuleId } from "../domain/finding.ts";
 import type { IngredientRef } from "../domain/ingredient.ts";
+import type { Menu, SessionDay } from "../domain/menu.ts";
 import type { Equipment } from "../equipment/household.ts";
 import { buildIngredientIndex } from "../ingredients/index-lookup.ts";
+import type { IngredientIndex } from "../ingredients/index-lookup.ts";
 import { isAdmissible } from "../scheduling/check-detail.ts";
+import type { SessionPlan } from "../scheduling/plan-session.ts";
 import type { SeasonRow } from "../season/months.ts";
 import { buildSheetDocument } from "../pdf/sheet.ts";
 import type { SheetSteps } from "../pdf/sheet.ts";
 import { composeMenu } from "./compose.ts";
 import type { ComposeInput, ComposeResult } from "./compose.ts";
 import { detailMenu } from "./detail.ts";
-import type { DetailResult } from "./detail.ts";
+import type { DetailAttempt, DetailResult } from "./detail.ts";
 import type { Model } from "./model.ts";
 
 export interface BatchResult {
@@ -61,6 +64,63 @@ function fallbackReason(detail: DetailResult): string {
   return `les étapes détaillées restent incohérentes après ${detail.calls} ${detail.calls > 1 ? "appels" : "appel"} (${causes.join(", ")})`;
 }
 
+export interface SheetPlan {
+  detail: DetailResult;
+  steps: SheetSteps;
+  fallback: "no-detail" | "detail-errors" | null;
+  fallbackReason: string | null;
+}
+
+// Détail court, puis choix des étapes de la fiche : le détail s'il est admissible, sinon les grandes phases.
+// `plan` est le planning du menu composé (la base de durée du détail et le repli). Ne rejette jamais à cause de l'IA.
+export async function detailForSheet(
+  input: {
+    menu: Menu;
+    plan: SessionPlan;
+    sessionDay: SessionDay;
+    maxAttempts: 1 | 2 | 3;
+    exclusions: readonly string[];
+  },
+  deps: {
+    model: Model;
+    equipment: Equipment;
+    index: IngredientIndex;
+    onAttempt?: (attempt: DetailAttempt) => void;
+  },
+): Promise<SheetPlan> {
+  const detail = await detailMenu(
+    {
+      menu: input.menu,
+      sessionDay: input.sessionDay,
+      maxAttempts: input.maxAttempts,
+      composedMinutes: input.plan.minutes,
+      exclusions: input.exclusions,
+    },
+    deps,
+  );
+  const chosen = detail.best;
+  if (chosen !== null && chosen.detail !== null && chosen.plan !== null && isAdmissible(chosen)) {
+    return {
+      detail,
+      steps: {
+        kind: "detail",
+        detail: chosen.detail,
+        plan: chosen.plan,
+        findings: chosen.findings,
+      },
+      fallback: null,
+      fallbackReason: null,
+    };
+  }
+  const reason = fallbackReason(detail);
+  return {
+    detail,
+    steps: { kind: "phases", plan: input.plan, reason },
+    fallback: chosen === null ? "no-detail" : "detail-errors",
+    fallbackReason: reason,
+  };
+}
+
 // Composition, puis détail court, puis fiche. Ne rejette jamais à cause de l'IA : les erreurs du modèle sont dans
 // `compose.technicalError` et `detail.technicalError`.
 export async function batchMenu(
@@ -106,12 +166,17 @@ export async function batchMenu(
 
   // Le même index sert au contrôle du détail et à la fiche.
   const index = buildIngredientIndex(deps.refs);
-  const detail = await detailMenu(
+  const {
+    detail,
+    steps,
+    fallback,
+    fallbackReason: reason,
+  } = await detailForSheet(
     {
       menu: best.menu,
+      plan: menuPlan,
       sessionDay: input.sessionDay,
       maxAttempts: input.maxAttempts,
-      composedMinutes: menuPlan.minutes,
       exclusions: input.exclusions,
     },
     {
@@ -121,18 +186,6 @@ export async function batchMenu(
       onAttempt: (attempt) => deps.onAttempt?.("detail", attempt.number),
     },
   );
-
-  const chosen = detail.best;
-  let steps: SheetSteps;
-  let fallback: BatchResult["fallback"] = null;
-  let reason: string | null = null;
-  if (chosen !== null && chosen.detail !== null && chosen.plan !== null && isAdmissible(chosen)) {
-    steps = { kind: "detail", detail: chosen.detail, plan: chosen.plan, findings: chosen.findings };
-  } else {
-    fallback = chosen === null ? "no-detail" : "detail-errors";
-    reason = fallbackReason(detail);
-    steps = { kind: "phases", plan: menuPlan, reason };
-  }
   const sheet = buildSheetDocument({
     sessionDay: input.sessionDay,
     menu: best.menu,

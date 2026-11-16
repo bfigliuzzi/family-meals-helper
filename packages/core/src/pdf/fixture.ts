@@ -3,7 +3,7 @@ import { buildIngredientIndex } from "../ingredients/index-lookup.ts";
 import { REFERENTIAL } from "../ingredients/referential.ts";
 import { checkMenu } from "../rules/check-menu.ts";
 import { autumnDetail } from "../rules/fixtures/detail.ts";
-import { autumnMenu } from "../rules/fixtures/menus.ts";
+import { asReply, autumnMenu } from "../rules/fixtures/menus.ts";
 import { checkDetail } from "../scheduling/check-detail.ts";
 import { SEASON_TABLE } from "../season/season-table.ts";
 import type { SheetInput } from "./sheet.ts";
@@ -46,4 +46,13 @@ export function fixtureSheetInput(mode: "detail" | "phases"): SheetInput {
   const check = checkDetail(menu, detail, HOUSEHOLD_EQUIPMENT, index, []);
   if (check.plan === null) throw new Error("Le détail d'exemple n'a pas de planning.");
   return { ...base, steps: { kind: "detail", detail, plan: check.plan, findings: check.findings } };
+}
+
+// Réponses d'exemple du modèle d'essai de l'app (sans appel à Claude) : le menu d'automne, sous la forme que le
+// schéma de composition demande, et son détail.
+export function fixtureReplies(): { menu: string; detail: string } {
+  return {
+    menu: asReply(autumnMenu(), { note: "Menu d'exemple, sans appel à Claude.", requested: [] }),
+    detail: JSON.stringify(autumnDetail()),
+  };
 }

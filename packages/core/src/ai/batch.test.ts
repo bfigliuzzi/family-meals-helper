@@ -7,7 +7,9 @@ import { autumnCyclicDetail, autumnDetail, autumnDetailLasting } from "../rules/
 import { asReply, autumnMenu } from "../rules/fixtures/menus.ts";
 import { SEASON_TABLE } from "../season/season-table.ts";
 import { buildSheetDocument } from "../pdf/sheet.ts";
-import { batchExitCode, batchMenu } from "./batch.ts";
+import { checkMenu } from "../rules/check-menu.ts";
+import { sessionTooLong } from "../pdf/sheet.ts";
+import { batchExitCode, batchMenu, detailForSheet } from "./batch.ts";
 import { renderBatchResult } from "./render.ts";
 import type { BatchResult } from "./batch.ts";
 import type { ComposeInput } from "./compose.ts";
@@ -391,5 +393,65 @@ describe("batchMenu : équipement réglé", () => {
     const two = await minutesWith(ovenSlots(2));
     const one = await minutesWith(ovenSlots(1));
     expect(one).toBeGreaterThan(two);
+  });
+});
+
+describe("detailForSheet", () => {
+  const index = buildIngredientIndex(REFERENTIAL);
+  const menu = autumnMenu();
+  const plan = checkMenu(menu, {
+    request: input.request,
+    exclusions: [],
+    month: 11,
+    sessionDay: "sun",
+    dinners: 5,
+    index,
+    seasonTable: SEASON_TABLE,
+    equipment: HOUSEHOLD_EQUIPMENT,
+  }).session!;
+  const sheetPlan = (script: (ModelReply | Error)[]) =>
+    detailForSheet(
+      { menu, plan, sessionDay: "sun", maxAttempts: 3, exclusions: [] },
+      { model: fakeModel(script).model, equipment: HOUSEHOLD_EQUIPMENT, index },
+    );
+
+  it("un détail valide donne les étapes du détail, sans repli", async () => {
+    const result = await sheetPlan([detailReply()]);
+    expect(result.steps.kind).toBe("detail");
+    expect(result.fallback).toBeNull();
+    expect(result.fallbackReason).toBeNull();
+    expect(result.detail.calls).toBe(1);
+    expect(sessionTooLong(result.steps)).toBe(false);
+  });
+
+  it("3 détails de plus de 3 h : les étapes du détail, `sessionTooLong`, 3 appels", async () => {
+    const result = await sheetPlan([detailReply(200), detailReply(210), detailReply(220)]);
+    expect(result.steps.kind).toBe("detail");
+    expect(sessionTooLong(result.steps)).toBe(true);
+    expect(result.detail.calls).toBe(3);
+    expect(result.fallback).toBeNull();
+  });
+
+  it("deux réponses identiques arrêtent le cycle après 2 appels (`no-progress`)", async () => {
+    const result = await sheetPlan([detailReply(200), detailReply(200), detailReply(210)]);
+    expect(result.detail.stop).toBe("no-progress");
+    expect(result.detail.calls).toBe(2);
+    expect(sessionTooLong(result.steps)).toBe(true);
+  });
+
+  it("un détail inutilisable donne les grandes phases du planning et la raison", async () => {
+    const cyclic = reply(JSON.stringify(autumnCyclicDetail()));
+    const result = await sheetPlan([cyclic, reply("pas du json"), new Error("coupé")]);
+    expect(result.steps.kind).toBe("phases");
+    expect(result.steps.plan).toBe(plan);
+    expect(result.fallback).toBe("detail-errors");
+    expect(result.fallbackReason).toContain("incohérentes");
+    expect(sessionTooLong(result.steps)).toBe(false);
+  });
+
+  it("aucune réponse lisible : `no-detail`", async () => {
+    const result = await sheetPlan([new Error("réseau coupé")]);
+    expect(result.fallback).toBe("no-detail");
+    expect(result.fallbackReason).toBe("le service d'IA n'a pas répondu (erreur technique)");
   });
 });

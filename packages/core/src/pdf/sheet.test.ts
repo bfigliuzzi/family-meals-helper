@@ -195,6 +195,16 @@ describe("buildSheetDocument : ingrédients", () => {
     );
     expect(full).toContain("Appareils\n : four · plaque induction · Thermomix TM5");
   });
+  it("affiche aussi un appareil utilisé mais absent de l'équipement, après ceux de l'équipement", () => {
+    const withoutOven = HOUSEHOLD_EQUIPMENT.filter((spec) => spec.id !== "oven");
+    const input = { ...detailInput(menu, detail), equipment: withoutOven };
+    const text = textOf(input);
+    expect(text).toContain("Appareils\n : plaque induction · Thermomix TM5 · four");
+    expect(text).not.toContain("four (appoint)");
+    const braise = allText(allNodes(buildSheetDocument(input).content)).join("|");
+    expect(braise).toContain("Bœuf braisé aux carottes|mercredi|plaque induction + four|3 j|oui");
+    expect(textOf(detailInput(menu, detail))).toContain("four + plaque induction");
+  });
   it("note l'appareil d'appoint, et un ingrédient à confirmer", () => {
     const withCookeo = autumnDetail();
     withCookeo.steps = withCookeo.steps.map((step) =>

@@ -8,8 +8,8 @@ import type {
 import { printable } from "../ai/printable.ts";
 import type { Detail } from "../domain/detail.ts";
 import type { Finding } from "../domain/finding.ts";
-import { DAYS, DAY_LABELS, SESSION_DAY_LABELS, dishLetter } from "../domain/menu.ts";
-import type { Dish, Menu, SessionDay } from "../domain/menu.ts";
+import { APPLIANCES, DAYS, DAY_LABELS, SESSION_DAY_LABELS, dishLetter } from "../domain/menu.ts";
+import type { ApplianceId, Dish, Menu, SessionDay } from "../domain/menu.ts";
 import { APPLIANCE_LABELS, phaseUseText } from "../equipment/household.ts";
 import type { Equipment } from "../equipment/household.ts";
 import type { IngredientIndex } from "../ingredients/index-lookup.ts";
@@ -115,16 +115,21 @@ function warningBox(text: string): Content {
   };
 }
 
+// Le détail est admissible mais la session dépasse 3 h (constat `session-length`) : la fiche porte un avertissement.
+export function sessionTooLong(steps: SheetSteps): boolean {
+  return (
+    steps.kind === "detail" &&
+    steps.findings.some((finding) => finding.level === "error" && finding.rule === "session-length")
+  );
+}
+
 function warning(steps: SheetSteps, menu: Menu): Content | null {
   if (steps.kind === "phases") {
     return warningBox(
       `Attention : le détail des étapes n'a pas pu être validé : ${steps.reason}. Cette fiche donne les grandes phases du menu, validées à la composition, sans quantités à chaque étape ni consigne du soir rédigée.`,
     );
   }
-  const tooLong = steps.findings.some(
-    (finding) => finding.level === "error" && finding.rule === "session-length",
-  );
-  if (!tooLong) return null;
+  if (!sessionTooLong(steps)) return null;
   // Le message du constat s'adresse à l'IA : la fiche, elle, parle au cuisinier.
   const last = lastDish(steps.plan, menu);
   return warningBox(
@@ -381,13 +386,27 @@ function stepsPart(input: SheetInput): Content[] {
   return content;
 }
 
+// Les appareils utilisés (sans « à la main »), chacun avec son libellé : d'abord ceux de l'équipement, dans son
+// ordre ; puis les autres (un appelant qui passerait deux équipements différents), dans l'ordre de `APPLIANCES`,
+// sans « (appoint) ».
+function usedAppliances(
+  used: ReadonlySet<ApplianceId>,
+  equipment: Equipment,
+): { label: string; extra: boolean }[] {
+  const known = equipment
+    .filter((spec) => used.has(spec.id))
+    .map((spec) => ({ label: APPLIANCE_LABELS[spec.id], extra: spec.extra }));
+  const others = APPLIANCES.filter(
+    (id) => id !== "none" && used.has(id) && !equipment.some((spec) => spec.id === id),
+  ).map((id) => ({ label: APPLIANCE_LABELS[id], extra: false }));
+  return [...known, ...others];
+}
+
 function appliancesOf(rows: readonly SheetStep[], letter: string, equipment: Equipment): string {
   const used = new Set(
     rows.filter((row) => row.letters.includes(letter)).map((row) => row.entry.phase.appliance),
   );
-  const labels = equipment
-    .filter((spec) => used.has(spec.id))
-    .map((spec) => APPLIANCE_LABELS[spec.id]);
+  const labels = usedAppliances(used, equipment).map((appliance) => appliance.label);
   return labels.length === 0 ? "à la main" : labels.join(" + ");
 }
 
@@ -438,9 +457,9 @@ function ingredientsPart(input: SheetInput): Content[] {
     stack: lines.map((text) => ({ text, margin: [0, 0, 0, 1] })),
   });
   const used = new Set(input.steps.plan.phases.map((entry) => entry.phase.appliance));
-  const appliances = input.equipment
-    .filter((spec) => used.has(spec.id))
-    .map((spec) => `${APPLIANCE_LABELS[spec.id]}${spec.extra ? " (appoint)" : ""}`);
+  const appliances = usedAppliances(used, input.equipment).map(
+    (appliance) => `${appliance.label}${appliance.extra ? " (appoint)" : ""}`,
+  );
   const pantry =
     list.pantry.length === 0
       ? "aucun ingrédient de placard dans ce menu."
