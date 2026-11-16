@@ -2,6 +2,8 @@
 
 Statut : validée par l'utilisateur le 12/11/2026. Ce document est la source de vérité du produit. Le découpage en lots est dans `docs/roadmap.md`.
 
+Mise à jour du 16/11/2026, après le lot 5 bis : une note datée en §10 dit que le `.app` est signé par une identité Apple Development, et que `tauri dev` reste en signature ad hoc.
+
 Mise à jour du 15/11/2026, après le lot 5 : des notes datées en §3.1, §3.2, §6.5, §9 et §10 disent ce qui a changé (réglages enregistrés par des commandes Rust, trousseau par `keyring`, plus de plugin SQL ni HTTP, équipement réglable par disponibilité et capacité, pas de groupes d'allergènes). Le texte qui ne vaut plus est gardé, marqué « ne vaut plus depuis ».
 
 Mise à jour du 14/11/2026, après le lot 4 : des notes datées en §5.4, §6.2, §7, §9 et §10 disent ce qui a changé (liste de courses sans rayon ni unité d'achat, fiche A4 sur le modèle cuisine-addict).
@@ -297,6 +299,8 @@ Il n'existe pas d'API publique de prix pour les enseignes françaises, et les CG
   > - une garde de navigation (`navigation.rs`), qui n'accepte que les pages de l'app.
   >
   > La raison : les plugins SQL et HTTP n'ont pas de portée assez fine. Le plugin SQL accepte n'importe quel chemin de base, et le plugin HTTP installe un proxy choisi par la vue web ; ils auraient laissé la vue web écrire dans n'importe quelle base ou envoyer la clé n'importe où. Aucun plugin SQL ni HTTP n'est installé.
+  >
+  > **Note du 16/11/2026 (lot 5 bis) :** le `.app` est signé par une identité Apple Development, passée par `APPLE_SIGNING_IDENTITY` à `tauri build` (le certificat auto-signé a été écarté). Constaté sur macOS 26.7.3, avec un certificat d'une Personal Team : A enregistre une clé ; B, de `CDHash` différent et de même exigence désignée, la lit deux fois sans demande d'accès, puis la supprime. `tauri dev` et un `.app` construit sans identité restent signés ad hoc : chaque recompilation y redemande l'accès, et une version ad hoc ne peut pas supprimer la clé d'une autre. La marche à suivre est dans `CLAUDE.md`.
 - **React + Vite** pour l'interface. *Note du 15/11/2026 (lot 5) : Mantine pour les composants.*
 - **L'API Claude**, avec le SDK TypeScript officiel d'Anthropic. Les sorties de l'IA sont structurées et validées par des schémas **Zod**. Le modèle est configurable, `claude-sonnet-5-5` par défaut.
 - **SQLite** stocke les réglages, les exclusions, l'équipement, l'historique, la table de prix et le résumé Open Prices. La même interface pourra plus tard s'appuyer sur PostgreSQL. *Note du 15/11/2026 (lot 5) : les réglages sont un document JSON versionné (`version: 1`) dans une seule ligne, validé par `core`. Les autres tables arrivent avec les lots 6 et 7, par des commandes Rust.*

@@ -14,7 +14,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 | 3 | Équipement et planning de session | 1 | `livré` (2026-11-13, `5b98d7b`) |
 | 4 | Détail, liste de courses et PDF | 2, 3 | `livré` (2026-11-14, `ca72cc6`) ; démonstration réelle non faite |
 | 5 | App desktop : coquille, réglages, persistance | 4 | `livré` (2026-11-15, `63f2bc7`) |
-| 5 bis | Signature stable de l'app | 5 | à faire |
+| 5 bis | Signature stable de l'app | 5 | `livré` (2026-11-16, `8bcf097`) |
 | 6 | App desktop : session, ingrédients, historique | 5 bis | à faire |
 | 7 | Prix | 4 (affichage dans l'app : 6) | à faire |
 
@@ -380,6 +380,7 @@ Contenu prévu à l'origine : recettes, conversion en unités d'achat, rayons, P
 - **Brouillons perdus** : un aliment, un modèle ou une clé tapés sans être enregistrés sont oubliés quand on quitte Réglages (c'est dit à l'écran). Si un enregistrement échoue et qu'on quitte l'app, les changements non enregistrés sont perdus.
 - **Seconde instance refusée** : elle s'ouvre, mais ses réglages sont refusés (« Réglages indisponibles »), avec un message qui dit de fermer l'autre fenêtre. Sa section « Clé d'API » reste utilisable. La « première » est celle qui a accédé aux réglages la première, pas celle qui a démarré la première ; l'autre fenêtre n'est pas remise au premier plan.
 - **Suppression de la clé impossible depuis une autre version de l'app** : l'app n'est pas signée, donc chaque nouvelle version (ou recompilation en développement) demande d'autoriser la lecture de la clé. Elle peut ensuite remplacer la clé, mais pas la supprimer, même après « Toujours autoriser » ; l'app explique alors comment supprimer l'entrée dans Trousseaux d'accès. Le message parle d'une « autre version de l'app » même quand la cause est un refus d'accès (code -25299) ; la marche à suivre répare quand même. Repris au lot 5 bis.
+  > **Note du 2026-11-16 (lot 5 bis) :** réglé pour le `.app` signé par une identité Apple Development. Constaté : A enregistre une clé ; B, de `CDHash` différent et de même exigence désignée, la lit deux fois sans demande d'accès, puis la supprime (voir le bilan du lot 5 bis). Reste vrai pour `tauri dev` et pour un `.app` construit sans `APPLE_SIGNING_IDENTITY`, qui sont signés ad hoc. Le message d'erreur a aussi changé : à l'enregistrement, il nomme le refus d'accès (code -25299) en plus de l'autre version de l'app ; à la suppression, il ne parle que de l'autre version.
 - La clé tapée passe une fois par la vue web ; ensuite, seul le Rust la voit.
 - WebRTC et la préconnexion ne sont pas bloqués : ils n'ont aucun secret à emporter.
 - Le verrou des réglages n'arrête pas `sqlite3` ni un autre programme.
@@ -387,12 +388,13 @@ Contenu prévu à l'origine : recettes, conversion en unités d'achat, rayons, P
 - Pas d'ajout ni de suppression d'appareil, pas d'ustensiles. Pas de modification d'une exclusion (on la retire puis on l'ajoute de nouveau). Pas d'annulation, d'import ni d'export. Pas de table de prix (lot 7).
 - Un document de réglages abîmé à la main, une migration ratée ou un document d'une version future laissent l'écran en erreur, sans bouton pour repartir des valeurs par défaut.
 - Le mode clair ou sombre suit macOS, sans réglage. La fenêtre ne garde ni sa taille ni sa position. L'app n'est pas signée.
+  > **Note du 2026-11-16 (lot 5 bis) :** le `.app` est signé depuis le lot 5 bis. Reste vrai pour `tauri dev` (signature ad hoc).
 
 **Reliquats du lot 5** (dettes connues, chacune reprise dans le lot qui doit la traiter)
 - (lot 6) **Brancher `applyEquipmentSettings`, les exclusions enregistrées et le modèle choisi** partout où `HOUSEHOLD_EQUIPMENT`, `--exclude` et le modèle par défaut servent en dur : `rules/check-menu.ts`, `ai/prompt.ts`, `ai/batch.ts`, `pdf/sheet.ts`.
 - (lot 6) **Brouillon de capacité jamais remis à jour, et retrait d'un aliment par sa position**, à revoir quand le keeper sera partagé avec l'action « éviter cet ingrédient ».
 - (lot 6) **Un abonné du keeper qui lève une erreur est ignoré sans trace** (choix écrit en commentaire).
-- (lot 5 bis) **Demande d'accès au trousseau et suppression impossible après une nouvelle version.**
+- (lot 5 bis) **Demande d'accès au trousseau et suppression impossible après une nouvelle version.** Traité au lot 5 bis (2026-11-16, `8bcf097`) pour le `.app` signé ; la demande d'accès reste pour `tauri dev`.
 - (non planifié) Un échec de `app_config_dir()` empêche l'app de démarrer ; seulement sans `HOME`.
 - (non planifié) Le paquet JS fait environ 517 kB (avertissement de Vite).
 - (non planifié) En dev, `StrictMode` lit deux fois le trousseau : deux demandes d'accès sont possibles.
@@ -401,20 +403,48 @@ Contenu prévu à l'origine : recettes, conversion en unités d'achat, rayons, P
 
 ## Lot 5 bis : signature stable de l'app
 
-**Statut** : à faire. Ajouté le 2026-11-15, sur décision de l'utilisateur, avant le lot 6.
+**Statut** : `livré` (2026-11-16, `8bcf097`). Ajouté le 2026-11-15, sur décision de l'utilisateur, avant le lot 6.
 
 **Objectif** : la clé d'API enregistrée dans le trousseau se lit sans demande d'accès après une reconstruction de l'app, et on peut la supprimer depuis l'app.
 
-**Pourquoi** : l'app n'est pas signée, et le trousseau macOS lie l'accès à une entrée à la signature du binaire qui l'a créée. Chaque nouvelle version demande donc d'autoriser la lecture, et ne peut pas supprimer la clé d'une version précédente (voir « Ce que ça ne fera PAS » du lot 5). Le lot 6 lira la clé à chaque appel à Claude : il vaut mieux régler cela avant.
+**Pourquoi** (au 2026-11-15, avant le lot) : l'app n'est pas signée, et le trousseau macOS lie l'accès à une entrée à la signature du binaire qui l'a créée. Chaque nouvelle version demande donc d'autoriser la lecture, et ne peut pas supprimer la clé d'une version précédente (voir « Ce que ça ne fera PAS » du lot 5). Le lot 6 lira la clé à chaque appel à Claude : il vaut mieux régler cela avant.
 
 **Contenu**
-- Signer l'app avec une identité stable : un certificat de signature de code auto-signé créé dans Trousseaux d'accès, ou un certificat Apple Development. L'identité est passée par `APPLE_SIGNING_IDENTITY` à `tauri build`.
+- Signer l'app avec une identité stable : un certificat de signature de code auto-signé créé dans Trousseaux d'accès, ou un certificat Apple Development. L'identité est passée par `APPLE_SIGNING_IDENTITY` à `tauri build`. *Note du 2026-11-16 : le choix auto-signé est écarté. L'utilisateur a choisi le certificat Apple Development d'emblée, sans essai auto-signé.*
 - `tauri dev` reste en signature ad hoc (chaque recompilation change la signature) : la demande d'accès au trousseau continue d'y apparaître. À écrire dans `CLAUDE.md`.
 - Dire dans `CLAUDE.md` comment créer l'identité et construire le `.app` signé.
 
 **Livrable vérifiable** : après deux reconstructions du `.app` avec la même identité, la clé se lit sans demande d'accès et « Supprimer la clé » réussit depuis l'app.
 
-**Ce que ça ne fera PAS (visible)** : pas de notarisation, pas de distribution à d'autres machines ; une clé enregistrée par une version non signée (ou signée autrement) reste à supprimer à la main dans Trousseaux d'accès, une seule fois.
+**Ce qui a changé en cours de lot** (2026-11-16)
+- **Apple Development direct**, sans essai auto-signé (décision de l'utilisateur). Xcode et un identifiant Apple servent à créer le certificat, pas ensuite à construire.
+- **L'utilisateur crée l'identité lui-même**, avec la marche à suivre de `CLAUDE.md`. Aucun agent n'écrit dans le trousseau.
+- **Les compilations signées passent par `env -u ...`** : les variables `APPLE_CERTIFICATE`, `APPLE_ID` et leurs voisines sont retirées, pour que la CLI Tauri n'importe pas de certificat et ne tente pas de notarisation.
+- **Deux textes d'erreur, pas un seul** (le plan en prévoyait un). À l'enregistrement, le message nomme le refus d'accès, le cas d'une clé d'une autre version, et dit « Réessayez et cliquez « Autoriser » ». À la suppression, il ne parle que d'une autre version de l'app. Les codes -25244 et -25299 (en enregistrement) donnent le même texte.
+- **Identité invalide après sa création** : `security find-identity -v -p codesigning` rendait `0 valid identities found`, alors que la même commande sans `-v` listait l'identité. Cause : le certificat intermédiaire « Apple Worldwide Developer Relations Certification Authority » **G3** manquait (seul l'ancien, expiré, était dans `System.keychain`). L'utilisateur l'a ajouté à son trousseau de session depuis https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer. La marche à suivre de `CLAUDE.md` le dit.
+- **Pas d'ancienne entrée dans le trousseau** : la suppression manuelle unique prévue n'a pas eu lieu d'être.
+- **Preuve par les clics de l'utilisateur** : les contrôles de `codesign` sont faits par commande, mais la demande d'accès au trousseau ne se voit qu'à l'écran.
+- **Version B distinguée par `--config`** : un titre de fenêtre différent change le binaire, donc son `CDHash`, sans toucher au code du dépôt.
+
+**Bilan de validation du livrable**
+- **Tests** : 895 tests `core`, 53 tests de l'app (Vitest, jsdom) et 20 tests Rust (19 au lot 5, plus le test du texte de suppression). `lint`, `format:check`, `typecheck`, `build`, `clippy` et `fmt` passent en local ; la CI GitHub est verte (jobs `check` et `rust`) sur `8bcf097`.
+- **Contre-épreuve, conforme** (2026-11-16, macOS 26.7.3, certificat Apple Development d'une Personal Team, `TeamIdentifier` 8Y4UG35YZV) :
+  - version A : signée, avec la protection renforcée à l'exécution (`hardened runtime`), exigence désignée (DR) sans `cdhash`, `CDHash` 57f0cba2… ; l'utilisateur enregistre une clé factice sans demande d'accès et ouvre l'inspecteur web ;
+  - version B (titre de fenêtre changé par `--config`) : `CDHash` 8bc7d920…, même DR que A, `codesign --verify -R` avec la DR de A rend 0, même certificat feuille ; l'utilisateur lit la clé sans demande d'accès, ouvre B une seconde fois sans demande, puis « Supprimer la clé » réussit (l'entrée est absente ensuite) ;
+  - version finale : `CDHash` fac4b3b7…, mêmes contrôles verts.
+- **Inspecteur web** : ouvert dans la version A, conforme.
+- **Limite du constat** : un seul Mac, une seule identité (Personal Team), macOS 26.7.3. Rien de plus général n'est affirmé.
+
+**Ce que ça ne fera PAS (visible)**
+- Pas de notarisation, pas de distribution à d'autres machines, pas de signature en CI. Un autre Mac devra créer sa propre identité.
+- `tauri dev` reste ad hoc : la demande d'accès au trousseau revient à chaque recompilation du Rust.
+- Une version ad hoc (`tauri dev`, ou `.app` construit sans `APPLE_SIGNING_IDENTITY`) peut remplacer la clé enregistrée par le `.app` signé, mais pas la supprimer, et inversement. Ce croisement entre version ad hoc et version signée n'a pas été testé au lot 5 bis : c'est le comportement attendu (constaté au lot 5 entre deux versions ad hoc), à confirmer. Consigne : enregistrer la clé depuis le `.app` signé.
+- Une clé enregistrée par une version non signée ou signée autrement reste à supprimer à la main dans Trousseaux d'accès, une seule fois. Cette fois, aucune entrée ne préexistait.
+- L'identité n'est pas dans `tauri.conf.json` : chaque compilation signée passe `APPLE_SIGNING_IDENTITY`. L'oublier donne un `.app` ad hoc, sans erreur.
+- Xcode et un identifiant Apple sont nécessaires pour créer l'identité (pas pour construire ensuite).
+- Le certificat Apple Development a une durée limitée ; son renouvellement peut faire revenir une demande d'accès.
+- Le trousseau garde deux textes d'erreur, un par action. Quand le refus d'accès et l'autre version de l'app sont deux causes possibles (enregistrement), le texte les nomme toutes les deux : l'app ne fait pas d'appel en plus pour les distinguer. Pas de bouton pour réparer le trousseau depuis l'app.
+- Rien d'autre ne change dans l'interface.
 
 ## Lot 6 : app desktop, session, ingrédients et historique
 

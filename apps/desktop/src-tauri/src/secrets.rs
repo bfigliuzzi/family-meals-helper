@@ -60,8 +60,9 @@ fn platform_code(_error: &keyring::Error) -> Option<i32> {
 // errSecInvalidOwnerEdit : l'ancien trousseau macOS refuse de modifier ou de supprimer l'entrée, parce qu'il la
 // considère comme celle d'une autre app. Il reconnaît une app à son exigence désignée (DR, la règle de signature que
 // `codesign -d -r-` affiche) et à sa partition. Une app ad hoc (`tauri dev`, `.app` construit sans
-// `APPLE_SIGNING_IDENTITY`) devient une autre app dès que son binaire change. Un `.app` signé par la même identité
-// Apple Development devrait rester la même app : c'est le but du lot 5 bis, à confirmer par sa contre-épreuve.
+// `APPLE_SIGNING_IDENTITY`) devient une autre app dès que son binaire change. Constaté au lot 5 bis (2026-11-16) sur
+// macOS 26.7.3, avec un certificat Apple Development d'une Personal Team : A enregistre une clé ; B, de `CDHash`
+// différent et de même exigence désignée, la lit deux fois sans demande d'accès, puis la supprime.
 // Constaté au lot 5 : depuis une autre app, après « Autoriser », remplacer la valeur réussit, supprimer l'entrée
 // échoue avec ce code.
 const INVALID_OWNER_EDIT: i32 = -25244;
