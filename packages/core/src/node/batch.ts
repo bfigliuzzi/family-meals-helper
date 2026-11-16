@@ -16,7 +16,13 @@ runBatchCommand(process.argv.slice(2), {
   stderr: (text) => process.stderr.write(text),
   now: () => nodeClock.now(),
   createModel: (schema, config) =>
-    createAnthropicModel({ ...config, http: nodeHttpClient, logger: console, schema }),
+    createAnthropicModel({
+      ...config,
+      http: nodeHttpClient,
+      logger: console,
+      schema,
+      browser: false,
+    }),
   loadFonts: loadPdfFonts,
   resolveOutputTarget: (out, now) => resolveOutputTarget(out, now, nodeOutputContext),
   checkTarget: checkOutputTarget,

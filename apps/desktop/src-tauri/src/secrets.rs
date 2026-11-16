@@ -4,23 +4,32 @@ use tauri::AppHandle;
 const ALLOWED_KEYS: [&str; 1] = ["anthropic-api-key"];
 const MAX_SECRET_LENGTH: usize = 500;
 
-fn entry(app: &AppHandle, key: &str) -> Result<keyring::Entry, String> {
+// Service du trousseau utilisé par le test réel d'`ai_transport.rs` (`real_call_to_mammouth`), qui n'a pas
+// d'`AppHandle`. `identifier_matches_the_app_config` le garde égal à l'`identifier` de `tauri.conf.json`.
+#[cfg(test)]
+pub(crate) const APP_SERVICE: &str = "com.familymealshelper.desktop";
+
+fn entry(service: &str, key: &str) -> Result<keyring::Entry, String> {
     if !ALLOWED_KEYS.contains(&key) {
         return Err(format!("Secret inconnu : {key}"));
     }
-    keyring::Entry::new(&app.config().identifier, key)
-        .map_err(|error| format!("Trousseau indisponible : {error}"))
+    keyring::Entry::new(service, key).map_err(|error| format!("Trousseau indisponible : {error}"))
 }
 
-// Même règle que checkApiKey dans packages/core/src/settings/settings.ts : des caractères ASCII visibles, de
-// 1 à 500 octets. Le message ne contient jamais la valeur.
-fn check_secret(value: &str) -> Result<(), String> {
+// Même règle que checkApiKey dans packages/core/src/settings/settings.ts : lettres sans accent, chiffres, « - » et
+// « _ », de 1 à 500 octets. Aucun échappement JSON ni JavaScript ne touche cet alphabet : ce que `ai_send` ajoute
+// plus tard au texte qu'il a contrôlé (repli `eval` de Tauri, `JSON.parse('…')`) ne peut pas former la clé
+// (`ai_transport.rs`). Le message ne contient jamais la valeur.
+pub(crate) fn check_secret(value: &str) -> Result<(), String> {
     if value.is_empty() {
         return Err("La valeur du secret est vide.".to_string());
     }
-    if !value.bytes().all(|byte| (0x21..=0x7E).contains(&byte)) {
+    if !value
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+    {
         return Err(
-            "La clé ne contient que des lettres sans accent, des chiffres et des signes, sans espace."
+            "La clé ne contient que des lettres sans accent, des chiffres, « - » et « _ », sans espace."
                 .to_string(),
         );
     }
@@ -105,18 +114,59 @@ fn join_failure(error: tauri::Error) -> String {
     format!("Trousseau indisponible : {error}")
 }
 
-// Aucune commande ne rend la valeur d'un secret au front : la clé ne quitte le Rust que vers l'API (lot 6). Le front
-// sait seulement si elle existe (`secret_status`), l'enregistre et la supprime.
+// Phrases fixes d'un échec de lecture de la clé pour `ai_send` : jamais le texte de `keyring`, qui vient de macOS.
+pub(crate) const KEY_MISSING: &str =
+    "Aucune clé d'API dans le trousseau : enregistrez-la dans Réglages.";
+pub(crate) const KEY_DENIED: &str =
+    "Accès au trousseau refusé : recommencez et cliquez « Autoriser » quand macOS le demande.";
+pub(crate) const KEY_UNREADABLE: &str =
+    "Lecture du trousseau impossible : vérifiez que le trousseau de session est déverrouillé.";
+pub(crate) const KEY_INVALID: &str =
+    "La clé enregistrée est invalide : enregistrez-la de nouveau dans Réglages.";
+
+// errSecUserCanceled : l'utilisateur a cliqué « Refuser » à la demande d'accès de macOS.
+const USER_CANCELED: i32 = -128;
+// errSecAuthFailed : le mot de passe de session demandé par macOS a été refusé.
+const AUTH_FAILED: i32 = -25293;
+
+fn key_read_error(error: &keyring::Error) -> &'static str {
+    match error {
+        keyring::Error::NoEntry => KEY_MISSING,
+        _ => match platform_code(error) {
+            Some(USER_CANCELED | AUTH_FAILED) => KEY_DENIED,
+            _ => KEY_UNREADABLE,
+        },
+    }
+}
+
+// Seule lecture de la valeur de la clé : pour `ai_send` (ai_transport.rs). Elle ne sort du Rust que vers l'API.
+// Même `spawn_blocking` que `secret_status` : la demande d'accès de macOS peut bloquer l'appel longtemps.
+pub(crate) async fn read_api_key(service: String) -> Result<String, &'static str> {
+    let read = tauri::async_runtime::spawn_blocking(move || {
+        let entry = entry(&service, "anthropic-api-key").map_err(|_| KEY_UNREADABLE)?;
+        entry.get_password().map_err(|error| key_read_error(&error))
+    })
+    .await
+    .map_err(|_| KEY_UNREADABLE)??;
+    check_secret(&read).map_err(|_| KEY_INVALID)?;
+    Ok(read)
+}
+
+// Aucune commande ne rend la valeur d'un secret au front : la clé ne quitte le Rust que vers l'API, par `ai_send`
+// (ai_transport.rs), qui la lit à chaque appel avec `read_api_key`. Le front sait seulement si elle existe
+// (`secret_status`), l'enregistre et la supprime.
 // Les messages d'erreur ne contiennent jamais la valeur du secret, qui n'est jamais journalisée.
 // Commandes asynchrones, appel au trousseau dans `spawn_blocking` : macOS peut afficher une demande
 // d'autorisation qui bloque l'appel longtemps, et aucun worker du runtime ne doit rester immobilisé.
 #[tauri::command]
 pub async fn secret_status(app: AppHandle, key: String) -> Result<bool, String> {
-    tauri::async_runtime::spawn_blocking(move || match entry(&app, &key)?.get_password() {
-        // La valeur lue est abandonnée aussitôt : seule sa présence sort de cette fonction.
-        Ok(_) => Ok(true),
-        Err(keyring::Error::NoEntry) => Ok(false),
-        Err(error) => Err(format!("Lecture du trousseau impossible : {error}")),
+    tauri::async_runtime::spawn_blocking(move || {
+        match entry(&app.config().identifier, &key)?.get_password() {
+            // La valeur lue est abandonnée aussitôt : seule sa présence sort de cette fonction.
+            Ok(_) => Ok(true),
+            Err(keyring::Error::NoEntry) => Ok(false),
+            Err(error) => Err(format!("Lecture du trousseau impossible : {error}")),
+        }
     })
     .await
     .map_err(join_failure)?
@@ -126,7 +176,7 @@ pub async fn secret_status(app: AppHandle, key: String) -> Result<bool, String> 
 pub async fn secret_set(app: AppHandle, key: String, value: String) -> Result<(), String> {
     check_secret(&value)?;
     tauri::async_runtime::spawn_blocking(move || {
-        entry(&app, &key)?
+        entry(&app.config().identifier, &key)?
             .set_password(&value)
             .map_err(|error| write_error_message(WriteAction::Set, &error))
     })
@@ -136,9 +186,11 @@ pub async fn secret_set(app: AppHandle, key: String, value: String) -> Result<()
 
 #[tauri::command]
 pub async fn secret_delete(app: AppHandle, key: String) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || match entry(&app, &key)?.delete_credential() {
-        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-        Err(error) => Err(write_error_message(WriteAction::Delete, &error)),
+    tauri::async_runtime::spawn_blocking(move || {
+        match entry(&app.config().identifier, &key)?.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Err(error) => Err(write_error_message(WriteAction::Delete, &error)),
+        }
     })
     .await
     .map_err(join_failure)?
@@ -282,5 +334,48 @@ mod tests {
         assert!(check_secret("sk-test-lot5-factice-0000").is_ok());
         let error = check_secret("sk ab").expect_err("refus");
         assert!(!error.contains("sk ab"));
+    }
+
+    #[test]
+    fn key_read_errors_are_fixed_sentences() {
+        assert_eq!(key_read_error(&keyring::Error::NoEntry), KEY_MISSING);
+        #[cfg(target_os = "macos")]
+        {
+            let denied = [
+                keyring::Error::NoStorageAccess(macos_error(USER_CANCELED)),
+                keyring::Error::PlatformFailure(macos_error(AUTH_FAILED)),
+            ];
+            for error in &denied {
+                assert_eq!(key_read_error(error), KEY_DENIED);
+            }
+        }
+        let others = [
+            keyring::Error::PlatformFailure(Box::new(std::io::Error::other("détail-secret"))),
+            keyring::Error::NoDefaultStore,
+        ];
+        for error in &others {
+            let sentence = key_read_error(error);
+            assert_eq!(sentence, KEY_UNREADABLE);
+            assert!(!sentence.contains("détail-secret"));
+            assert!(!sentence.contains(&error.to_string()));
+        }
+    }
+
+    #[test]
+    fn identifier_matches_the_app_config() {
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).expect("tauri.conf.json");
+        assert_eq!(config["identifier"], APP_SERVICE);
+        assert_eq!(APP_SERVICE, "com.familymealshelper.desktop");
+    }
+
+    // Même liste que `checkApiKey` dans packages/core/src/settings/settings.test.ts.
+    #[test]
+    fn secret_alphabet_matches_core() {
+        for value in ["a\\b", "a\"b", "a'b", "a.b", "a+b", "a/b", "a=b"] {
+            assert!(check_secret(value).is_err(), "{value}");
+        }
+        assert!(check_secret("sk-ant-api03-AZaz09_-").is_ok());
+        assert!(check_secret(&"a".repeat(500)).is_ok());
     }
 }

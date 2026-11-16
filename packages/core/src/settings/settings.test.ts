@@ -396,15 +396,28 @@ describe("checkApiKey", () => {
     ["   ", "Collez la clé avant d'enregistrer."],
     [
       "sk ab",
-      "La clé ne contient que des lettres sans accent, des chiffres et des signes, sans espace.",
+      "La clé ne contient que des lettres sans accent, des chiffres, « - » et « _ », sans espace.",
     ],
     [
       "clé-é",
-      "La clé ne contient que des lettres sans accent, des chiffres et des signes, sans espace.",
+      "La clé ne contient que des lettres sans accent, des chiffres, « - » et « _ », sans espace.",
     ],
     ["a".repeat(501), "Clé trop longue (500 caractères au plus)."],
   ])("refuse %j", (raw, error) => {
     expect(checkApiKey(raw)).toEqual({ ok: false, error });
+  });
+  // Même liste que le test Rust `secret_alphabet_matches_core` (secrets.rs).
+  it.each(["a\\b", 'a"b', "a'b", "a.b", "a+b", "a/b", "a=b"])(
+    "refuse %j (hors alphabet)",
+    (raw) => {
+      expect(checkApiKey(raw).ok).toBe(false);
+    },
+  );
+  it("accepte l'alphabet d'une clé Anthropic", () => {
+    expect(checkApiKey("sk-ant-api03-AZaz09_-")).toEqual({
+      ok: true,
+      key: "sk-ant-api03-AZaz09_-",
+    });
   });
   it("accepte 500 caractères et rend la clé sans les espaces autour", () => {
     expect(checkApiKey("a".repeat(500)).ok).toBe(true);

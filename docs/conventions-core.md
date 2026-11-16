@@ -17,7 +17,7 @@ Ce fichier dit comment écrire du code dans `packages/core` sans casser la front
 - Scripts du lot 1 : `compose` (composition par l'IA), `smoke` (un seul appel de test de connexion) et `season:import` (régénère `src/season/season-table.ts` depuis l'API ADEME ; voir `docs/research/saison-fruits-legumes.md`). Le script d'import est le seul code qui fait un appel réseau hors de l'IA.
 - Scripts du lot 4 : `batch` (composition, détail, liste de courses et fiche PDF) et `pdf:fixture` (une fiche d'exemple, sans réseau ni clé ; `--fallback` pour la fiche de repli). `batch` passe par `runBatchCommand(argv, io)` (`src/node/batch-command.ts`) : tout ce qui touche à l'extérieur (environnement, modèles, polices, destination, écriture, heure) arrive par l'objet `io`, remplacé dans les tests.
 
-- Scripts et modules du lot 5 : le module `settings/` contient `settings.ts` (schéma, validation, `loadSettings`, `applyEquipmentSettings`, `checkApiKey`) et `settings-keeper.ts` (`createSettingsKeeper`, le propriétaire du document de réglages, qui écrit dans l'ordre). Les ports sont `SettingsStore` (`read` et `write` transportent du **texte** : parsing, validation et sérialisation restent dans `core`), `SecretStore` (`get`, réservé à l'appel à l'API ; son implémentation Node ne change pas) et `SecretAdmin` (`has`, `set`, `delete` : il ne lit jamais la valeur de la clé). Les implémentations pour l'app sont dans `apps/desktop/src/platform/`, pas dans `core`.
+- Scripts et modules du lot 5 : le module `settings/` contient `settings.ts` (schéma, validation, `loadSettings`, `applyEquipmentSettings`, `checkApiKey`, qui n'accepte que des lettres sans accent, des chiffres, `-` et `_`, comme `check_secret` côté Rust) et `settings-keeper.ts` (`createSettingsKeeper`, le propriétaire du document de réglages, qui écrit dans l'ordre). Les ports sont `SettingsStore` (`read` et `write` transportent du **texte** : parsing, validation et sérialisation restent dans `core`), `SecretStore` (`get`, réservé à l'appel à l'API ; son implémentation Node ne change pas) et `SecretAdmin` (`has`, `set`, `delete` : il ne lit jamais la valeur de la clé). Les implémentations pour l'app sont dans `apps/desktop/src/platform/`, pas dans `core`.
 - **Faire évoluer le document de réglages** : la `version` s'incrémente à tout changement de forme, `loadSettings` porte une transformation explicite de chaque version précédente, et une version future est refusée sans écriture. `MAX_DOCUMENT_BYTES` est le même qu'en Rust (`settings_db.rs`), et `MAX_EXCLUSIONS` est choisi pour que le pire document valide tienne dedans (un test le vérifie).
 - Messages de validation en français : chaque schéma Zod porte son `error`, et un test vérifie qu'aucun message ne contient « Invalid », « expected », « Required » ni « received ».
 
@@ -27,19 +27,22 @@ Il vit dans `packages/core/src/ai/`, comme la conception le demande. Il reçoit 
 
 Le client est construit dans `src/ai/anthropic-client.ts` avec des options toutes explicites, pour qu'il ne lise de l'environnement que ce qu'on ne peut pas éviter :
 
-- `apiKey` : la clé reçue du `SecretStore` (le SDK l'envoie en `Authorization: Bearer`, ce qu'attend aussi Mammouth). On ne passe pas `authToken`, exclusif d'`apiKey`.
-- `baseURL` : donnée par le code Node (le SDK ajoute `/v1/messages`).
+- `apiKey` : la clé reçue du `SecretStore` (le SDK l'envoie en `Authorization: Bearer`, ce qu'attend aussi Mammouth), et, dans l'app, une clé factice : le Rust ajoute la vraie (`ai_send`). On ne passe pas `authToken`, exclusif d'`apiKey`.
+- `browser` : vrai dans la vue web de l'app (il devient `dangerouslyAllowBrowser`, que le SDK exige dès qu'il voit un navigateur), faux pour la CLI. Il choisit aussi les textes d'erreur de `describeApiError` : ceux de l'app renvoient aux Réglages, ceux de la CLI citent les variables d'environnement.
+- `baseURL` : donnée par le code Node pour la CLI, et dans l'app par `createAppModel` (`MAMMOUTH_BASE_URL`) ; le SDK ajoute `/v1/messages`.
 - `fetch` : adapté du port `HttpClient`.
 - `webhookKey: null` : sans cela, le SDK lit `ANTHROPIC_WEBHOOK_SIGNING_KEY`.
 - `openTelemetry: false` : sans cela, il lit les variables `ANTHROPIC_OPEN_TELEMETRY*`.
 - `maxRetries: 0` : aucun nouvel essai caché qui facturerait deux fois.
-- `logLevel: "warn"` et `logger` : le journal vient du code Node (le code pur n'a pas `console`).
+- `logLevel: "warn"` et `logger` : le journal vient du code Node pour la CLI, et dans l'app de `createAppModel` (`console`) ; le code pur n'a pas `console`.
 
 **Dette nommée** : le constructeur du SDK lit toujours `ANTHROPIC_CUSTOM_HEADERS`, aucune option ne l'empêche. C'est un code venu d'une dépendance qui accède lui-même à l'extérieur (§6, point 1) : accepté.
 
 Autre dette du même ordre : pour un modèle déprécié, le SDK écrit directement dans `console.warn`, même avec un `logger` fourni.
 
-Les erreurs du client ne sortent jamais telles quelles : `complete` les traduit en français (`describeApiError`) et en retire la clé et toute suite `Bearer …` (`redact`). Le cycle de composition ne dépend donc pas du SDK.
+Le SDK est exposé par un point d'entrée à part, `core/ai` (`src/ai/index.ts`, hors de `src/index.ts` pour que l'écran Réglages n'importe pas le SDK). Il exporte aussi `TransportError`, l'erreur d'un transport qui échoue en local (trousseau, taille, réseau, délai) : son message, déjà en français et sans la clé, s'affiche tel quel, `describeApiError` le rendant quand elle est la `cause` d'une erreur de connexion du SDK. Le script `test` charge ce point d'entrée sous Node (`node src/ai/index.ts`).
+
+Les erreurs du client ne sortent jamais telles quelles : `complete` les traduit en français (`describeApiError`) et en retire la clé et toute suite `Bearer …` (`redact`). Le cycle de composition ne dépend donc pas du SDK. Le SDK rend le JSON reçu sans le vérifier : `complete` lit la réponse par `readMessage`, dans le même `try`, qui vérifie le type de tout ce qu'elle lit (`content` tableau d'objets, `text` chaîne pour un bloc texte, `stop_reason` chaîne ou `null`, compteurs d'usage nombres finis, ceux du cache absents ou `null` comptant 0), sinon « Réponse de l'IA inattendue. ». Une réponse 2xx sans `content-type` JSON, sans corps ou mal typée finit donc sur cette phrase, jamais sur une `TypeError` en anglais. `describeApiError` ne lève jamais : elle reprend le texte de l'API (`apiMessage`) s'il est une chaîne, sinon, si le SDK a lu un corps d'erreur JSON (`error.error`), le message du SDK (`error.message`) s'il en est une, et tout son corps est dans un `try` dont le repli est « Erreur de l'API. ».
 
 Le `throw` qui suit ce `catch` porte `// eslint-disable-next-line preserve-caught-error` : on ne joint pas l'erreur d'origine (`cause`), parce qu'elle peut contenir la clé et que Node l'afficherait en entier.
 

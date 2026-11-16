@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { DetailSchema } from "../domain/detail.ts";
 import { APPLIANCES, MenuSchema } from "../domain/menu.ts";
@@ -8,6 +9,7 @@ import { createAnthropicModel, describeApiError, redact } from "./anthropic-clie
 import type { AnthropicOptions } from "./anthropic-client.ts";
 import { MenuReplySchema } from "./menu-reply.ts";
 import type { Feature } from "./model.ts";
+import { TransportError } from "./transport-error.ts";
 
 function fixture(name: string): string {
   return readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8");
@@ -26,6 +28,17 @@ function fakeHttp(status: number, body: string) {
   return { http, requests };
 }
 
+// Le message valide de la fixture, à modifier champ par champ.
+interface FixtureMessage {
+  content: Record<string, unknown>[];
+  stop_reason?: unknown;
+  usage: Record<string, unknown>;
+}
+
+function fixtureMessage(): FixtureMessage {
+  return JSON.parse(fixture("messages-ok.json")) as FixtureMessage;
+}
+
 const silentLogger = { debug() {}, info() {}, warn() {}, error() {} };
 
 function options(http: HttpClient, overrides: Partial<AnthropicOptions> = {}): AnthropicOptions {
@@ -37,6 +50,7 @@ function options(http: HttpClient, overrides: Partial<AnthropicOptions> = {}): A
     logger: silentLogger,
     disabled: new Set<Feature>(),
     schema: MenuSchema,
+    browser: false,
     ...overrides,
   };
 }
@@ -55,6 +69,28 @@ describe("createAnthropicModel", () => {
       expect(requests).toHaveLength(1);
       expect(requests[0]?.url).toBe(`${baseURL}/v1/messages`);
       expect(requests[0]?.headers.get("authorization")).toBe("Bearer test-key");
+    }
+  });
+
+  it("`browser: true` envoie l'en-tête d'accès navigateur, `browser: false` ne l'envoie pas", async () => {
+    const header = "anthropic-dangerous-direct-browser-access";
+    const on = fakeHttp(200, fixture("messages-ok.json"));
+    await createAnthropicModel(options(on.http, { browser: true })).complete(prompt);
+    expect(on.requests[0]?.headers.get(header)).toBe("true");
+    const off = fakeHttp(200, fixture("messages-ok.json"));
+    await createAnthropicModel(options(off.http, { browser: false })).complete(prompt);
+    expect(off.requests[0]?.headers.get(header)).toBeNull();
+  });
+
+  it("une `TransportError` du transport s'affiche telle quelle, en CLI comme dans l'app", async () => {
+    const message = "Aucune clé d'API dans le trousseau : enregistrez-la dans Réglages.";
+    for (const browser of [true, false]) {
+      const http: HttpClient = { send: () => Promise.reject(new TransportError(message)) };
+      const error: unknown = await createAnthropicModel(options(http, { browser }))
+        .complete(prompt)
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe(message);
     }
   });
 
@@ -227,6 +263,59 @@ describe("createAnthropicModel", () => {
     });
   });
 
+  it("une réponse 200 qui n'est pas un message donne une phrase fixe, pas une TypeError", async () => {
+    for (const body of [
+      '{"id":"x"}',
+      "null",
+      '{"content":"texte","usage":{}}',
+      '{"content":[null],"usage":{}}',
+      '{"content":[]}',
+    ]) {
+      for (const browser of [false, true]) {
+        const { http } = fakeHttp(200, body);
+        await expect(
+          createAnthropicModel(options(http, { browser })).complete(prompt),
+          body,
+        ).rejects.toThrow(new Error("Réponse de l'IA inattendue."));
+      }
+    }
+  });
+
+  it("chaque champ lu d'un message a son type, sinon une phrase fixe", async () => {
+    // Le message valide de la fixture, avec un seul champ changé à chaque fois.
+    const changes: [string, (message: FixtureMessage) => void][] = [
+      ["text objet", (m) => (m.content[0]!["text"] = { toString: 0 })],
+      ["text vide objet", (m) => (m.content[0]!["text"] = {})],
+      ["stop_reason nombre", (m) => (m.stop_reason = 1)],
+      ["stop_reason absent", (m) => delete m.stop_reason],
+      ["usage sans nombres", (m) => (m.usage = { input_tokens: "1", output_tokens: "1" })],
+      ["output_tokens absent", (m) => delete m.usage["output_tokens"]],
+      ["cache en texte", (m) => (m.usage["cache_read_input_tokens"] = "0")],
+    ];
+    for (const [label, change] of changes) {
+      const message = fixtureMessage();
+      change(message);
+      const { http } = fakeHttp(200, JSON.stringify(message));
+      await expect(createAnthropicModel(options(http)).complete(prompt), label).rejects.toThrow(
+        new Error("Réponse de l'IA inattendue."),
+      );
+    }
+  });
+
+  it("compteurs de cache absents ou null : 0 ; bloc non textuel ignoré", async () => {
+    const message = fixtureMessage();
+    message.usage["cache_read_input_tokens"] = null;
+    delete message.usage["cache_creation_input_tokens"];
+    message.content.unshift({ type: "thinking", thinking: "…" });
+    const { http } = fakeHttp(200, JSON.stringify(message));
+    const reply = await createAnthropicModel(options(http)).complete(prompt);
+    expect(reply).toEqual({
+      text: '{"dishes":[]}',
+      stopReason: "end_turn",
+      usage: { input: 120, output: 15, cacheRead: 0, cacheWrite: 0 },
+    });
+  });
+
   it("n'envoie qu'une requête sur une erreur 500", async () => {
     const { http, requests } = fakeHttp(
       500,
@@ -331,11 +420,76 @@ describe("describeApiError", () => {
   it("traduit le 429", async () => {
     expect(await errorFor(429, "{}")).toContain("429");
   });
+  it("un message d'erreur qui n'est pas une chaîne n'est pas repris, et rien ne lève", async () => {
+    // Contre-exemple Codex du cycle 6 : interpoler cet objet lève une TypeError depuis le `catch` de `complete`.
+    const body = '{"type":"error","error":{"type":"x","message":{"toString":0}}}';
+    for (const browser of [false, true]) {
+      for (const [status, expected] of [
+        [400, "Requête refusée (400)"],
+        [500, "Erreur de l'API (500)"],
+      ] as const) {
+        const { http } = fakeHttp(status, body);
+        const error: unknown = await createAnthropicModel(options(http, { browser }))
+          .complete(prompt)
+          .catch((e: unknown) => e);
+        expect((error as Error).message.startsWith(expected), `${status}`).toBe(true);
+      }
+    }
+  });
+  it("sans `error.message` dans le corps, le message du SDK est repris", async () => {
+    for (const browser of [false, true]) {
+      const { http } = fakeHttp(502, '{"detail":"passerelle-x"}');
+      const error: unknown = await createAnthropicModel(options(http, { browser }))
+        .complete(prompt)
+        .catch((e: unknown) => e);
+      const message = (error as Error).message;
+      expect(message.startsWith("Erreur de l'API (502) : "), message).toBe(true);
+      expect(message).toContain("passerelle-x");
+    }
+  });
+  it("une erreur dont un champ lève donne le repli", () => {
+    const error: unknown = Object.create(Anthropic.APIError.prototype, {
+      status: {
+        get() {
+          throw new Error("getter");
+        },
+      },
+    });
+    expect(error instanceof Anthropic.APIError).toBe(true);
+    expect(describeApiError(error)).toBe("Erreur de l'API.");
+    expect(describeApiError(error, "app")).toBe("Erreur de l'API.");
+  });
   it("traduit une erreur réseau", async () => {
     const http: HttpClient = { send: () => Promise.reject(new TypeError("fetch failed")) };
     const error: unknown = await createAnthropicModel(options(http))
       .complete(prompt)
       .catch((e: unknown) => e);
     expect(describeApiError(error)).toContain("Connexion impossible");
+  });
+  it("les messages de l'app ne citent aucune variable d'environnement", async () => {
+    // `browser: true` choisit les textes de l'app : on lit le message que `complete` rend.
+    async function appMessage(http: HttpClient): Promise<string> {
+      const error: unknown = await createAnthropicModel(options(http, { browser: true }))
+        .complete(prompt)
+        .catch((e: unknown) => e);
+      return (error as Error).message;
+    }
+    const messages = new Map<string, string>([
+      [
+        "connexion",
+        await appMessage({ send: () => Promise.reject(new TypeError("fetch failed")) }),
+      ],
+    ]);
+    for (const status of [400, 401, 404]) {
+      messages.set(String(status), await appMessage(fakeHttp(status, "{}").http));
+    }
+    expect(messages.size).toBe(4);
+    expect(messages.get("connexion")).toContain("Connexion impossible");
+    for (const message of messages.values()) {
+      expect(message).not.toContain("ANTHROPIC_");
+      expect(message).not.toContain("FMH_DISABLE");
+    }
+    expect(messages.get("401")).toContain("Réglages");
+    expect(messages.get("404")).toContain("Réglages");
   });
 });

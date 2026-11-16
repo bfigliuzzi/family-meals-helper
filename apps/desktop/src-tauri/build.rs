@@ -6,6 +6,7 @@ fn main() {
             "secret_delete",
             "settings_read",
             "settings_write",
+            "ai_send",
         ]),
     ))
     .expect("échec de tauri-build");

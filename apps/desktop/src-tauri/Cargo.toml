@@ -12,6 +12,12 @@ tauri = { version = "2.12", features = [] }
 rusqlite = { version = "0.42", features = ["bundled"] }
 keyring = "4.2"
 serde_json = "1"
+# Client HTTPS de `ai_send` (ai_transport.rs). Déjà dans Cargo.lock (0.13.5, dépendance de `tauri` pour iOS et
+# Android, non compilée sur macOS). `rustls` : TLS en Rust (aws-lc-rs) et vérification des certificats par le
+# système (rustls-platform-verifier). Sans les fonctions par défaut : ni HTTP/2, ni proxy système, ni `charset`.
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls"] }
+# Déjà compilé par `tauri` : sert à `#[derive(Serialize)]` de la réponse de `ai_send`.
+serde = { version = "1", features = ["derive"] }
 
 # Déjà présent par `keyring` (même version, verrouillée dans Cargo.lock) : sert seulement à lire le code d'erreur
 # macOS d'un refus du trousseau (secrets.rs).

@@ -4,11 +4,12 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./ai": "./src/ai/index.ts"
   },
   "scripts": {
     "typecheck": "tsc",
-    "test": "node src/index.ts && vitest run",
+    "test": "node src/index.ts && node src/ai/index.ts && vitest run",
     "compose": "node src/node/compose.ts",
     "batch": "node src/node/batch.ts",
     "pdf:fixture": "node src/node/pdf-fixture.ts",

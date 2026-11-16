@@ -245,12 +245,14 @@ export function removeExclusion(settings: Settings, term: string): Settings {
 export function checkApiKey(raw: string): { ok: true; key: string } | { ok: false; error: string } {
   const key = raw.trim();
   if (key === "") return { ok: false, error: "Collez la clé avant d'enregistrer." };
-  // ASCII visible seulement : en ASCII, 500 caractères font 500 octets, comme la borne de Rust.
-  if (!/^[\x21-\x7E]+$/.test(key)) {
+  // Lettres sans accent, chiffres, « - » et « _ » : aucun échappement JSON ou JavaScript ne touche cet alphabet, donc
+  // un encodage ajouté plus tard au texte que `ai_send` contrôle ne peut pas former la clé (`ai_transport.rs`). En
+  // ASCII, 500 caractères font 500 octets, comme la borne de Rust (`check_secret`, même alphabet).
+  if (!/^[A-Za-z0-9_-]+$/.test(key)) {
     return {
       ok: false,
       error:
-        "La clé ne contient que des lettres sans accent, des chiffres et des signes, sans espace.",
+        "La clé ne contient que des lettres sans accent, des chiffres, « - » et « _ », sans espace.",
     };
   }
   if (key.length > MAX_API_KEY_LENGTH) {

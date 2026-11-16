@@ -66,6 +66,7 @@ async function main(): Promise<number> {
     logger: console,
     disabled: config.disabled,
     schema: MenuReplySchema,
+    browser: false,
   });
   const result = await composeMenu(input, {
     model,

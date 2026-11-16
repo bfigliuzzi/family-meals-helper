@@ -28,6 +28,7 @@ async function main(): Promise<number> {
     disabled: config.disabled,
     schema: MenuReplySchema,
     maxTokens: 300,
+    browser: false,
   });
   try {
     const reply = await model.complete({

@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod ai_transport;
 mod navigation;
 mod secrets;
 mod settings_db;
@@ -15,12 +16,14 @@ fn main() {
             app.manage(settings_db::SettingsDb::new(dir));
             Ok(())
         })
+        .manage(ai_transport::AiGate::default())
         .invoke_handler(tauri::generate_handler![
             secrets::secret_status,
             secrets::secret_set,
             secrets::secret_delete,
             settings_db::settings_read,
-            settings_db::settings_write
+            settings_db::settings_write,
+            ai_transport::ai_send
         ])
         .run(tauri::generate_context!())
         .expect("échec du lancement de l'application Tauri");

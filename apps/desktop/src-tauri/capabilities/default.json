@@ -1,13 +1,14 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissions de la fenêtre principale : réglages (base de l'app), clé d'API (trousseau)",
+  "description": "Permissions de la fenêtre principale : réglages (base de l'app), clé d'API (trousseau), appel à Claude par Mammouth (ai_send)",
   "windows": ["main"],
   "permissions": [
     "allow-settings-read",
     "allow-settings-write",
     "allow-secret-status",
     "allow-secret-set",
-    "allow-secret-delete"
+    "allow-secret-delete",
+    "allow-ai-send"
   ]
 }
