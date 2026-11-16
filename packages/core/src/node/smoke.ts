@@ -4,6 +4,7 @@ import { createAnthropicModel } from "../ai/anthropic-client.ts";
 import { parseMenuReply } from "../ai/menu-reply.ts";
 import { buildSystemPrompt } from "../ai/prompt.ts";
 import { MenuSchema } from "../domain/menu.ts";
+import { HOUSEHOLD_EQUIPMENT } from "../equipment/household.ts";
 import { REFERENTIAL } from "../ingredients/referential.ts";
 import { readAiConfig } from "./config.ts";
 import { createEnvSecretStore, nodeHttpClient } from "./ports.ts";
@@ -31,7 +32,7 @@ async function main(): Promise<number> {
   });
   try {
     const reply = await model.complete({
-      system: buildSystemPrompt(REFERENTIAL),
+      system: buildSystemPrompt(REFERENTIAL, HOUSEHOLD_EQUIPMENT),
       user: 'Test de connexion : renvoie exactement {"dishes":[]}',
     });
     const { usage } = reply;

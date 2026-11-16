@@ -1,7 +1,8 @@
+import { HOUSEHOLD_EQUIPMENT } from "../equipment/household.ts";
 import { describe, expect, it } from "vitest";
 import type { Menu, MenuIngredient } from "../domain/menu.ts";
 import { REFERENTIAL } from "../ingredients/referential.ts";
-import { balancedMenu } from "../rules/fixtures/menus.ts";
+import { balancedMenu, phase } from "../rules/fixtures/menus.ts";
 import { SEASON_TABLE } from "../season/season-table.ts";
 import { composeMenu, exitCodeOf } from "./compose.ts";
 import type { ComposeInput } from "./compose.ts";
@@ -59,7 +60,12 @@ const input: ComposeInput = {
   sessionDay: "sun",
   maxAttempts: 3,
 };
-const deps = (model: Model) => ({ model, refs: REFERENTIAL, seasonTable: SEASON_TABLE });
+const deps = (model: Model) => ({
+  model,
+  refs: REFERENTIAL,
+  seasonTable: SEASON_TABLE,
+  equipment: HOUSEHOLD_EQUIPMENT,
+});
 
 describe("composeMenu", () => {
   it("corrige un premier menu fautif : courgette exclue et tomate hors saison", async () => {
@@ -387,5 +393,23 @@ describe("composeMenu : constats souples", () => {
     const result = await composeMenu({ ...input, maxAttempts: 2 }, deps(model));
     expect(result.attempts).toHaveLength(2);
     expect(result.best?.number).toBe(1);
+  });
+});
+
+describe("composeMenu : équipement", () => {
+  it("l'équipement passe au prompt et aux contrôles", async () => {
+    const withAirfryer = variant((menu) => {
+      menu.dishes[0]!.phases.push(phase("a3", 10, "airfryer", false, ["a1"]));
+    });
+    const { model, prompts } = fakeModel([reply(withAirfryer)]);
+    const equipment = HOUSEHOLD_EQUIPMENT.filter((spec) => spec.id !== "airfryer");
+    const result = await composeMenu(
+      { ...input, maxAttempts: 1 },
+      { model, refs: REFERENTIAL, seasonTable: SEASON_TABLE, equipment },
+    );
+    expect(prompts[0]!.system.toLowerCase()).not.toContain("airfryer");
+    expect(
+      result.attempts[0]?.check.findings.filter((finding) => finding.rule === "equipment"),
+    ).toHaveLength(1);
   });
 });

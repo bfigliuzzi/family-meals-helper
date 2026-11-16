@@ -1,5 +1,11 @@
 import { Button, Group, Paper, Table, Text, TextInput, Title } from "@mantine/core";
-import { REFERENTIAL, buildIngredientIndex, unknownExclusionTerms } from "core";
+import {
+  REFERENTIAL,
+  buildIngredientIndex,
+  normalizeName,
+  removeExclusion,
+  unknownExclusionTerms,
+} from "core";
 import type { SettingsKeeper, SettingsSnapshot } from "core";
 import { useRef, useState } from "react";
 import type { SyntheticEvent } from "react";
@@ -62,11 +68,8 @@ export function ExclusionsSection({
     );
   }
 
-  function remove(index: number) {
-    const result = apply((settings) => ({
-      ...settings,
-      exclusions: settings.exclusions.filter((_, position) => position !== index),
-    }));
+  function remove(term: string) {
+    const result = apply((settings) => removeExclusion(settings, term));
     // Après un retrait, les messages du dernier ajout refusé (doublon, liste pleine) ne valent plus.
     if (result.ok) {
       clearErrors();
@@ -126,8 +129,8 @@ export function ExclusionsSection({
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {exclusions.map((exclusion, index) => (
-                  <Table.Tr key={exclusion.term}>
+                {exclusions.map((exclusion) => (
+                  <Table.Tr key={normalizeName(exclusion.term)}>
                     <Table.Td>
                       {exclusion.term}
                       {unknown.has(exclusion.term) && (
@@ -147,7 +150,7 @@ export function ExclusionsSection({
                         size="xs"
                         aria-label={`Retirer ${exclusion.term}`}
                         onClick={() => {
-                          remove(index);
+                          remove(exclusion.term);
                         }}
                       >
                         Retirer

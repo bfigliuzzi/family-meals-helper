@@ -1,3 +1,4 @@
+import { APPLIANCES } from "../domain/menu.ts";
 import type { ApplianceId, Phase } from "../domain/menu.ts";
 
 export interface ApplianceSpec {
@@ -29,7 +30,7 @@ export function phaseUseText(phase: Phase): string {
 }
 
 // Table de base de l'équipement (conception §3.2). Les réglages de l'utilisateur s'y appliquent par
-// `applyEquipmentSettings` (`settings/settings.ts`) ; le branchement dans la composition est prévu au lot 6.
+// `applyEquipmentSettings` (`settings/settings.ts`).
 const HOUSEHOLD_SPECS: ApplianceSpec[] = [
   { id: "oven", slots: 2, extra: false, uses: "chaleur tournante" },
   { id: "induction", slots: 4, extra: false, uses: "un feu par cuisson" },
@@ -42,6 +43,13 @@ const HOUSEHOLD_SPECS: ApplianceSpec[] = [
 export const HOUSEHOLD_EQUIPMENT: Equipment = Object.freeze(
   HOUSEHOLD_SPECS.map((spec) => Object.freeze(spec)),
 );
+
+// Identifiants d'appareil que l'IA peut employer (sans `none`), présents dans l'équipement, dans l'ordre de `APPLIANCES`.
+export function availableApplianceIds(equipment: Equipment): ApplianceSpec["id"][] {
+  return APPLIANCES.filter(
+    (id): id is ApplianceSpec["id"] => id !== "none" && equipment.some((spec) => spec.id === id),
+  );
+}
 
 export const UTENSILS_FR = ["casseroles", "poêle en inox", "mixeur plongeant"] as const;
 
@@ -84,9 +92,16 @@ export function applianceChoiceLines(equipment: Equipment): string[] {
 // Lignes de capacité du prompt, générées depuis la constante pour que le prompt et les contrôles ne divergent pas.
 // Le détail de la session les reprend seules : sa consigne de durée n'est pas celle de la composition.
 export function equipmentCapacityLines(equipment: Equipment): string[] {
+  const always = equipment.filter((spec) => !spec.extra);
+  const extras = equipment.filter((spec) => spec.extra);
+  const utensils = `Ustensiles : ${UTENSILS_FR.join(", ")}.`;
   return [
-    `Équipement toujours disponible, avec le nombre de cuissons en même temps au plus : ${describeSpecs(equipment.filter((spec) => !spec.extra))}. Ustensiles : ${UTENSILS_FR.join(", ")}.`,
-    `Appareils d'appoint, un seul par session au plus, et seulement s'il fait gagner du temps, avec le nombre de cuissons en même temps au plus : ${describeSpecs(equipment.filter((spec) => spec.extra))}. Une session sans appareil d'appoint est normale : la place en cuisine est limitée.`,
+    always.length === 0
+      ? `Équipement toujours disponible : aucun appareil. ${utensils}`
+      : `Équipement toujours disponible, avec le nombre de cuissons en même temps au plus : ${describeSpecs(always)}. ${utensils}`,
+    extras.length === 0
+      ? "Aucun appareil d'appoint."
+      : `Appareils d'appoint, un seul par session au plus, et seulement s'il fait gagner du temps, avec le nombre de cuissons en même temps au plus : ${describeSpecs(extras)}. Une session sans appareil d'appoint est normale : la place en cuisine est limitée.`,
     "Ces nombres sont des maximums, pas un objectif.",
     "La session est faite par une seule personne, qui ne fait qu'une tâche à la main à la fois ; pendant qu'un appareil tourne seul, elle peut faire autre chose.",
     ...applianceChoiceLines(equipment),

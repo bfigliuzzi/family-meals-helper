@@ -1,3 +1,4 @@
+import { HOUSEHOLD_EQUIPMENT } from "../equipment/household.ts";
 import { describe, expect, it } from "vitest";
 import type { Category, Form } from "../domain/ingredient.ts";
 import type { Menu } from "../domain/menu.ts";
@@ -19,6 +20,7 @@ function ctx(month: Month, request = "un plat"): CheckContext {
     dinners: 1,
     index,
     seasonTable: SEASON_TABLE,
+    equipment: HOUSEHOLD_EQUIPMENT,
   };
 }
 

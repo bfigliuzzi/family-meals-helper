@@ -5,6 +5,7 @@ import {
   HOUSEHOLD_EQUIPMENT,
   UTENSILS_FR,
   applianceChoiceLines,
+  availableApplianceIds,
   equipmentCapacityLines,
   equipmentPromptLines,
 } from "./household.ts";
@@ -125,5 +126,31 @@ describe("applianceChoiceLines", () => {
     expect(lines).toContain(
       "Soupe ou velouté : une casserole sur la plaque, puis le mixeur plongeant.",
     );
+  });
+});
+
+describe("équipement incomplet", () => {
+  it("aucun appareil d'appoint", () => {
+    const lines = equipmentCapacityLines(HOUSEHOLD_EQUIPMENT.filter((spec) => !spec.extra));
+    expect(lines).toContain("Aucun appareil d'appoint.");
+    expect(lines.join("\n")).not.toContain(" : .");
+  });
+  it("aucun appareil toujours disponible", () => {
+    const lines = equipmentCapacityLines(HOUSEHOLD_EQUIPMENT.filter((spec) => spec.extra));
+    expect(lines[0]).toBe(
+      `Équipement toujours disponible : aucun appareil. Ustensiles : ${UTENSILS_FR.join(", ")}.`,
+    );
+    expect(lines.join("\n")).not.toContain(" : .");
+  });
+  it("availableApplianceIds garde l'ordre de APPLIANCES et ignore l'ordre de l'équipement", () => {
+    const reversed = [...HOUSEHOLD_EQUIPMENT].reverse().filter((spec) => spec.id !== "kenwood");
+    expect(availableApplianceIds(reversed)).toEqual([
+      "oven",
+      "induction",
+      "thermomix",
+      "cookeo",
+      "steamer",
+      "airfryer",
+    ]);
   });
 });

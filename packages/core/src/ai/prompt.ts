@@ -2,7 +2,6 @@ import { CATEGORIES } from "../domain/ingredient.ts";
 import type { IngredientRef } from "../domain/ingredient.ts";
 import type { Finding } from "../domain/finding.ts";
 import {
-  APPLIANCES,
   DAYS,
   DAY_LABELS,
   SESSION_DAY_LABELS,
@@ -10,7 +9,8 @@ import {
   dishLetter,
 } from "../domain/menu.ts";
 import type { Menu, SessionDay } from "../domain/menu.ts";
-import { HOUSEHOLD_EQUIPMENT, equipmentPromptLines } from "../equipment/household.ts";
+import type { Equipment } from "../equipment/household.ts";
+import { availableApplianceIds, equipmentPromptLines } from "../equipment/household.ts";
 import { MAX_PHASE_MINUTES, MAX_SESSION_PHASES } from "../scheduling/plan-session.ts";
 import { balancePromptLines } from "../rules/balance-table.ts";
 import {
@@ -40,7 +40,7 @@ export const COMPOSITION_RULES_FR = [
   "Une demande explicite l'emporte sur les règles souples : un plat que la demande nomme reste au menu, sous son nom, même s'il dépasse un plafond ; ajuste les autres plats. Les règles bloquantes s'appliquent toujours.",
 ].join("\n");
 
-export function buildSystemPrompt(refs: readonly IngredientRef[]): string {
+export function buildSystemPrompt(refs: readonly IngredientRef[], equipment: Equipment): string {
   const names = refs.map((ref) => ref.name).sort();
   const instructions = [
     'Réponds uniquement par un objet JSON {"dishes":[{"name","day","ingredients":[{"name","qty","unit","form","category","sameDay"}],"phases":[{"id","description","minutes","appliance","attended","after"}]}]}, sans texte autour.',
@@ -51,11 +51,13 @@ export function buildSystemPrompt(refs: readonly IngredientRef[]): string {
     "Les accompagnements préparés le soir même sont des ingrédients du plat avec `sameDay` à true ; tous les autres ont `sameDay` à false.",
     `\`phases\` : les grandes phases du plat pendant la session de cuisine (préparation, cuisson), pas ce qui se fait le soir même. Un plat dont tous les ingrédients sont \`sameDay\` a \`phases\` vide. Pas plus de ${MAX_SESSION_PHASES} phases pour tout le menu.`,
     `\`id\` : lettre du plat et numéro (a1, a2, b1…), unique dans le menu. \`minutes\` : nombre entier de minutes, de 1 à ${MAX_PHASE_MINUTES}.`,
-    `\`appliance\` : none (à la main, ou attente comme une marinade), ${APPLIANCES.filter((appliance) => appliance !== "none").join(", ")}.`,
+    `\`appliance\` : ${["none (à la main, ou attente comme une marinade)", ...availableApplianceIds(equipment)].join(", ")}.`,
     "`attended` : true si la phase t'occupe tout du long (éplucher, couper, saisir, mixer), false si l'appareil tourne seul (four, mijotage, vapeur).",
     `\`after\` : les \`id\` des phases qui doivent être finies avant, de ce plat ou d'un autre. Une préparation commune à deux plats est une seule phase, dont l'autre plat dépend. Au plus ${MAX_SESSION_PHASES} id.`,
     "Une phase occupe une seule place d'un seul appareil pendant toute sa durée : deux plats au four font deux phases, trois casseroles sur la plaque font trois phases.",
-    "Si un plat passe au four, ajoute une seule phase « Préchauffer le four » (oven, attended false, 15 minutes) dans le premier plat qui l'utilise, et mets son id dans le after de toutes les cuissons au four, de tous les plats. Ne compte ni le refroidissement, ni la vaisselle.",
+    equipment.some((spec) => spec.id === "oven")
+      ? "Si un plat passe au four, ajoute une seule phase « Préchauffer le four » (oven, attended false, 15 minutes) dans le premier plat qui l'utilise, et mets son id dans le after de toutes les cuissons au four, de tous les plats. Ne compte ni le refroidissement, ni la vaisselle."
+      : "Ne compte ni le refroidissement, ni la vaisselle.",
     "Quantités pour 4 portions adultes.",
     "Liste aussi la matière grasse, le bouillon et les épices qui servent pendant la session, avec leur quantité (par exemple huile d'olive 30 ml) : les étapes les citeront.",
     "Ni le nom d'un plat ni la description d'une phase ne cite un ingrédient exclu, même précédé de « sans ».",
@@ -67,7 +69,7 @@ export function buildSystemPrompt(refs: readonly IngredientRef[]): string {
     "",
     balancePromptLines().join("\n"),
     "",
-    equipmentPromptLines(HOUSEHOLD_EQUIPMENT).join("\n"),
+    equipmentPromptLines(equipment).join("\n"),
     "",
     instructions,
     "",

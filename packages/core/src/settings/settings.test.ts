@@ -7,10 +7,12 @@ import { checkSession } from "../scheduling/check-session.ts";
 import {
   applyEquipmentSettings,
   checkApiKey,
+  compositionSettings,
   defaultSettings,
   loadSettings,
   MAX_DOCUMENT_BYTES,
   MAX_EXCLUSIONS,
+  removeExclusion,
   validateSettings,
 } from "./settings.ts";
 import type { Settings } from "./settings.ts";
@@ -407,5 +409,58 @@ describe("checkApiKey", () => {
   it("accepte 500 caractères et rend la clé sans les espaces autour", () => {
     expect(checkApiKey("a".repeat(500)).ok).toBe(true);
     expect(checkApiKey("  sk-test-factice \n")).toEqual({ ok: true, key: "sk-test-factice" });
+  });
+});
+
+describe("compositionSettings", () => {
+  it("retire l'appareil indisponible et remplace la capacité", () => {
+    const settings: Settings = {
+      ...defaultSettings(),
+      equipment: defaultSettings().equipment.map((item) =>
+        item.id === "airfryer"
+          ? { ...item, available: false }
+          : item.id === "oven"
+            ? { ...item, slots: 1 }
+            : item,
+      ),
+    };
+    const { equipment } = compositionSettings(settings);
+    expect(equipment.map((spec) => spec.id)).not.toContain("airfryer");
+    expect(equipment.find((spec) => spec.id === "oven")?.slots).toBe(1);
+    expect(equipment).toEqual(applyEquipmentSettings(HOUSEHOLD_EQUIPMENT, settings.equipment));
+  });
+  it("donne les termes dans l'ordre du document, et une liste vide sans aliment", () => {
+    expect(compositionSettings(defaultSettings()).exclusions).toEqual([]);
+    const settings: Settings = {
+      ...defaultSettings(),
+      exclusions: [
+        { term: "fenouil", reason: "" },
+        { term: "Céleri", reason: "n'aime pas" },
+        { term: "noix", reason: "" },
+      ],
+    };
+    expect(compositionSettings(settings).exclusions).toEqual(["fenouil", "Céleri", "noix"]);
+  });
+});
+
+describe("removeExclusion", () => {
+  const settings: Settings = {
+    ...defaultSettings(),
+    exclusions: [
+      { term: "fenouil", reason: "a" },
+      { term: "Céleri", reason: "b" },
+      { term: "noix", reason: "c" },
+    ],
+  };
+  it("« celeri » retire « Céleri » (comparaison normalisée) et garde l'ordre des autres", () => {
+    const result = removeExclusion(settings, "celeri");
+    expect(result.exclusions).toEqual([
+      { term: "fenouil", reason: "a" },
+      { term: "noix", reason: "c" },
+    ]);
+    expect(result).not.toBe(settings);
+  });
+  it("un terme absent rend un document égal", () => {
+    expect(removeExclusion(settings, "poireau")).toEqual(settings);
   });
 });

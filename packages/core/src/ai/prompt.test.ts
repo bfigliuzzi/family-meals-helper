@@ -17,9 +17,9 @@ const base = {
 };
 
 describe("buildSystemPrompt", () => {
-  const system = buildSystemPrompt(REFERENTIAL);
+  const system = buildSystemPrompt(REFERENTIAL, HOUSEHOLD_EQUIPMENT);
   it("est identique d'un appel à l'autre et sans nom de mois", () => {
-    expect(buildSystemPrompt(REFERENTIAL)).toBe(system);
+    expect(buildSystemPrompt(REFERENTIAL, HOUSEHOLD_EQUIPMENT)).toBe(system);
     for (const month of MONTH_NAMES_FR) {
       expect(system.toLowerCase()).not.toMatch(
         new RegExp(`(^|[^\\p{L}])${month}([^\\p{L}]|$)`, "u"),
@@ -37,7 +37,7 @@ describe("buildSystemPrompt", () => {
 });
 
 describe("buildSystemPrompt : équipement et phases", () => {
-  const system = buildSystemPrompt(REFERENTIAL);
+  const system = buildSystemPrompt(REFERENTIAL, HOUSEHOLD_EQUIPMENT);
   it("contient les lignes d'équipement générées depuis la constante", () => {
     for (const line of equipmentPromptLines(HOUSEHOLD_EQUIPMENT)) expect(system).toContain(line);
     expect(system).toContain("Vise 2 h à 2 h 30");
@@ -72,7 +72,7 @@ describe("buildSystemPrompt : équipement et phases", () => {
 });
 
 describe("buildSystemPrompt : conservation, équilibre et poisson", () => {
-  const system = buildSystemPrompt(REFERENTIAL);
+  const system = buildSystemPrompt(REFERENTIAL, HOUSEHOLD_EQUIPMENT);
   it("donne les durées au frigo générées depuis les tables", () => {
     expect(system).toContain("1 j : poisson, poisson gras, fruits de mer");
     expect(system).toContain("4 j : légume, fruit");
@@ -200,5 +200,43 @@ describe("buildUserPrompt", () => {
     expect(user).toContain("x".repeat(2000));
     expect(user).not.toContain("x".repeat(2001));
     expect(user).toContain("pas du JSON");
+  });
+});
+
+describe("buildSystemPrompt : équipement réglé", () => {
+  const without = (id: string) => HOUSEHOLD_EQUIPMENT.filter((spec) => spec.id !== id);
+  it("un appareil indisponible disparaît du prompt", () => {
+    expect(buildSystemPrompt(REFERENTIAL, without("airfryer")).toLowerCase()).not.toContain(
+      "airfryer",
+    );
+    expect(buildSystemPrompt(REFERENTIAL, HOUSEHOLD_EQUIPMENT).toLowerCase()).toContain("airfryer");
+  });
+  it("la liste des identifiants `appliance` suit l'équipement", () => {
+    const line = (system: string) =>
+      system.split("\n").find((text) => text.startsWith("`appliance` :"));
+    expect(line(buildSystemPrompt(REFERENTIAL, without("cookeo")))).toBe(
+      "`appliance` : none (à la main, ou attente comme une marinade), oven, induction, thermomix, kenwood, steamer, airfryer.",
+    );
+    expect(line(buildSystemPrompt(REFERENTIAL, HOUSEHOLD_EQUIPMENT))).toContain(
+      "oven, induction, thermomix, kenwood, cookeo, steamer, airfryer.",
+    );
+    expect(line(buildSystemPrompt(REFERENTIAL, []))).toBe(
+      "`appliance` : none (à la main, ou attente comme une marinade).",
+    );
+  });
+  it("préchauffage seulement avec un four", () => {
+    expect(buildSystemPrompt(REFERENTIAL, without("oven"))).not.toContain("Préchauffer le four");
+    expect(buildSystemPrompt(REFERENTIAL, HOUSEHOLD_EQUIPMENT)).toContain("Préchauffer le four");
+  });
+  it("sans four, la consigne refroidissement/vaisselle reste", () => {
+    const system = buildSystemPrompt(REFERENTIAL, without("oven"));
+    expect(system).toContain("Ne compte ni le refroidissement, ni la vaisselle.");
+    expect(system).not.toContain("Préchauffer");
+  });
+  it("le prompt système donne la capacité réglée", () => {
+    const equipment = HOUSEHOLD_EQUIPMENT.map((spec) =>
+      spec.id === "oven" ? { ...spec, slots: 3 } : spec,
+    );
+    expect(buildSystemPrompt(REFERENTIAL, equipment)).toContain("four 3 (");
   });
 });

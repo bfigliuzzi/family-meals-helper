@@ -1,7 +1,7 @@
 import type { TDocumentDefinitions } from "pdfmake/interfaces.js";
 import type { RuleId } from "../domain/finding.ts";
 import type { IngredientRef } from "../domain/ingredient.ts";
-import { HOUSEHOLD_EQUIPMENT } from "../equipment/household.ts";
+import type { Equipment } from "../equipment/household.ts";
 import { buildIngredientIndex } from "../ingredients/index-lookup.ts";
 import { isAdmissible } from "../scheduling/check-detail.ts";
 import type { SeasonRow } from "../season/months.ts";
@@ -69,6 +69,7 @@ export async function batchMenu(
     models: { compose: Model; detail: Model };
     refs: readonly IngredientRef[];
     seasonTable: Readonly<Record<string, SeasonRow>>;
+    equipment: Equipment;
     onAttempt?: (stage: "compose" | "detail", number: number) => void;
   },
 ): Promise<BatchResult> {
@@ -76,6 +77,7 @@ export async function batchMenu(
     model: deps.models.compose,
     refs: deps.refs,
     seasonTable: deps.seasonTable,
+    equipment: deps.equipment,
     onAttempt: (attempt) => deps.onAttempt?.("compose", attempt.number),
   });
   const best = compose.best;
@@ -114,8 +116,7 @@ export async function batchMenu(
     },
     {
       model: deps.models.detail,
-      // Comme la composition et la fiche, le détail utilise l'équipement du foyer, constant jusqu'au lot 5.
-      equipment: HOUSEHOLD_EQUIPMENT,
+      equipment: deps.equipment,
       index,
       onAttempt: (attempt) => deps.onAttempt?.("detail", attempt.number),
     },
@@ -138,6 +139,7 @@ export async function batchMenu(
     keeping: best.check.keeping,
     steps,
     index,
+    equipment: deps.equipment,
   });
   return { compose, detail, sheet, stoppedBecause: null, fallback, fallbackReason: reason };
 }

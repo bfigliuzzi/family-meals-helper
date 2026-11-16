@@ -23,6 +23,7 @@ const ctx: CheckContext = {
   dinners: 5,
   index,
   seasonTable: SEASON_TABLE,
+  equipment: HOUSEHOLD_EQUIPMENT,
 };
 
 function item(name: string, qty: number, over: Partial<MenuIngredient> = {}): MenuIngredient {
@@ -38,6 +39,7 @@ function detailInput(menu: Menu, detail: Detail): SheetInput {
     keeping: checkMenu(menu, ctx).keeping,
     steps: { kind: "detail", detail, plan: check.plan, findings: check.findings },
     index,
+    equipment: HOUSEHOLD_EQUIPMENT,
   };
 }
 
@@ -54,6 +56,7 @@ function phasesInput(menu: Menu): SheetInput {
       reason: "les étapes restent incohérentes après 3 appels",
     },
     index,
+    equipment: HOUSEHOLD_EQUIPMENT,
   };
 }
 
@@ -791,5 +794,32 @@ describe("buildSheetDocument : pagination", () => {
   it("garde un titre suivi de contenu, et ne touche pas au texte ordinaire", () => {
     expect(rule()(node(1), queries([node(1), node()]))).toBe(false);
     expect(rule()(node(), queries([]))).toBe(false);
+  });
+});
+
+describe("buildSheetDocument : équipement de la fiche", () => {
+  // Plaque induction avant le four : l'ordre de `input.equipment`, pas celui du foyer.
+  const induction = HOUSEHOLD_EQUIPMENT.find((spec) => spec.id === "induction")!;
+  const reordered = [induction, ...HOUSEHOLD_EQUIPMENT.filter((spec) => spec !== induction)];
+  const doc = buildSheetDocument({ ...detailInput(menu, detail), equipment: reordered });
+  it("la colonne « Cuisson » du tableau du menu suit l'ordre de l'équipement", () => {
+    const menuTable = allNodes(doc.content).find(
+      (node) => (node["table"] as { widths?: unknown[] } | undefined)?.widths?.length === 6,
+    );
+    expect(allText(menuTable).join("|")).toContain(
+      "Bœuf braisé aux carottes|mercredi|plaque induction + four|",
+    );
+  });
+  it("la ligne « Appareils » suit l'ordre de l'équipement", () => {
+    expect(allText(doc.content).join("\n")).toContain(
+      "Appareils\n : plaque induction · four · Thermomix TM5",
+    );
+  });
+  it("un appareil absent de l'équipement n'est pas listé", () => {
+    const withoutOven = HOUSEHOLD_EQUIPMENT.filter((spec) => spec.id !== "oven");
+    const text = allText(
+      buildSheetDocument({ ...detailInput(menu, detail), equipment: withoutOven }).content,
+    ).join("\n");
+    expect(text).toContain("Appareils\n : plaque induction · Thermomix TM5");
   });
 });

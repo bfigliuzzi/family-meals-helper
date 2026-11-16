@@ -10,7 +10,8 @@ import type { Detail } from "../domain/detail.ts";
 import type { Finding } from "../domain/finding.ts";
 import { DAYS, DAY_LABELS, SESSION_DAY_LABELS, dishLetter } from "../domain/menu.ts";
 import type { Dish, Menu, SessionDay } from "../domain/menu.ts";
-import { APPLIANCE_LABELS, HOUSEHOLD_EQUIPMENT, phaseUseText } from "../equipment/household.ts";
+import { APPLIANCE_LABELS, phaseUseText } from "../equipment/household.ts";
+import type { Equipment } from "../equipment/household.ts";
 import type { IngredientIndex } from "../ingredients/index-lookup.ts";
 import { ADULT_PORTIONS } from "../rules/balance-table.ts";
 import type { DishKeeping } from "../rules/check-conservation.ts";
@@ -34,6 +35,7 @@ export interface SheetInput {
   keeping: readonly DishKeeping[];
   steps: SheetSteps;
   index: IngredientIndex;
+  equipment: Equipment;
 }
 
 // Fiche A4 portrait, une colonne, à la densité des fiches cuisine-addict (9 pt, marges de 10 mm, titres en
@@ -379,13 +381,13 @@ function stepsPart(input: SheetInput): Content[] {
   return content;
 }
 
-function appliancesOf(rows: readonly SheetStep[], letter: string): string {
+function appliancesOf(rows: readonly SheetStep[], letter: string, equipment: Equipment): string {
   const used = new Set(
     rows.filter((row) => row.letters.includes(letter)).map((row) => row.entry.phase.appliance),
   );
-  const labels = HOUSEHOLD_EQUIPMENT.filter((spec) => used.has(spec.id)).map(
-    (spec) => APPLIANCE_LABELS[spec.id],
-  );
+  const labels = equipment
+    .filter((spec) => used.has(spec.id))
+    .map((spec) => APPLIANCE_LABELS[spec.id]);
   return labels.length === 0 ? "à la main" : labels.join(" + ");
 }
 
@@ -409,7 +411,7 @@ function menuPart(input: SheetInput, rows: readonly SheetStep[]): Content[] {
       { text: dishLetter(i), bold: true },
       clean(`${dish.name}${isVegetarian(dish, index) ? " (V)" : ""}`),
       DAY_LABELS[dish.day],
-      evening ? "soir" : appliancesOf(rows, dishLetter(i)),
+      evening ? "soir" : appliancesOf(rows, dishLetter(i), input.equipment),
       evening ? "—" : keep?.fridgeDays == null ? "non calculé" : `${keep.fridgeDays} j`,
       freeze,
     ];
@@ -436,9 +438,9 @@ function ingredientsPart(input: SheetInput): Content[] {
     stack: lines.map((text) => ({ text, margin: [0, 0, 0, 1] })),
   });
   const used = new Set(input.steps.plan.phases.map((entry) => entry.phase.appliance));
-  const appliances = HOUSEHOLD_EQUIPMENT.filter((spec) => used.has(spec.id)).map(
-    (spec) => `${APPLIANCE_LABELS[spec.id]}${spec.extra ? " (appoint)" : ""}`,
-  );
+  const appliances = input.equipment
+    .filter((spec) => used.has(spec.id))
+    .map((spec) => `${APPLIANCE_LABELS[spec.id]}${spec.extra ? " (appoint)" : ""}`);
   const pantry =
     list.pantry.length === 0
       ? "aucun ingrédient de placard dans ce menu."

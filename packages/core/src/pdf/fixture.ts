@@ -21,8 +21,15 @@ export function fixtureSheetInput(mode: "detail" | "phases"): SheetInput {
     dinners: menu.dishes.length,
     index,
     seasonTable: SEASON_TABLE,
+    equipment: HOUSEHOLD_EQUIPMENT,
   });
-  const base = { sessionDay: "sun", menu, keeping: checked.keeping, index } as const;
+  const base = {
+    sessionDay: "sun",
+    menu,
+    keeping: checked.keeping,
+    index,
+    equipment: HOUSEHOLD_EQUIPMENT,
+  } as const;
   if (mode === "phases") {
     if (checked.session === null) throw new Error("Le menu d'exemple n'a pas de planning.");
     return {

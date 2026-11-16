@@ -1,3 +1,4 @@
+import { HOUSEHOLD_EQUIPMENT } from "../equipment/household.ts";
 import { describe, expect, it } from "vitest";
 import type { Day, Menu, MenuIngredient } from "../domain/menu.ts";
 import { DAYS } from "../domain/menu.ts";
@@ -6,7 +7,7 @@ import { REFERENTIAL } from "../ingredients/referential.ts";
 import { SEASON_TABLE } from "../season/season-table.ts";
 import { checkMenu } from "./check-menu.ts";
 import type { CheckContext } from "./context.ts";
-import { balancedMenu } from "./fixtures/menus.ts";
+import { balancedMenu, phase } from "./fixtures/menus.ts";
 
 const ctx: CheckContext = {
   request: "un plat",
@@ -16,6 +17,7 @@ const ctx: CheckContext = {
   dinners: 5,
   index: buildIngredientIndex(REFERENTIAL),
   seasonTable: SEASON_TABLE,
+  equipment: HOUSEHOLD_EQUIPMENT,
 };
 
 // Sans exclusion : pour les menus qui partent de `balancedMenu()`.
@@ -125,5 +127,30 @@ describe("checkMenu", () => {
     const result = checkMenu(balancedWith([{ ...carrot, category: "fruit" }]), cleanCtx);
     expect(result.findings).toEqual([]);
     expect(result.toConfirm).toEqual([]);
+  });
+
+  it("utilise l'équipement du contexte", () => {
+    const menu = balancedMenu();
+    menu.dishes[0]!.phases.push(phase("a3", 10, "airfryer", false, ["a1"]));
+    const withoutAirfryer = HOUSEHOLD_EQUIPMENT.filter((spec) => spec.id !== "airfryer");
+    const refused = checkMenu(menu, { ...cleanCtx, equipment: withoutAirfryer });
+    expect(refused.findings.filter((finding) => finding.rule === "equipment")).toHaveLength(1);
+    const accepted = checkMenu(menu, { ...cleanCtx, equipment: HOUSEHOLD_EQUIPMENT });
+    expect(accepted.findings.filter((finding) => finding.rule === "equipment")).toEqual([]);
+  });
+
+  it("la capacité du contexte change le planning", () => {
+    const menu = balancedMenu();
+    menu.dishes[0]!.phases.push(
+      phase("a3", 90, "oven", false, ["a1"]),
+      phase("a4", 90, "oven", false, ["a1"]),
+    );
+    const withOven = (slots: number) =>
+      HOUSEHOLD_EQUIPMENT.map((spec) => (spec.id === "oven" ? { ...spec, slots } : spec));
+    const two = checkMenu(menu, { ...cleanCtx, equipment: withOven(2) }).session;
+    const one = checkMenu(menu, { ...cleanCtx, equipment: withOven(1) }).session;
+    expect(two).not.toBeNull();
+    expect(one).not.toBeNull();
+    expect(one!.minutes).toBeGreaterThan(two!.minutes);
   });
 });

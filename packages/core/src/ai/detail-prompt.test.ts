@@ -198,3 +198,14 @@ describe("buildDetailUserPrompt", () => {
     expect(text).not.toContain("x".repeat(2001));
   });
 });
+
+describe("buildDetailSystemPrompt : équipement réglé", () => {
+  it("le détail ne propose que les appareils disponibles", () => {
+    const reduced = HOUSEHOLD_EQUIPMENT.filter((spec) => spec.id !== "airfryer");
+    expect(buildDetailSystemPrompt(reduced).toLowerCase()).not.toContain("airfryer");
+    expect(buildDetailSystemPrompt(HOUSEHOLD_EQUIPMENT).toLowerCase()).toContain("airfryer");
+    expect(buildDetailSystemPrompt(reduced)).toContain(
+      "`appliance` : none (à la main, ou attente), oven, induction, thermomix, kenwood, cookeo, steamer.",
+    );
+  });
+});

@@ -182,6 +182,7 @@ function nominalInput(phases: (index: number) => string): SheetInput {
     dinners: 5,
     index,
     seasonTable: SEASON_TABLE,
+    equipment: HOUSEHOLD_EQUIPMENT,
   }).keeping;
   return {
     sessionDay: "sun",
@@ -189,6 +190,7 @@ function nominalInput(phases: (index: number) => string): SheetInput {
     keeping,
     index,
     steps: { kind: "detail", detail, plan: check.plan, findings: check.findings },
+    equipment: HOUSEHOLD_EQUIPMENT,
   };
 }
 

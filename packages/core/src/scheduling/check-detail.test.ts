@@ -70,6 +70,7 @@ describe("checkDetail : le couple d'automne de la fiche d'exemple", () => {
       dinners: 5,
       index,
       seasonTable: SEASON_TABLE,
+      equipment: HOUSEHOLD_EQUIPMENT,
     });
     expect(menuCheck.findings).toEqual([]);
     const check = run(autumnDetail(), { menu: autumn });

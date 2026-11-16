@@ -4,6 +4,7 @@ import { createAnthropicModel } from "../ai/anthropic-client.ts";
 import { composeMenu, exitCodeOf } from "../ai/compose.ts";
 import { renderComposeResult } from "../ai/render.ts";
 import { MenuSchema } from "../domain/menu.ts";
+import { HOUSEHOLD_EQUIPMENT } from "../equipment/household.ts";
 import { buildIngredientIndex } from "../ingredients/index-lookup.ts";
 import { REFERENTIAL } from "../ingredients/referential.ts";
 import { unknownExclusionTerms } from "../rules/check-exclusions.ts";
@@ -68,6 +69,7 @@ async function main(): Promise<number> {
     model,
     refs: REFERENTIAL,
     seasonTable: SEASON_TABLE,
+    equipment: HOUSEHOLD_EQUIPMENT,
     onAttempt: (attempt) => {
       process.stderr.write(`Essai ${attempt.number} sur ${input.maxAttempts} : vérification…\n`);
     },

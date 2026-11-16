@@ -1,10 +1,11 @@
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createSettingsKeeper, defaultSettings } from "core";
-import type { SettingsIssue, SettingsKeeper } from "core";
+import type { Settings, SettingsIssue, SettingsKeeper } from "core";
 import { describe, expect, it } from "vitest";
 import { fakeSecretAdmin, fakeSettingsStore, lastWritten } from "../test/fakes.ts";
 import { renderWithMantine } from "../test/render.tsx";
+import { ExclusionsSection } from "./settings/ExclusionsSection.tsx";
 import { SettingsScreen } from "./SettingsScreen.tsx";
 
 function setup(
@@ -532,5 +533,58 @@ describe("autres corrections de l'écran", () => {
     expect(names[0]).toBe("Four disponible");
     expect(names[1]).toBe("Plaque induction disponible");
     expect(names).toHaveLength(7);
+  });
+});
+
+describe("reliquats du keeper (lot 6.1)", () => {
+  it("la capacité affichée suit une écriture venue d'ailleurs", async () => {
+    const { keeper } = setup();
+    await ready();
+    const oven = input("Cuissons en même temps : Four");
+    expect(oven.value).toBe("2");
+    act(() => {
+      keeper.apply((settings) => ({
+        ...settings,
+        equipment: settings.equipment.map((item) =>
+          item.id === "oven" ? { ...item, slots: 1 } : item,
+        ),
+      }));
+    });
+    await waitFor(() => {
+      expect(input("Cuissons en même temps : Four").value).toBe("1");
+    });
+    act(() => {
+      keeper.apply((settings) => ({
+        ...settings,
+        equipment: settings.equipment.map((item) =>
+          item.id === "oven" ? { ...item, slots: 2 } : item,
+        ),
+      }));
+    });
+    await waitFor(() => {
+      expect(input("Cuissons en même temps : Four").value).toBe("2");
+    });
+  });
+  it("retirer un aliment vise son terme, même si la liste a changé depuis l'affichage", async () => {
+    const withTerms = (terms: string[]): Settings => ({
+      ...defaultSettings(),
+      exclusions: terms.map((term) => ({ term, reason: "" })),
+    });
+    // L'écran affiche [céleri, fenouil, poireau] ; entre le rendu et le clic, « céleri » a été retiré ailleurs.
+    const displayed = withTerms(["céleri", "fenouil", "poireau"]);
+    const actual = withTerms(["fenouil", "poireau"]);
+    const produced: Settings[] = [];
+    renderWithMantine(
+      <ExclusionsSection
+        snapshot={{ status: "ready", settings: displayed, save: "idle" }}
+        apply={(change) => {
+          produced.push(change(actual));
+          return { ok: true };
+        }}
+      />,
+    );
+    await userEvent.setup().click(button("Retirer fenouil"));
+    expect(produced).toHaveLength(1);
+    expect(produced[0]?.exclusions.map((exclusion) => exclusion.term)).toEqual(["poireau"]);
   });
 });

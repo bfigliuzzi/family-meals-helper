@@ -1,4 +1,6 @@
+import { HOUSEHOLD_EQUIPMENT } from "../equipment/household.ts";
 import { describe, expect, it } from "vitest";
+import type { Equipment } from "../equipment/household.ts";
 import { buildIngredientIndex } from "../ingredients/index-lookup.ts";
 import { REFERENTIAL } from "../ingredients/referential.ts";
 import { autumnCyclicDetail, autumnDetail, autumnDetailLasting } from "../rules/fixtures/detail.ts";
@@ -42,7 +44,11 @@ const menuReply = (): ModelReply => reply(JSON.stringify(autumnMenu()));
 const detailReply = (total?: number): ModelReply =>
   reply(JSON.stringify(total === undefined ? autumnDetail() : autumnDetailLasting(total)));
 
-function run(compose: (ModelReply | Error)[], detail: (ModelReply | Error)[]) {
+function run(
+  compose: (ModelReply | Error)[],
+  detail: (ModelReply | Error)[],
+  equipment: Equipment = HOUSEHOLD_EQUIPMENT,
+) {
   const composeFake = fakeModel(compose);
   const detailFake = fakeModel(detail);
   const stages: string[] = [];
@@ -50,6 +56,7 @@ function run(compose: (ModelReply | Error)[], detail: (ModelReply | Error)[]) {
     models: { compose: composeFake.model, detail: detailFake.model },
     refs: REFERENTIAL,
     seasonTable: SEASON_TABLE,
+    equipment,
     onAttempt: (stage, number) => stages.push(`${stage}${number}`),
   });
   return { result, composeFake, detailFake, stages };
@@ -241,6 +248,7 @@ describe("batchMenu : pas de PDF", () => {
         models: { compose: composeFake.model, detail: detailFake.model },
         refs: REFERENTIAL,
         seasonTable: SEASON_TABLE,
+        equipment: HOUSEHOLD_EQUIPMENT,
       },
     );
     // Les exclusions sont données au prompt du détail.
@@ -309,6 +317,7 @@ describe("batchMenu : le même index", () => {
       models: { compose: composeFake.model, detail: detailFake.model },
       refs,
       seasonTable: SEASON_TABLE,
+      equipment: HOUSEHOLD_EQUIPMENT,
     });
     expect(result.detail?.best?.findings).toEqual([]);
     expect(result.detail?.stop).toBe("valid");
@@ -331,7 +340,54 @@ describe("batchMenu : le même index", () => {
         findings: result.detail!.best!.findings,
       },
       index: buildIngredientIndex(refs),
+      equipment: HOUSEHOLD_EQUIPMENT,
     });
     expect(allText(rebuilt.content)).toBe(text);
+  });
+});
+
+describe("batchMenu : équipement réglé", () => {
+  const without = (id: string): Equipment => HOUSEHOLD_EQUIPMENT.filter((spec) => spec.id !== id);
+  const ovenSlots = (slots: number): Equipment =>
+    HOUSEHOLD_EQUIPMENT.map((spec) => (spec.id === "oven" ? { ...spec, slots } : spec));
+
+  it("un appareil absent dans le seul détail donne le repli", async () => {
+    const detail = autumnDetail();
+    detail.steps = detail.steps.map((step) =>
+      step.id === "s10" ? { ...step, appliance: "airfryer" } : step,
+    );
+    const replies = [1, 2, 3].map(() => reply(JSON.stringify(detail)));
+    const result = await run([menuReply()], replies, without("airfryer")).result;
+    expect(result.compose.best?.check.findings.some((finding) => finding.level === "error")).toBe(
+      false,
+    );
+    expect(result.detail).not.toBeNull();
+    expect(result.fallback).toBe("detail-errors");
+    expect(result.fallbackReason).toContain("appareil absent");
+  });
+
+  it("la fiche reçoit l'équipement de deps", async () => {
+    const induction = HOUSEHOLD_EQUIPMENT.find((spec) => spec.id === "induction")!;
+    const reordered = [induction, ...HOUSEHOLD_EQUIPMENT.filter((spec) => spec !== induction)];
+    const result = await run([menuReply()], [detailReply()], reordered).result;
+    expect(result.fallback).toBeNull();
+    const sheet = JSON.stringify(result.sheet);
+    expect(sheet).toContain("plaque induction + four");
+    expect(sheet).not.toContain("four + plaque induction");
+  });
+
+  it("la capacité réglée sert au planning du détail", async () => {
+    const detail = autumnDetail();
+    detail.steps = detail.steps.map((step) =>
+      step.id === "s10" ? { ...step, appliance: "oven" } : step,
+    );
+    const minutesWith = async (equipment: Equipment): Promise<number> => {
+      const result = await run([menuReply()], [reply(JSON.stringify(detail))], equipment).result;
+      expect(result.fallback).toBeNull();
+      return result.detail!.best!.plan!.minutes;
+    };
+    const two = await minutesWith(ovenSlots(2));
+    const one = await minutesWith(ovenSlots(1));
+    expect(one).toBeGreaterThan(two);
   });
 });

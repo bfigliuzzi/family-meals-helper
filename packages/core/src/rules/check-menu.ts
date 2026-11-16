@@ -2,7 +2,6 @@ import { isBlankWhenPrinted } from "../ai/printable.ts";
 import type { Category } from "../domain/ingredient.ts";
 import type { Finding } from "../domain/finding.ts";
 import type { Menu } from "../domain/menu.ts";
-import { HOUSEHOLD_EQUIPMENT } from "../equipment/household.ts";
 import { checkSession } from "../scheduling/check-session.ts";
 import type { SessionPlan } from "../scheduling/plan-session.ts";
 import { checkSeason } from "../season/check-season.ts";
@@ -55,7 +54,7 @@ export function checkMenu(menu: Menu, ctx: CheckContext): MenuCheck {
     ...checkBalance(menu, ctx),
     ...checkQuantities(menu, ctx),
   );
-  const session = checkSession(menu, HOUSEHOLD_EQUIPMENT);
+  const session = checkSession(menu, ctx.equipment);
   // Pas de spread : un tableau de constats ne doit jamais devenir une liste d'arguments.
   for (const finding of session.findings) findings.push(finding);
   return {

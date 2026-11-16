@@ -222,6 +222,26 @@ export function applyEquipmentSettings(
   );
 }
 
+// Ce que la composition lit des réglages : l'équipement réglé et les termes à éviter, dans l'ordre du document.
+export function compositionSettings(settings: Settings): {
+  equipment: Equipment;
+  exclusions: string[];
+} {
+  return {
+    equipment: applyEquipmentSettings(HOUSEHOLD_EQUIPMENT, settings.equipment),
+    exclusions: settings.exclusions.map((exclusion) => exclusion.term),
+  };
+}
+
+// Retire les aliments dont le terme normalisé égale celui du terme donné. Un terme absent rend un document égal.
+export function removeExclusion(settings: Settings, term: string): Settings {
+  const key = normalizeName(term);
+  return {
+    ...settings,
+    exclusions: settings.exclusions.filter((exclusion) => normalizeName(exclusion.term) !== key),
+  };
+}
+
 export function checkApiKey(raw: string): { ok: true; key: string } | { ok: false; error: string } {
   const key = raw.trim();
   if (key === "") return { ok: false, error: "Collez la clé avant d'enregistrer." };

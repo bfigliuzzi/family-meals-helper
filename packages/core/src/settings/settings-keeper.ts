@@ -51,7 +51,10 @@ function messageOf(error: unknown): string {
 // Propriétaire unique du document de réglages, créé une fois pour toute l'app. Il garde en mémoire le document
 // voulu, écrit dans l'ordre (une écriture à la fois, chacune avec le document courant à son démarrage) et ne relit
 // jamais après un échec.
-export function createSettingsKeeper(store: SettingsStore): SettingsKeeper {
+export function createSettingsKeeper(
+  store: SettingsStore,
+  options: { onListenerError?: (error: unknown) => void } = {},
+): SettingsKeeper {
   let current: SettingsSnapshot = deepFreeze({ status: "idle" });
   const listeners = new Set<() => void>();
   let queue: Promise<void> = Promise.resolve();
@@ -61,13 +64,17 @@ export function createSettingsKeeper(store: SettingsStore): SettingsKeeper {
     current = deepFreeze(next);
     for (const listener of [...listeners]) {
       // Un abonné qui lève une erreur n'empêche ni les autres abonnés ni la suite : la file d'écriture et la
-      // lecture ne dépendent jamais d'un abonné. L'erreur est ignorée volontairement : `core` n'a pas de `console`,
-      // et la relancer hors de la pile (`queueMicrotask`) ferait échouer Vitest sur les tests qui la provoquent
-      // exprès.
+      // lecture ne dépendent jamais d'un abonné. L'erreur est donnée à `onListenerError` (l'app la journalise :
+      // `core` n'a pas de `console`) ; si ce rappel lève à son tour, c'est ignoré. On ne la relance pas hors de la
+      // pile (`queueMicrotask`) : elle ferait échouer Vitest sur les tests qui la provoquent exprès.
       try {
         listener();
-      } catch {
-        continue;
+      } catch (error) {
+        try {
+          options.onListenerError?.(error);
+        } catch {
+          continue;
+        }
       }
     }
   }

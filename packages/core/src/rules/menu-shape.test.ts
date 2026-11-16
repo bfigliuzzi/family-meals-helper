@@ -1,3 +1,4 @@
+import { HOUSEHOLD_EQUIPMENT } from "../equipment/household.ts";
 import { describe, expect, it } from "vitest";
 import type { Day, Menu, MenuIngredient } from "../domain/menu.ts";
 import { DAYS } from "../domain/menu.ts";
@@ -15,6 +16,7 @@ const ctx: CheckContext = {
   dinners: 5,
   index: buildIngredientIndex(REFERENTIAL),
   seasonTable: SEASON_TABLE,
+  equipment: HOUSEHOLD_EQUIPMENT,
 };
 
 const ingredient: MenuIngredient = {

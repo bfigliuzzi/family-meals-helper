@@ -1,3 +1,4 @@
+import { HOUSEHOLD_EQUIPMENT } from "../equipment/household.ts";
 import { describe, expect, it } from "vitest";
 import type { Menu, MenuIngredient } from "../domain/menu.ts";
 import { buildIngredientIndex } from "../ingredients/index-lookup.ts";
@@ -15,6 +16,7 @@ const ctx: CheckContext = {
   dinners: 1,
   index: buildIngredientIndex(REFERENTIAL),
   seasonTable: SEASON_TABLE,
+  equipment: HOUSEHOLD_EQUIPMENT,
 };
 
 function item(name: string, qty: number, over: Partial<MenuIngredient> = {}): MenuIngredient {

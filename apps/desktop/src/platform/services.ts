@@ -13,7 +13,11 @@ export interface Services {
 // aussi longtemps que l'app.
 export function createServices(): Services {
   return {
-    settings: createSettingsKeeper(createTauriSettingsStore(invoke)),
+    settings: createSettingsKeeper(createTauriSettingsStore(invoke), {
+      onListenerError: (error) => {
+        console.error("Abonné des réglages en erreur", error);
+      },
+    }),
     secretAdmin: createKeychainSecretAdmin(invoke),
   };
 }

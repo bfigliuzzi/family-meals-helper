@@ -1,9 +1,13 @@
 import type { Detail } from "../domain/detail.ts";
 import type { Finding } from "../domain/finding.ts";
 import { FORM_LABELS } from "../domain/ingredient.ts";
-import { APPLIANCES, DAY_LABELS, SESSION_DAY_LABELS, dishLetter } from "../domain/menu.ts";
+import { DAY_LABELS, SESSION_DAY_LABELS, dishLetter } from "../domain/menu.ts";
 import type { Menu, MenuIngredient, SessionDay } from "../domain/menu.ts";
-import { equipmentCapacityLines, phaseUseText } from "../equipment/household.ts";
+import {
+  availableApplianceIds,
+  equipmentCapacityLines,
+  phaseUseText,
+} from "../equipment/household.ts";
 import type { Equipment } from "../equipment/household.ts";
 import { isEveningDish } from "../scheduling/check-session.ts";
 import { durationText } from "../scheduling/plan-session.ts";
@@ -28,7 +32,7 @@ export function buildDetailSystemPrompt(equipment: Equipment): string {
     "- Aucune quantité d'un ingrédient du menu en toutes lettres : utilise ses repères. La matière grasse se cite par son repère si elle est au menu, sinon « un peu de matière grasse » qui n'est pas exclue. L'eau, le sel et le poivre restent libres (« 2 fois leur volume d'eau »).",
     "- `**…**` met en gras : seulement ce qu'il faut garder (« **Garder l'eau de cuisson** pour le plat c »), une température ou une durée. Pas d'autre balise, pas d'accolade hors des repères.",
     "- N'écris jamais de numéro ni d'`id` d'étape dans le texte : la fiche numérote elle-même. Pour renvoyer à une autre étape, nomme la préparation (« la sauce (c) »).",
-    `- \`minutes\` : entier de 1 à 600. \`appliance\` : none (à la main, ou attente), ${APPLIANCES.filter((appliance) => appliance !== "none").join(", ")}. \`attended\` : true si l'étape t'occupe tout du long, false si l'appareil tourne seul. \`after\` : les \`id\` des étapes à finir avant. Une étape qui reprend une préparation mise de côté (sauce, garniture, légumes cuits réservés) met aussi dans \`after\` l'\`id\` de l'étape qui l'a faite, même si l'ordre semble aller de soi : le code en déduit la consigne de conservation.`,
+    `- \`minutes\` : entier de 1 à 600. \`appliance\` : ${["none (à la main, ou attente)", ...availableApplianceIds(equipment)].join(", ")}. \`attended\` : true si l'étape t'occupe tout du long, false si l'appareil tourne seul. \`after\` : les \`id\` des étapes à finir avant. Une étape qui reprend une préparation mise de côté (sauce, garniture, légumes cuits réservés) met aussi dans \`after\` l'\`id\` de l'étape qui l'a faite, même si l'ordre semble aller de soi : le code en déduit la consigne de conservation.`,
     "- Une étape est une seule occupation d'un seul appareil. Un seul préchauffage du four. Ni vaisselle, ni conservation, ni refroidissement final, ni consigne de sécurité : le code les ajoute.",
     ...equipmentCapacityLines(equipment),
     "Le code calcule la durée de la session à partir des étapes. Vise 2 h à 2 h 30, 3 h au plus, sans changer les plats : fais tourner les cuissons en même temps.",

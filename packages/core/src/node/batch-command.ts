@@ -199,6 +199,7 @@ export async function runBatchCommand(argv: readonly string[], io: BatchIo): Pro
     },
     refs: REFERENTIAL,
     seasonTable: SEASON_TABLE,
+    equipment: HOUSEHOLD_EQUIPMENT,
     onAttempt: (stage, number) => {
       io.stderr(
         `${stage === "compose" ? "Composition" : "Détail"}, essai ${number} sur ${input.maxAttempts} : vérification…\n`,

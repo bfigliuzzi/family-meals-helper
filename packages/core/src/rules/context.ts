@@ -1,4 +1,5 @@
 import type { SessionDay } from "../domain/menu.ts";
+import type { Equipment } from "../equipment/household.ts";
 import type { IngredientIndex } from "../ingredients/index-lookup.ts";
 import type { Month, SeasonRow } from "../season/months.ts";
 
@@ -10,4 +11,5 @@ export interface CheckContext {
   dinners: number;
   index: IngredientIndex;
   seasonTable: Readonly<Record<string, SeasonRow>>;
+  equipment: Equipment;
 }

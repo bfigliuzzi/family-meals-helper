@@ -1,5 +1,6 @@
 import { buildSystemPrompt, buildUserPrompt } from "../ai/prompt.ts";
 import type { ComposeInput } from "../ai/compose.ts";
+import { HOUSEHOLD_EQUIPMENT } from "../equipment/household.ts";
 import { REFERENTIAL } from "../ingredients/referential.ts";
 import { expectedDinners } from "../rules/menu-shape.ts";
 import { inSeasonNames } from "../season/check-season.ts";
@@ -7,7 +8,7 @@ import { SEASON_TABLE } from "../season/season-table.ts";
 
 // Ce que `compose --dry-run` et `batch --dry-run` affichent des prompts de composition : sans réseau ni clé.
 export function composeDryRunLines(input: ComposeInput): string[] {
-  const system = buildSystemPrompt(REFERENTIAL);
+  const system = buildSystemPrompt(REFERENTIAL, HOUSEHOLD_EQUIPMENT);
   const user = buildUserPrompt({
     request: input.request,
     exclusions: input.exclusions,

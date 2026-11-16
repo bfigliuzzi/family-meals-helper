@@ -1,5 +1,5 @@
 import { Checkbox, NumberInput, Paper, Table, Text, Title } from "@mantine/core";
-import { APPLIANCE_LABELS, HOUSEHOLD_EQUIPMENT } from "core";
+import { APPLIANCE_LABELS, HOUSEHOLD_EQUIPMENT, MAX_SLOTS } from "core";
 import type { ApplianceSetting, ApplianceSpec, SettingsKeeper, SettingsSnapshot } from "core";
 import { useState } from "react";
 import { messageAt, refusalMessage } from "./refusal.ts";
@@ -21,6 +21,13 @@ function ApplianceRow({
 }) {
   const name = displayName(setting.id);
   const [draft, setDraft] = useState<number | string>(setting.slots);
+  // Quand le document change la capacité (autre écriture, hors du champ), le champ reprend la valeur du document.
+  // Remise faite pendant le rendu, comme le conseille React pour un état qui dépend d'une valeur reçue.
+  const [shownSlots, setShownSlots] = useState(setting.slots);
+  if (shownSlots !== setting.slots) {
+    setShownSlots(setting.slots);
+    setDraft(setting.slots);
+  }
   const [error, setError] = useState<string | undefined>(undefined);
   const [availableError, setAvailableError] = useState<string | undefined>(undefined);
 
@@ -77,7 +84,7 @@ function ApplianceRow({
           aria-label={`Cuissons en même temps : ${name}`}
           w={90}
           min={1}
-          max={10}
+          max={MAX_SLOTS}
           allowDecimal={false}
           allowNegative={false}
           clampBehavior="strict"

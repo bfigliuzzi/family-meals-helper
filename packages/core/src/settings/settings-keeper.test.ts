@@ -403,3 +403,58 @@ describe("abonné qui lève une erreur", () => {
     expect(keeper.snapshot().status).toBe("ready");
   });
 });
+
+describe("onListenerError", () => {
+  async function keeperWith(options?: { onListenerError?: (error: unknown) => void }) {
+    const fake = fakeStore();
+    const keeper = createSettingsKeeper(fake.store, options);
+    keeper.load();
+    await settle();
+    return keeper;
+  }
+  it("un abonné qui lève est signalé à `onListenerError`, les autres abonnés sont appelés", async () => {
+    const received: unknown[] = [];
+    const keeper = await keeperWith({ onListenerError: (error) => received.push(error) });
+    const failure = new Error("abonné défaillant");
+    keeper.subscribe(() => {
+      throw failure;
+    });
+    let called = 0;
+    keeper.subscribe(() => {
+      called += 1;
+    });
+    expect(keeper.apply(addTerm("noix"))).toEqual({ ok: true });
+    // Un appel à chaque publication : le document change, puis l'état d'écriture passe à « saving ».
+    expect(received.length).toBeGreaterThan(0);
+    expect(received.every((error) => error === failure)).toBe(true);
+    expect(called).toBe(received.length);
+  });
+  it("sans `onListenerError`, un abonné qui lève n'arrête rien", async () => {
+    const keeper = await keeperWith();
+    keeper.subscribe(() => {
+      throw new Error("abonné défaillant");
+    });
+    let called = 0;
+    keeper.subscribe(() => {
+      called += 1;
+    });
+    expect(keeper.apply(addTerm("noix"))).toEqual({ ok: true });
+    expect(called).toBeGreaterThan(0);
+  });
+  it("un `onListenerError` qui lève n'arrête rien", async () => {
+    const keeper = await keeperWith({
+      onListenerError: () => {
+        throw new Error("rappel défaillant");
+      },
+    });
+    keeper.subscribe(() => {
+      throw new Error("abonné défaillant");
+    });
+    let called = 0;
+    keeper.subscribe(() => {
+      called += 1;
+    });
+    expect(keeper.apply(addTerm("noix"))).toEqual({ ok: true });
+    expect(called).toBeGreaterThan(0);
+  });
+});

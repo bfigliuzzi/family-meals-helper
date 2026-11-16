@@ -1,5 +1,6 @@
 import type { Finding, RuleId } from "../domain/finding.ts";
 import type { IngredientRef } from "../domain/ingredient.ts";
+import type { Equipment } from "../equipment/household.ts";
 import type { Menu, SessionDay } from "../domain/menu.ts";
 import { buildIngredientIndex } from "../ingredients/index-lookup.ts";
 import { checkMenu } from "../rules/check-menu.ts";
@@ -97,6 +98,7 @@ export async function composeMenu(
     model: Model;
     refs: readonly IngredientRef[];
     seasonTable: Readonly<Record<string, SeasonRow>>;
+    equipment: Equipment;
     onAttempt?: (attempt: Attempt) => void;
   },
 ): Promise<ComposeResult> {
@@ -108,8 +110,9 @@ export async function composeMenu(
     dinners: expectedDinners(input.request),
     index: buildIngredientIndex(deps.refs),
     seasonTable: deps.seasonTable,
+    equipment: deps.equipment,
   };
-  const system = buildSystemPrompt(deps.refs);
+  const system = buildSystemPrompt(deps.refs, deps.equipment);
   const inSeason = inSeasonNames(input.month, deps.refs, deps.seasonTable);
   const attempts: Attempt[] = [];
   let stop: StopCause = "max-attempts";

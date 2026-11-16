@@ -1,3 +1,4 @@
+import { HOUSEHOLD_EQUIPMENT } from "../equipment/household.ts";
 import { describe, expect, it } from "vitest";
 import type { Menu } from "../domain/menu.ts";
 import { buildIngredientIndex } from "../ingredients/index-lookup.ts";
@@ -319,6 +320,7 @@ describe("renderComposeResult : texte complet", () => {
     dinners: 5,
     index: buildIngredientIndex(REFERENTIAL),
     seasonTable: SEASON_TABLE,
+    equipment: HOUSEHOLD_EQUIPMENT,
   };
   const wanted: ComposeInput = { ...input, request };
 
@@ -460,6 +462,7 @@ describe("de la composition au rendu, sans réseau", () => {
       model,
       refs: REFERENTIAL,
       seasonTable: SEASON_TABLE,
+      equipment: HOUSEHOLD_EQUIPMENT,
     });
     const text = renderComposeResult(composed, composeInput);
     const lines = text.split("\n");
@@ -499,6 +502,7 @@ describe("renderBatchResult", () => {
       models: { compose: replying(composed), detail: detailModel },
       refs: REFERENTIAL,
       seasonTable: SEASON_TABLE,
+      equipment: HOUSEHOLD_EQUIPMENT,
     });
   }
 
@@ -550,6 +554,7 @@ describe("renderBatchResult", () => {
       models: { compose: replying(balancedMenu()), detail: failing },
       refs: REFERENTIAL,
       seasonTable: SEASON_TABLE,
+      equipment: HOUSEHOLD_EQUIPMENT,
     });
     const text = renderBatchResult(result, batchInput);
     expect(text).toContain(
@@ -575,6 +580,7 @@ describe("renderBatchResult", () => {
         models: { compose: replying(bad), detail: replying(balancedDetail()) },
         refs: REFERENTIAL,
         seasonTable: SEASON_TABLE,
+        equipment: HOUSEHOLD_EQUIPMENT,
       },
     );
     const text = renderBatchResult(result, batchInput);
