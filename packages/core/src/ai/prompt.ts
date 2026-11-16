@@ -19,6 +19,8 @@ import {
 } from "../rules/conservation-table.ts";
 import { monthName } from "../season/months.ts";
 import type { Month } from "../season/months.ts";
+import type { PastMenu } from "./compose.ts";
+import { printable } from "./printable.ts";
 
 // Règles tirées de docs/research/cuisine-addict-regles.md (§1.3 à §1.7, §2) et de la conception (§3.1, §6.1).
 export const COMPOSITION_RULES_FR = [
@@ -43,7 +45,9 @@ export const COMPOSITION_RULES_FR = [
 export function buildSystemPrompt(refs: readonly IngredientRef[], equipment: Equipment): string {
   const names = refs.map((ref) => ref.name).sort();
   const instructions = [
-    'Réponds uniquement par un objet JSON {"dishes":[{"name","day","ingredients":[{"name","qty","unit","form","category","sameDay"}],"phases":[{"id","description","minutes","appliance","attended","after"}]}]}, sans texte autour.',
+    'Réponds uniquement par un objet JSON {"note","dishes":[{"name","day","requested","ingredients":[{"name","qty","unit","form","category","sameDay"}],"phases":[{"id","description","minutes","appliance","attended","after"}]}]}, sans texte autour.',
+    "`requested` : true seulement pour un plat que la demande ou le nouveau message nomme (« un bœuf bourguignon »), false sinon.",
+    "`note` : une ou deux phrases pour l'utilisateur, en français : ce que tu proposes ou ce que tu as changé. Si tu as dû changer un autre plat que celui visé, nomme-le et dis pourquoi.",
     "`day` : mon, tue, wed, thu, fri, un jour différent par plat.",
     "`unit` : g, ml, piece.",
     "`form` : fresh, canned, frozen, dry.",
@@ -85,6 +89,22 @@ export function findingLine(finding: Finding, menu: Menu | null): string {
   return `- [${finding.level}] [${finding.rule}] plat ${dishLetter(finding.dish)} « ${dish.name} » : ${finding.message}`;
 }
 
+const MAX_CONVERSATION_MESSAGES = 10;
+const MAX_MESSAGE_CHARS = 300;
+const MAX_HISTORY_MENUS = 5;
+
+// Résumé de la conversation donné à l'IA : les 10 derniers messages de l'utilisateur, chacun coupé à 300 caractères.
+export function conversationLines(messages: readonly string[]): string[] {
+  return messages.slice(-MAX_CONVERSATION_MESSAGES).map((message) => {
+    const chars = Array.from(printable(message));
+    const text =
+      chars.length > MAX_MESSAGE_CHARS
+        ? `${chars.slice(0, MAX_MESSAGE_CHARS).join("")}…`
+        : chars.join("");
+    return `- ${text}`;
+  });
+}
+
 export function buildUserPrompt(input: {
   request: string;
   exclusions: readonly string[];
@@ -93,15 +113,49 @@ export function buildUserPrompt(input: {
   dinners: number;
   inSeason: readonly string[];
   previous?: { menu: Menu | null; rawText: string; findings: readonly Finding[] };
+  pinned?: readonly string[];
+  history?: readonly PastMenu[];
+  revision?: { initialRequest: string; current: Menu; conversation: readonly string[] };
 }): string {
-  const lines = [
-    `Demande : ${input.request}`,
-    `Nombre de dîners : ${input.dinners}`,
+  const { revision } = input;
+  const lines =
+    revision === undefined
+      ? [`Demande : ${input.request}`]
+      : [
+          `Demande d'origine : ${revision.initialRequest}`,
+          `Menu courant : ${JSON.stringify(revision.current)}`,
+          ...(revision.conversation.length === 0
+            ? []
+            : [
+                "Conversation (messages précédents) :",
+                ...conversationLines(revision.conversation),
+              ]),
+          `Nouveau message : ${input.request}`,
+          "Modifie le menu courant selon le nouveau message : ne change que ce qu'il vise, sauf si une règle l'exige (dis-le dans `note`). Renvoie le menu complet.",
+        ];
+  lines.push(`Nombre de dîners : ${input.dinners}`);
+  if (revision !== undefined && revision.current.dishes.length !== input.dinners) {
+    lines.push(
+      `Le menu passe de ${revision.current.dishes.length} à ${input.dinners} dîners : ajoute ou retire des plats en gardant les épinglés.`,
+    );
+  }
+  lines.push(
     `Mois : ${monthName(input.month)}`,
     `Session de cuisine : ${SESSION_DAY_LABELS[input.sessionDay]}. Jours écoulés au dîner : ${DAYS.map((day) => `${DAY_LABELS[day]} ${daysAfterSession(input.sessionDay, day)}`).join(", ")}.`,
     `De saison ce mois-ci (fruits et légumes frais) : ${input.inSeason.join(", ")}`,
     `Ingrédients exclus : ${input.exclusions.length === 0 ? "aucun" : input.exclusions.join(", ")}`,
-  ];
+  );
+  if (input.pinned !== undefined && input.pinned.length > 0) {
+    lines.push(`Plats épinglés, à garder sous ce nom : ${input.pinned.map(printable).join(", ")}.`);
+  }
+  if (input.history !== undefined && input.history.length > 0) {
+    lines.push(
+      "Plats des semaines passées, à ne pas reprendre sauf si la demande les nomme :",
+      ...input.history
+        .slice(0, MAX_HISTORY_MENUS)
+        .map((menu) => `${printable(menu.date)} : ${menu.dishes.map(printable).join(", ")}`),
+    );
+  }
   const { previous } = input;
   if (previous !== undefined) {
     lines.push(

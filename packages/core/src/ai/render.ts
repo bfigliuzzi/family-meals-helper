@@ -16,7 +16,7 @@ import { monthName } from "../season/months.ts";
 import type { ComposeInput, ComposeResult, StopCause } from "./compose.ts";
 import type { BatchResult } from "./batch.ts";
 import type { ModelReply } from "./model.ts";
-import { printable } from "./printable.ts";
+import { isBlankWhenPrinted, printable } from "./printable.ts";
 
 const index = buildIngredientIndex(REFERENTIAL);
 
@@ -42,6 +42,7 @@ export const RULE_LABELS: Record<RuleId, string> = {
   "extra-appliance": "appareil d'appoint",
   "session-length": "durée de session",
   detail: "détail",
+  pinned: "plat épinglé",
 };
 
 const STOP_MESSAGES: Partial<Record<StopCause, string>> = {
@@ -49,6 +50,7 @@ const STOP_MESSAGES: Partial<Record<StopCause, string>> = {
   truncated: "Réponse coupée (plafond de jetons atteint).",
   "no-progress": "L'IA a renvoyé le même menu : arrêt.",
   "same-unreadable": "L'IA a renvoyé deux fois la même réponse illisible : arrêt.",
+  "pinned-removed": "L'IA a retiré un plat épinglé : aucun menu retenu.",
 };
 
 function describeIngredient(ingredient: MenuIngredient): string {
@@ -182,7 +184,10 @@ export function renderComposeResult(result: ComposeResult, input: ComposeInput):
           .join(", ")}`,
       );
     }
+    if (best.note !== null && !isBlankWhenPrinted(best.note))
+      lines.push(`Note de l'IA : ${best.note}`);
   }
+  if (result.pinned.length > 0) lines.push(`Plats épinglés : ${result.pinned.join(", ")}`);
   const stopMessage = STOP_MESSAGES[result.stop];
   if (stopMessage !== undefined) lines.push(stopMessage);
   if (result.technicalError !== null) lines.push(`Erreur technique : ${result.technicalError}`);

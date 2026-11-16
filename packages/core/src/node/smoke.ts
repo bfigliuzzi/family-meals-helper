@@ -1,9 +1,8 @@
 // Test de connexion : un seul appel réel, même forme de requête que `compose`.
 // Lancé par l'orchestrateur avec la clé, jamais par les tests.
 import { createAnthropicModel } from "../ai/anthropic-client.ts";
-import { parseMenuReply } from "../ai/menu-reply.ts";
+import { MenuReplySchema, parseMenuReply } from "../ai/menu-reply.ts";
 import { buildSystemPrompt } from "../ai/prompt.ts";
-import { MenuSchema } from "../domain/menu.ts";
 import { HOUSEHOLD_EQUIPMENT } from "../equipment/household.ts";
 import { REFERENTIAL } from "../ingredients/referential.ts";
 import { readAiConfig } from "./config.ts";
@@ -27,13 +26,13 @@ async function main(): Promise<number> {
     http: nodeHttpClient,
     logger: console,
     disabled: config.disabled,
-    schema: MenuSchema,
+    schema: MenuReplySchema,
     maxTokens: 300,
   });
   try {
     const reply = await model.complete({
       system: buildSystemPrompt(REFERENTIAL, HOUSEHOLD_EQUIPMENT),
-      user: 'Test de connexion : renvoie exactement {"dishes":[]}',
+      user: 'Test de connexion : renvoie exactement {"note":"","dishes":[]}',
     });
     const { usage } = reply;
     process.stdout.write(

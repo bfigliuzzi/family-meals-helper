@@ -2,10 +2,10 @@ import { HOUSEHOLD_EQUIPMENT } from "../equipment/household.ts";
 import { describe, expect, it } from "vitest";
 import type { Menu, MenuIngredient } from "../domain/menu.ts";
 import { REFERENTIAL } from "../ingredients/referential.ts";
-import { balancedMenu, phase } from "../rules/fixtures/menus.ts";
+import { asReply, balancedMenu, phase } from "../rules/fixtures/menus.ts";
 import { SEASON_TABLE } from "../season/season-table.ts";
-import { composeMenu, exitCodeOf } from "./compose.ts";
-import type { ComposeInput } from "./compose.ts";
+import { composeMenu, exitCodeOf, reviseMenu } from "./compose.ts";
+import type { Attempt, ComposeInput, ReviseInput } from "./compose.ts";
 import type { Model, ModelReply, TokenUsage } from "./model.ts";
 import { renderComposeResult } from "./render.ts";
 
@@ -37,14 +37,14 @@ function menuOf(extra: MenuIngredient[] = [], qty = 400): string {
   const menu = balancedMenu();
   menu.dishes[0]!.ingredients.push(...extra);
   menu.dishes[1]!.ingredients[1] = item("carotte", { qty });
-  return JSON.stringify(menu);
+  return asReply(menu);
 }
 
 // balancedMenu() modifié par `change`, sérialisé.
 function variant(change: (menu: Menu) => void): string {
   const menu = balancedMenu();
   change(menu);
-  return JSON.stringify(menu);
+  return asReply(menu);
 }
 
 const withoutPulses = (menu: Menu): void => {
@@ -59,6 +59,8 @@ const input: ComposeInput = {
   month: 11,
   sessionDay: "sun",
   maxAttempts: 3,
+  pinned: [],
+  history: [],
 };
 const deps = (model: Model) => ({
   model,
@@ -158,7 +160,7 @@ describe("composeMenu", () => {
   });
 
   it("refuse un menu vide", async () => {
-    const { model } = fakeModel([reply('{"dishes":[]}')]);
+    const { model } = fakeModel([reply('{"note":"","dishes":[]}')]);
     const result = await composeMenu({ ...input, maxAttempts: 1 }, deps(model));
     expect(result.best?.check.findings[0]?.rule).toBe("menu-shape");
     expect(exitCodeOf(result)).toBe(1);
@@ -411,5 +413,564 @@ describe("composeMenu : équipement", () => {
     expect(
       result.attempts[0]?.check.findings.filter((finding) => finding.rule === "equipment"),
     ).toHaveLength(1);
+  });
+});
+
+// Épinglage : un plat épinglé ne sort jamais dans le menu retenu.
+describe("épinglage et révision", () => {
+  const nameOf = (index: number): string => balancedMenu().dishes[index]!.name;
+  const B = nameOf(1);
+  const X = "Pizza maison";
+  // Deux erreurs de saison (tomate et poivron, hors saison en novembre).
+  const twoFaults = (menu: Menu): void => {
+    menu.dishes[0]!.ingredients.push(item("tomate"), item("poivron"));
+  };
+  const oneFault = (menu: Menu): void => {
+    menu.dishes[0]!.ingredients.push(item("tomate"));
+  };
+  // Le plat b change de nom : il compte comme retiré, et le menu garde ses 5 plats.
+  const rename = (menu: Menu, index: number, name: string): void => {
+    menu.dishes[index]!.name = name;
+  };
+  const replyOf = (
+    change: (menu: Menu) => void,
+    options: { requested?: readonly string[]; note?: string } = {},
+  ): ModelReply => {
+    const menu = balancedMenu();
+    change(menu);
+    return reply(asReply(menu, options));
+  };
+  const errorsOf = (attempt: Attempt | undefined) =>
+    (attempt?.check.findings ?? []).filter((finding) => finding.level === "error");
+  const pinnedFindings = (attempt: Attempt | undefined) =>
+    (attempt?.check.findings ?? []).filter((finding) => finding.rule === "pinned");
+
+  const revise: ReviseInput = {
+    initialRequest: "un bœuf bourguignon, 5 dîners",
+    message: "remplace le plat c",
+    current: balancedMenu(),
+    conversation: [],
+    exclusions: ["courgette"],
+    month: 11,
+    sessionDay: "sun",
+    maxAttempts: 3,
+    pinned: [],
+    history: [],
+  };
+
+  describe("reviseMenu", () => {
+    it("l'IA retire un plat épinglé au premier essai : arrêt, menu courant conservé, un seul appel", async () => {
+      const input: ReviseInput = { ...revise, pinned: [B], current: balancedMenu() };
+      const before = structuredClone(input);
+      const { model, prompts } = fakeModel([
+        replyOf((menu) => rename(menu, 1, X), { requested: [X] }),
+        replyOf(() => {}),
+      ]);
+      const result = await reviseMenu(input, deps(model));
+      expect(prompts).toHaveLength(1);
+      expect(result.calls).toBe(1);
+      expect(result.stop).toBe("pinned-removed");
+      expect(result.best).toBeNull();
+      expect(result.pinnedRemoved).toEqual([B]);
+      expect(result.pinned).toEqual([B]);
+      expect(input).toEqual(before);
+      expect(exitCodeOf(result)).toBe(2);
+    });
+
+    it("`best` filtre la perte d'épingle même quand elle a moins d'erreurs", async () => {
+      const input: ReviseInput = { ...revise, pinned: [B], maxAttempts: 2 };
+      const { model } = fakeModel([replyOf(twoFaults), replyOf((menu) => rename(menu, 1, X))]);
+      const result = await reviseMenu(input, deps(model));
+      expect(result.attempts).toHaveLength(2);
+      expect(errorsOf(result.attempts[0])).toHaveLength(2);
+      expect(errorsOf(result.attempts[1])).toHaveLength(1);
+      expect(pinnedFindings(result.attempts[1])).toHaveLength(1);
+      expect(result.best?.number).toBe(1);
+      expect(result.pinned).toEqual([B]);
+    });
+
+    it("un plat `requested` acquis à l'essai 1 est protégé à l'essai 2", async () => {
+      const { model, prompts } = fakeModel([
+        replyOf(
+          (menu) => {
+            twoFaults(menu);
+            rename(menu, 1, X);
+          },
+          { requested: [X] },
+        ),
+        replyOf(() => {}),
+      ]);
+      const result = await reviseMenu({ ...revise, maxAttempts: 2 }, deps(model));
+      expect(prompts[1]?.user).toContain(`Plats épinglés, à garder sous ce nom : ${X}.`);
+      expect(pinnedFindings(result.attempts[1])).toHaveLength(1);
+      expect(result.best?.number).toBe(1);
+      expect(result.pinned).toEqual([X]);
+    });
+
+    it("acquisition tardive : aucune épingle rendue hors du menu retenu", async () => {
+      const { model } = fakeModel([
+        replyOf(withoutPulses),
+        replyOf(
+          (menu) => {
+            withoutPulses(menu);
+            oneFault(menu);
+            rename(menu, 1, X);
+          },
+          { requested: [X] },
+        ),
+      ]);
+      const result = await reviseMenu({ ...revise, maxAttempts: 2 }, deps(model));
+      expect(result.attempts).toHaveLength(2);
+      expect(errorsOf(result.attempts[0])).toHaveLength(0);
+      expect(errorsOf(result.attempts[1])).toHaveLength(1);
+      expect(result.best?.number).toBe(1);
+      expect(result.pinned).toEqual([]);
+    });
+
+    it("un nouveau plat `requested` est protégé sur trois essais", async () => {
+      const { model, prompts } = fakeModel([
+        replyOf(
+          (menu) => {
+            oneFault(menu);
+            rename(menu, 1, X);
+          },
+          { requested: [X] },
+        ),
+        replyOf(() => {}),
+        replyOf((menu) => rename(menu, 1, X)),
+      ]);
+      const result = await reviseMenu(revise, deps(model));
+      expect(prompts).toHaveLength(3);
+      expect(prompts[1]?.user).toContain(`Plats épinglés, à garder sous ce nom : ${X}.`);
+      expect(prompts[2]?.user).toContain("[pinned]");
+      expect(result.stop).toBe("valid");
+      expect(result.best?.number).toBe(3);
+      expect(result.pinned).toEqual([X]);
+    });
+
+    it("un plat déjà au menu marqué `requested` n'est pas réépinglé", async () => {
+      const { model } = fakeModel([replyOf(() => {}, { requested: [B] })]);
+      const result = await reviseMenu({ ...revise, pinned: [] }, deps(model));
+      expect(result.stop).toBe("valid");
+      expect(result.attempts[0]?.requested).toEqual([B]);
+      expect(result.pinned).toEqual([]);
+    });
+
+    it("un `requested` acquis reste épinglé si l'essai retenu le garde sans la marque", async () => {
+      const { model } = fakeModel([
+        replyOf(
+          (menu) => {
+            oneFault(menu);
+            rename(menu, 1, X);
+          },
+          { requested: [X] },
+        ),
+        replyOf((menu) => rename(menu, 1, X)),
+      ]);
+      const result = await reviseMenu(revise, deps(model));
+      expect(result.best?.number).toBe(2);
+      expect(result.pinned).toEqual([X]);
+    });
+
+    it("perte d'une épingle d'entrée au 2e essai : corrigée au 3e, pas d'arrêt", async () => {
+      const { model, prompts } = fakeModel([
+        replyOf(oneFault),
+        replyOf((menu) => rename(menu, 1, X)),
+        replyOf(() => {}),
+      ]);
+      const result = await reviseMenu({ ...revise, pinned: [B] }, deps(model));
+      expect(prompts).toHaveLength(3);
+      expect(prompts[2]?.user).toContain("[pinned]");
+      expect(result.stop).toBe("valid");
+      expect(result.best?.number).toBe(3);
+      expect(result.pinnedRemoved).toEqual([]);
+      expect(result.pinned).toEqual([B]);
+    });
+
+    it("tous les essais lisibles perdent l'épingle : pinned-removed, pas de menu, épingle d'entrée rendue", async () => {
+      // Le 1er essai illisible évite l'arrêt immédiat ; les deux suivants perdent b.
+      const { model } = fakeModel([
+        reply("Voici votre menu !"),
+        replyOf((menu) => rename(menu, 1, X)),
+        replyOf((menu) => rename(menu, 1, "Gratin de pâtes")),
+      ]);
+      const result = await reviseMenu({ ...revise, pinned: [B] }, deps(model));
+      expect(result.calls).toBe(3);
+      expect(result.stop).toBe("pinned-removed");
+      expect(result.best).toBeNull();
+      expect(result.pinnedRemoved).toEqual([B]);
+      expect(result.pinned).toEqual([B]);
+    });
+
+    it("sans `dinners`, le nombre de dîners reste celui du menu courant", async () => {
+      const fourDishes = (menu: Menu): void => {
+        menu.dishes.pop();
+      };
+      const current = balancedMenu();
+      fourDishes(current);
+      const shapeOf = (attempt: Attempt | undefined) =>
+        attempt?.check.findings.filter((finding) => finding.rule === "menu-shape") ?? [];
+      for (const message of [
+        "remplace le plat c",
+        "mets du poisson deux soirs",
+        "ajoute un repas végétarien",
+      ]) {
+        const four = fakeModel([replyOf(fourDishes)]);
+        const kept = await reviseMenu(
+          { ...revise, current, message, maxAttempts: 1 },
+          deps(four.model),
+        );
+        expect(shapeOf(kept.attempts[0])).toEqual([]);
+        expect(four.prompts[0]?.user).toContain("Nombre de dîners : 4");
+        const three = fakeModel([
+          replyOf((menu) => {
+            menu.dishes.length = 3;
+          }),
+        ]);
+        const fewer = await reviseMenu(
+          { ...revise, current, message, maxAttempts: 1 },
+          deps(three.model),
+        );
+        expect(shapeOf(fewer.attempts[0])).toHaveLength(1);
+      }
+    });
+
+    it("avec `dinners`, le prompt le dit et le contrôle l'attend ; hors de 1 à 5, rejet sans appel", async () => {
+      const current = balancedMenu();
+      current.dishes.pop();
+      const { model, prompts } = fakeModel([replyOf(() => {})]);
+      const result = await reviseMenu(
+        { ...revise, current, dinners: 5, maxAttempts: 1 },
+        deps(model),
+      );
+      expect(prompts[0]?.user).toContain("Nombre de dîners : 5");
+      expect(prompts[0]?.user).toContain("Le menu passe de 4 à 5 dîners");
+      expect(
+        result.attempts[0]?.check.findings.some((finding) => finding.rule === "menu-shape"),
+      ).toBe(false);
+      for (const dinners of [0, 2.5]) {
+        const fake = fakeModel([replyOf(() => {})]);
+        await expect(reviseMenu({ ...revise, current, dinners }, deps(fake.model))).rejects.toThrow(
+          "entier de 1 à 5",
+        );
+        expect(fake.prompts).toHaveLength(0);
+      }
+    });
+
+    it("la saison se souvient des demandes précédentes, au-delà des 10 messages du prompt", async () => {
+      const conversation = [
+        "ajoute de la tomate",
+        ...Array.from({ length: 11 }, (_, i) => `message ${i}`),
+      ];
+      const withTomato = (menu: Menu): void => {
+        menu.dishes[0]!.ingredients.push(item("tomate"));
+      };
+      const seasonOf = (attempt: Attempt | undefined) =>
+        attempt?.check.findings.filter((finding) => finding.rule === "season") ?? [];
+      const asked = fakeModel([replyOf(withTomato)]);
+      const remembered = await reviseMenu(
+        { ...revise, message: "déplace le plat a au mardi", conversation, maxAttempts: 1 },
+        deps(asked.model),
+      );
+      expect(seasonOf(remembered.attempts[0])).toEqual([]);
+      expect(asked.prompts[0]?.user).not.toContain("ajoute de la tomate");
+      // Contre-épreuve : sans ce message, la tomate est hors saison.
+      const forgotten = await reviseMenu(
+        {
+          ...revise,
+          message: "déplace le plat a au mardi",
+          conversation: conversation.slice(1),
+          maxAttempts: 1,
+        },
+        deps(fakeModel([replyOf(withTomato)]).model),
+      );
+      expect(seasonOf(forgotten.attempts[0])).toHaveLength(1);
+    });
+
+    it("un `requested` d'un essai qui perd l'épingle n'est pas acquis : le 3e essai, qui la rend, est retenu", async () => {
+      const { model, prompts } = fakeModel([
+        reply("Voici votre menu !"),
+        replyOf((menu) => rename(menu, 1, X), { requested: [X] }),
+        replyOf(() => {}),
+      ]);
+      const result = await reviseMenu({ ...revise, pinned: [B] }, deps(model));
+      expect(prompts[2]?.user).toContain(`Plats épinglés, à garder sous ce nom : ${B}.`);
+      expect(prompts[2]?.user).not.toContain(`${B}, ${X}`);
+      expect(result.best?.number).toBe(3);
+      expect(result.stop).toBe("valid");
+      expect(result.pinnedRemoved).toEqual([]);
+      expect(result.pinned).toEqual([B]);
+    });
+
+    it("rejette sans appel un menu courant de 6 plats quand `dinners` manque", async () => {
+      const six = balancedMenu();
+      six.dishes.push({ ...structuredClone(six.dishes[0]!), name: "Sixième", day: "fri" });
+      const fake = fakeModel([replyOf(() => {})]);
+      await expect(reviseMenu({ ...revise, current: six }, deps(fake.model))).rejects.toThrow(
+        "entier de 1 à 5",
+      );
+      expect(fake.prompts).toHaveLength(0);
+    });
+
+    it("rejette sans appel un menu courant vide quand `dinners` manque", async () => {
+      const fake = fakeModel([replyOf(() => {})]);
+      await expect(
+        reviseMenu({ ...revise, current: { dishes: [] } }, deps(fake.model)),
+      ).rejects.toThrow("entier de 1 à 5");
+      expect(fake.prompts).toHaveLength(0);
+    });
+
+    it("garde sa copie des épingles quand l'appelant vide son tableau pendant l'appel", async () => {
+      const pinned = [B];
+      const model: Model = {
+        complete() {
+          pinned.length = 0;
+          return Promise.resolve(reply("", "refusal"));
+        },
+      };
+      const result = await reviseMenu({ ...revise, pinned }, deps(model));
+      expect(result.stop).toBe("refusal");
+      expect(result.pinned).toEqual([B]);
+    });
+
+    it("envoie le menu courant, la demande d'origine et l'historique dans le prompt", async () => {
+      const { model, prompts } = fakeModel([replyOf(() => {})]);
+      await reviseMenu(
+        {
+          ...revise,
+          maxAttempts: 1,
+          pinned: [B],
+          history: [{ date: "2026-11-09", dishes: ["Lasagnes"] }],
+        },
+        deps(model),
+      );
+      const user = prompts[0]!.user;
+      expect(user).toContain("Demande d'origine : un bœuf bourguignon, 5 dîners");
+      expect(user).toContain(`Menu courant : ${JSON.stringify(revise.current)}`);
+      expect(user).toContain("Nouveau message : remplace le plat c");
+      expect(user).toContain(`Plats épinglés, à garder sous ce nom : ${B}.`);
+      expect(user).toContain("2026-11-09 : Lasagnes");
+    });
+  });
+
+  describe("composeMenu", () => {
+    const composeInput: ComposeInput = { ...input, pinned: [B], maxAttempts: 2 };
+
+    it("`best` filtre la perte d'épingle même quand elle a moins d'erreurs", async () => {
+      const { model } = fakeModel([replyOf(twoFaults), replyOf((menu) => rename(menu, 1, X))]);
+      const result = await composeMenu(composeInput, deps(model));
+      expect(errorsOf(result.attempts[0])).toHaveLength(2);
+      expect(errorsOf(result.attempts[1])).toHaveLength(1);
+      expect(result.best?.number).toBe(1);
+      expect(result.pinned).toEqual([B]);
+    });
+
+    it("un plat `requested` acquis à l'essai 1 est protégé à l'essai 2", async () => {
+      const { model, prompts } = fakeModel([
+        replyOf(
+          (menu) => {
+            twoFaults(menu);
+            rename(menu, 1, X);
+          },
+          { requested: [X] },
+        ),
+        replyOf(() => {}),
+      ]);
+      const result = await composeMenu({ ...composeInput, pinned: [] }, deps(model));
+      expect(prompts[0]?.user).not.toContain("Plats épinglés");
+      expect(prompts[1]?.user).toContain(`Plats épinglés, à garder sous ce nom : ${X}.`);
+      expect(result.best?.number).toBe(1);
+      expect(result.pinned).toEqual([X]);
+    });
+
+    it("acquisition tardive : aucune épingle rendue hors du menu retenu", async () => {
+      const { model } = fakeModel([
+        replyOf(withoutPulses),
+        replyOf(
+          (menu) => {
+            withoutPulses(menu);
+            oneFault(menu);
+            rename(menu, 1, X);
+          },
+          { requested: [X] },
+        ),
+      ]);
+      const result = await composeMenu({ ...composeInput, pinned: [] }, deps(model));
+      expect(result.best?.number).toBe(1);
+      expect(result.pinned).toEqual([]);
+    });
+
+    it("un `requested` acquis reste épinglé si l'essai retenu le garde sans la marque", async () => {
+      const { model } = fakeModel([
+        replyOf(
+          (menu) => {
+            oneFault(menu);
+            rename(menu, 1, X);
+          },
+          { requested: [X] },
+        ),
+        replyOf((menu) => rename(menu, 1, X)),
+      ]);
+      const result = await composeMenu({ ...composeInput, pinned: [] }, deps(model));
+      expect(result.best?.number).toBe(2);
+      expect(result.pinned).toEqual([X]);
+    });
+
+    it("tous les essais perdent l'épingle : pinned-removed, pas de menu, épingles d'entrée rendues", async () => {
+      const { model } = fakeModel([
+        replyOf((menu) => rename(menu, 1, X)),
+        replyOf((menu) => rename(menu, 1, "Gratin de pâtes")),
+      ]);
+      const result = await composeMenu(composeInput, deps(model));
+      expect(result.calls).toBe(2);
+      expect(result.stop).toBe("pinned-removed");
+      expect(result.best).toBeNull();
+      expect(result.pinnedRemoved).toEqual([B]);
+      expect(result.pinned).toEqual([B]);
+      expect(exitCodeOf(result)).toBe(2);
+    });
+
+    it("garde l'épingle à l'essai 1, la perd à l'essai 2, la retrouve à l'essai 3 sans erreur", async () => {
+      const { model } = fakeModel([
+        replyOf(oneFault),
+        replyOf((menu) => rename(menu, 1, X)),
+        replyOf(() => {}),
+      ]);
+      const result = await composeMenu({ ...composeInput, maxAttempts: 3 }, deps(model));
+      expect(result.best?.number).toBe(3);
+      expect(errorsOf(result.best ?? undefined)).toEqual([]);
+      expect(result.stop).toBe("valid");
+    });
+
+    it("« Bœuf bourguignon » épinglé : « boeuf bourguignons » le garde", async () => {
+      const { model } = fakeModel([replyOf((menu) => rename(menu, 1, "boeuf bourguignons"))]);
+      const result = await composeMenu(
+        { ...composeInput, pinned: ["Bœuf bourguignon"], maxAttempts: 1 },
+        deps(model),
+      );
+      expect(pinnedFindings(result.attempts[0])).toEqual([]);
+      expect(result.pinned).toEqual(["Bœuf bourguignon"]);
+    });
+
+    it("clés de plat : « 🥘 » épinglé et plat « 🍲 », ou plat renommé : constat pinned ; nom blanc : pas acquis", async () => {
+      const emoji = await composeMenu(
+        { ...composeInput, pinned: ["🥘"], maxAttempts: 1 },
+        deps(fakeModel([replyOf((menu) => rename(menu, 1, "🍲"))]).model),
+      );
+      expect(pinnedFindings(emoji.attempts[0])).toHaveLength(1);
+      const renamed = await composeMenu(
+        { ...composeInput, pinned: ["Bœuf bourguignon"], maxAttempts: 1 },
+        deps(fakeModel([replyOf((menu) => rename(menu, 1, "Bourguignon"))]).model),
+      );
+      expect(pinnedFindings(renamed.attempts[0])).toHaveLength(1);
+      const blank = await composeMenu(
+        { ...composeInput, pinned: [], maxAttempts: 1 },
+        deps(
+          fakeModel([replyOf((menu) => rename(menu, 1, "\u200b"), { requested: ["\u200b"] })])
+            .model,
+        ),
+      );
+      expect(blank.attempts[0]?.requested).toEqual(["\u200b"]);
+      expect(blank.pinned).toEqual([]);
+    });
+
+    it("un `requested` d'un essai qui perd l'épingle n'est pas acquis : le 3e essai, qui la rend, est retenu", async () => {
+      const { model, prompts } = fakeModel([
+        reply("Voici votre menu !"),
+        replyOf((menu) => rename(menu, 1, X), { requested: [X] }),
+        replyOf(() => {}),
+      ]);
+      const result = await composeMenu({ ...composeInput, maxAttempts: 3 }, deps(model));
+      expect(prompts[2]?.user).toContain(`Plats épinglés, à garder sous ce nom : ${B}.`);
+      expect(prompts[2]?.user).not.toContain(`${B}, ${X}`);
+      expect(result.best?.number).toBe(3);
+      expect(result.stop).toBe("valid");
+      expect(result.pinned).toEqual([B]);
+    });
+
+    it("`pinnedRemoved` réunit les épingles perdues à des essais différents : B à l'essai 2, C à l'essai 3", async () => {
+      const C = nameOf(2);
+      const { model } = fakeModel([
+        reply("Voici votre menu !"),
+        replyOf((menu) => rename(menu, 1, X)),
+        replyOf((menu) => rename(menu, 2, "Gratin de pâtes")),
+      ]);
+      const result = await composeMenu(
+        { ...composeInput, pinned: [B, C], maxAttempts: 3 },
+        deps(model),
+      );
+      expect(result.best).toBeNull();
+      expect(result.stop).toBe("pinned-removed");
+      expect(result.pinnedRemoved).toEqual([B, C]);
+      expect(result.pinned).toEqual([B, C]);
+    });
+
+    it("ne rend pas une épingle ajoutée par l'appelant à son tableau pendant l'appel", async () => {
+      const pinned = [B];
+      const model: Model = {
+        complete() {
+          pinned.push("Absent du menu");
+          return Promise.resolve(replyOf(() => {}));
+        },
+      };
+      const result = await composeMenu({ ...composeInput, pinned, maxAttempts: 1 }, deps(model));
+      expect(result.stop).toBe("valid");
+      expect(result.pinned).toEqual([B]);
+    });
+
+    it("garde sa copie des épingles quand l'appelant vide son tableau pendant l'appel, puis refus", async () => {
+      const pinned = [B];
+      const model: Model = {
+        complete() {
+          pinned.length = 0;
+          return Promise.resolve(reply("", "refusal"));
+        },
+      };
+      const result = await composeMenu({ ...composeInput, pinned }, deps(model));
+      expect(result.best).toBeNull();
+      expect(result.pinned).toEqual([B]);
+    });
+
+    it("un essai qui perd l'épingle puis un refus : `stop` reste « refusal », `pinnedRemoved` dit la perte", async () => {
+      const { model } = fakeModel([replyOf((menu) => rename(menu, 1, X)), reply("", "refusal")]);
+      const result = await composeMenu(composeInput, deps(model));
+      expect(result.best).toBeNull();
+      expect(result.stop).toBe("refusal");
+      expect(result.pinnedRemoved).toEqual([B]);
+      expect(result.pinned).toEqual([B]);
+    });
+
+    it("un essai qui perd l'épingle puis une erreur technique : `stop` reste « technical-error »", async () => {
+      const { model } = fakeModel([
+        replyOf((menu) => rename(menu, 1, X)),
+        new Error("réseau coupé"),
+      ]);
+      const result = await composeMenu(composeInput, deps(model));
+      expect(result.best).toBeNull();
+      expect(result.stop).toBe("technical-error");
+      expect(result.technicalError).toBe("réseau coupé");
+      expect(result.pinnedRemoved).toEqual([B]);
+    });
+
+    it("un nom blanc marqué `requested` à l'essai 1 n'est pas épinglé à l'essai 2", async () => {
+      const { model, prompts } = fakeModel([
+        replyOf((menu) => rename(menu, 1, "\u200b"), { requested: ["\u200b"] }),
+        replyOf(() => {}),
+      ]);
+      const result = await composeMenu({ ...composeInput, pinned: [] }, deps(model));
+      expect(prompts[1]?.user).not.toContain("Plats épinglés");
+      expect(pinnedFindings(result.attempts[1])).toEqual([]);
+      expect(result.best?.number).toBe(2);
+    });
+
+    it("rend la note de l'IA et ne modifie pas `input.pinned`", async () => {
+      const pinned = [B];
+      const { model } = fakeModel([
+        replyOf((menu) => rename(menu, 1, B), { note: "Voici le menu.", requested: [X] }),
+      ]);
+      const result = await composeMenu({ ...composeInput, pinned, maxAttempts: 1 }, deps(model));
+      expect(result.best?.note).toBe("Voici le menu.");
+      expect(pinned).toEqual([B]);
+    });
   });
 });

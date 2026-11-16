@@ -5,7 +5,7 @@ import { buildIngredientIndex } from "../ingredients/index-lookup.ts";
 import { REFERENTIAL } from "../ingredients/referential.ts";
 import { checkMenu } from "../rules/check-menu.ts";
 import type { CheckContext } from "../rules/context.ts";
-import { balancedMenu, phase } from "../rules/fixtures/menus.ts";
+import { asReply, asReplyValue, balancedMenu, phase } from "../rules/fixtures/menus.ts";
 import { SEASON_TABLE } from "../season/season-table.ts";
 import { composeMenu } from "./compose.ts";
 import type { Model } from "./model.ts";
@@ -21,6 +21,8 @@ const input: ComposeInput = {
   month: 11,
   sessionDay: "sun",
   maxAttempts: 3,
+  pinned: [],
+  history: [],
 };
 
 const menu: Menu = {
@@ -76,6 +78,8 @@ function attempt(over: Partial<Attempt> = {}): Attempt {
       toConfirm: [{ name: "romanesco", category: "vegetable" }],
       session: null,
     },
+    requested: [],
+    note: null,
     ...over,
   };
 }
@@ -89,6 +93,8 @@ function result(over: Partial<ComposeResult> = {}): ComposeResult {
     technicalError: null,
     calls: 1,
     failedCalls: 0,
+    pinned: [],
+    pinnedRemoved: [],
     ...over,
   };
 }
@@ -286,6 +292,8 @@ describe("renderComposeResult", () => {
         technicalError: "Clé refusée",
         calls: 1,
         failedCalls: 1,
+        pinned: [],
+        pinnedRemoved: [],
       },
       input,
     );
@@ -302,6 +310,8 @@ describe("renderComposeResult", () => {
         technicalError: null,
         calls: 1,
         failedCalls: 0,
+        pinned: [],
+        pinnedRemoved: [],
       },
       input,
     );
@@ -452,7 +462,7 @@ describe("de la composition au rendu, sans réseau", () => {
     const model: Model = {
       complete: () =>
         Promise.resolve({
-          text: JSON.stringify(menu),
+          text: asReply(menu),
           stopReason: "end_turn",
           usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 },
         }),
@@ -479,6 +489,39 @@ describe("de la composition au rendu, sans réseau", () => {
   });
 });
 
+describe("renderComposeResult : note et épingles", () => {
+  it("affiche la note de l'IA et les plats épinglés", () => {
+    const a = attempt({ note: "J'ai remplacé le plat c par un gratin." });
+    const text = renderComposeResult(
+      result({ best: a, attempts: [a], pinned: ["Bœuf bourguignon", "Soupe"] }),
+      input,
+    );
+    expect(text).toContain("Note de l'IA : J'ai remplacé le plat c par un gratin.");
+    expect(text).toContain("Plats épinglés : Bœuf bourguignon, Soupe");
+  });
+
+  it("n'ajoute aucune ligne sans note ni épingle", () => {
+    for (const note of [null, "", "  ", "\u200b"]) {
+      const text = renderComposeResult(result({ best: attempt({ note }) }), input);
+      expect(text).not.toContain("Note de l'IA");
+      expect(text).not.toContain("Plats épinglés");
+    }
+  });
+
+  it("passe la note par printable", () => {
+    const text = renderComposeResult(result({ best: attempt({ note: "a\nb" }) }), input);
+    expect(text).toContain("Note de l'IA : a b");
+  });
+
+  it("dit que le menu précédent est gardé quand l'IA a retiré un plat épinglé", () => {
+    const text = renderComposeResult(
+      result({ best: null, stop: "pinned-removed", pinned: ["Soupe"], pinnedRemoved: ["Soupe"] }),
+      input,
+    );
+    expect(text).toContain("L'IA a retiré un plat épinglé : aucun menu retenu.");
+  });
+});
+
 describe("renderBatchResult", () => {
   const batchInput: ComposeInput = {
     request: "un bœuf bourguignon, 5 dîners",
@@ -486,20 +529,22 @@ describe("renderBatchResult", () => {
     month: 11,
     sessionDay: "sun",
     maxAttempts: 3,
+    pinned: [],
+    history: [],
   };
   const usage = { input: 100, output: 50, cacheRead: 0, cacheWrite: 0 };
   const replying = (value: unknown): Model => ({
     complete: () => Promise.resolve({ text: JSON.stringify(value), stopReason: "end_turn", usage }),
   });
 
-  function batch(detail: unknown[], composed: unknown = balancedMenu()): Promise<BatchResult> {
+  function batch(detail: unknown[], composed: Menu = balancedMenu()): Promise<BatchResult> {
     let calls = 0;
     const detailModel: Model = {
       complete: () =>
         replying(detail[Math.min(calls++, detail.length - 1)]).complete({ system: "", user: "" }),
     };
     return batchMenu(batchInput, {
-      models: { compose: replying(composed), detail: detailModel },
+      models: { compose: replying(asReplyValue(composed)), detail: detailModel },
       refs: REFERENTIAL,
       seasonTable: SEASON_TABLE,
       equipment: HOUSEHOLD_EQUIPMENT,
@@ -551,7 +596,7 @@ describe("renderBatchResult", () => {
   it("dit la même raison de repli que le PDF : erreur technique au premier appel du détail", async () => {
     const failing: Model = { complete: () => Promise.reject(new Error("réseau coupé")) };
     const result = await batchMenu(batchInput, {
-      models: { compose: replying(balancedMenu()), detail: failing },
+      models: { compose: replying(asReplyValue(balancedMenu())), detail: failing },
       refs: REFERENTIAL,
       seasonTable: SEASON_TABLE,
       equipment: HOUSEHOLD_EQUIPMENT,
@@ -577,7 +622,7 @@ describe("renderBatchResult", () => {
     const result = await batchMenu(
       { ...batchInput, exclusions: ["courgette"], maxAttempts: 1 },
       {
-        models: { compose: replying(bad), detail: replying(balancedDetail()) },
+        models: { compose: replying(asReplyValue(bad)), detail: replying(balancedDetail()) },
         refs: REFERENTIAL,
         seasonTable: SEASON_TABLE,
         equipment: HOUSEHOLD_EQUIPMENT,

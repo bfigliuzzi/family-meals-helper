@@ -3,9 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Model, ModelReply } from "../ai/model.ts";
-import { MenuSchema } from "../domain/menu.ts";
+import { MenuReplySchema } from "../ai/menu-reply.ts";
 import { autumnCyclicDetail, autumnDetail } from "../rules/fixtures/detail.ts";
-import { autumnMenu } from "../rules/fixtures/menus.ts";
+import { asReply, autumnMenu } from "../rules/fixtures/menus.ts";
 import { checkOutputTarget, runBatchCommand } from "./batch-command.ts";
 import type { BatchIo } from "./batch-command.ts";
 import { resolveOutputTarget } from "./output-path.ts";
@@ -53,7 +53,7 @@ interface Harness {
 function harness(
   over: Partial<BatchIo> & { detail?: ModelReply[]; compose?: ModelReply[] } = {},
 ): Harness {
-  const compose = scripted(over.compose ?? [reply(JSON.stringify(autumnMenu()))]);
+  const compose = scripted(over.compose ?? [reply(asReply(autumnMenu()))]);
   const detail = scripted(over.detail ?? [reply(JSON.stringify(autumnDetail()))]);
   const out: string[] = [];
   const err: string[] = [];
@@ -66,7 +66,7 @@ function harness(
     now: () => new Date(Date.UTC(2026, 10, 13, 9, 30)),
     createModel: (schema) => {
       created++;
-      return schema === MenuSchema ? compose.model : detail.model;
+      return schema === MenuReplySchema ? compose.model : detail.model;
     },
     loadFonts: loadPdfFonts,
     // Dossier personnel factice : le défaut va dans `<dossier de test>/home/Downloads`.
@@ -146,7 +146,7 @@ describe("runBatchCommand : succès", () => {
       category: null,
       sameDay: false,
     });
-    const badReply = reply(JSON.stringify(bad));
+    const badReply = reply(asReply(bad));
     const h = harness({ compose: [badReply, badReply, badReply] });
     const code = await runBatchCommand(
       [request, "--out", join(folder, "menu.pdf"), "--exclude", "courgette"],

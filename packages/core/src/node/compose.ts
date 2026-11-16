@@ -2,8 +2,8 @@
 // Appel réel à l'IA sans --dry-run : la clé est dans ANTHROPIC_API_KEY.
 import { createAnthropicModel } from "../ai/anthropic-client.ts";
 import { composeMenu, exitCodeOf } from "../ai/compose.ts";
+import { MenuReplySchema } from "../ai/menu-reply.ts";
 import { renderComposeResult } from "../ai/render.ts";
-import { MenuSchema } from "../domain/menu.ts";
 import { HOUSEHOLD_EQUIPMENT } from "../equipment/household.ts";
 import { buildIngredientIndex } from "../ingredients/index-lookup.ts";
 import { REFERENTIAL } from "../ingredients/referential.ts";
@@ -28,6 +28,8 @@ async function main(): Promise<number> {
     month,
     sessionDay: args.sessionDay,
     maxAttempts: args.maxAttempts,
+    pinned: [],
+    history: [],
   };
 
   for (const term of unknownExclusionTerms(input.exclusions, buildIngredientIndex(REFERENTIAL))) {
@@ -63,7 +65,7 @@ async function main(): Promise<number> {
     http: nodeHttpClient,
     logger: console,
     disabled: config.disabled,
-    schema: MenuSchema,
+    schema: MenuReplySchema,
   });
   const result = await composeMenu(input, {
     model,

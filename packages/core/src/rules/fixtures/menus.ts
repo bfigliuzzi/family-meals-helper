@@ -164,3 +164,22 @@ export function autumnMenu(): Menu {
     ],
   };
 }
+
+// Un menu tel que l'IA le renvoie : `note` et `requested` (vrai pour les plats dont le nom est dans `requested`).
+export function asReplyValue(
+  menu: Menu,
+  options: { note?: string; requested?: readonly string[] } = {},
+): { note: string; dishes: (Menu["dishes"][number] & { requested: boolean })[] } {
+  const { note = "", requested = [] } = options;
+  return {
+    note,
+    dishes: menu.dishes.map((dish) => ({ ...dish, requested: requested.includes(dish.name) })),
+  };
+}
+
+export function asReply(
+  menu: Menu,
+  options: { note?: string; requested?: readonly string[] } = {},
+): string {
+  return JSON.stringify(asReplyValue(menu, options));
+}

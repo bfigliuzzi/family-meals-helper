@@ -4,7 +4,7 @@ import type { Equipment } from "../equipment/household.ts";
 import { buildIngredientIndex } from "../ingredients/index-lookup.ts";
 import { REFERENTIAL } from "../ingredients/referential.ts";
 import { autumnCyclicDetail, autumnDetail, autumnDetailLasting } from "../rules/fixtures/detail.ts";
-import { autumnMenu } from "../rules/fixtures/menus.ts";
+import { asReply, autumnMenu } from "../rules/fixtures/menus.ts";
 import { SEASON_TABLE } from "../season/season-table.ts";
 import { buildSheetDocument } from "../pdf/sheet.ts";
 import { batchExitCode, batchMenu } from "./batch.ts";
@@ -38,9 +38,11 @@ const input: ComposeInput = {
   month: 11,
   sessionDay: "sun",
   maxAttempts: 3,
+  pinned: [],
+  history: [],
 };
 
-const menuReply = (): ModelReply => reply(JSON.stringify(autumnMenu()));
+const menuReply = (): ModelReply => reply(asReply(autumnMenu()));
 const detailReply = (total?: number): ModelReply =>
   reply(JSON.stringify(total === undefined ? autumnDetail() : autumnDetailLasting(total)));
 
@@ -198,7 +200,7 @@ describe("batchMenu : pas de PDF", () => {
       category: null,
       sameDay: false,
     });
-    const badReply = reply(JSON.stringify(bad));
+    const badReply = reply(asReply(bad));
     const { result: pending, detailFake } = run([badReply, badReply, badReply], [detailReply()]);
     const result = await pending;
     expect(detailFake.prompts).toHaveLength(0);
@@ -211,7 +213,7 @@ describe("batchMenu : pas de PDF", () => {
   it("s'arrête sans fiche, code 2, quand un nom de plat reste invisible une fois imprimé", async () => {
     const hidden = autumnMenu();
     hidden.dishes[1]!.name = "\u200b";
-    const hiddenReply = reply(JSON.stringify(hidden));
+    const hiddenReply = reply(asReply(hidden));
     const { result: pending, detailFake } = run(
       [hiddenReply, hiddenReply, hiddenReply],
       [detailReply()],

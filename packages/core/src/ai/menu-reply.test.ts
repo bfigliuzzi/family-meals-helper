@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { DetailSchema } from "../domain/detail.ts";
-import { parseJsonReply, parseMenuReply } from "./menu-reply.ts";
+import { MenuReplySchema, parseJsonReply, parseMenuReply } from "./menu-reply.ts";
 
 const json = JSON.stringify({
+  note: "",
   dishes: [
     {
       name: "Soupe",
       day: "mon",
+      requested: false,
       ingredients: [
         { name: "poireau", qty: 3, unit: "piece", form: "fresh", category: null, sameDay: false },
       ],
@@ -40,7 +42,7 @@ describe("parseMenuReply", () => {
   });
   it("refuse un JSON hors schéma avec le message de z.prettifyError", () => {
     const result = parseMenuReply(
-      '{"dishes":[{"name":"X","day":"sat","ingredients":[],"phases":[]}]}',
+      '{"note":"","dishes":[{"name":"X","day":"sat","requested":false,"ingredients":[],"phases":[]}]}',
     );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toContain("day");
@@ -51,7 +53,9 @@ describe("parseMenuReply", () => {
     else expect.unreachable();
   });
   it("refuse un JSON sans phases en citant `phases`", () => {
-    const result = parseMenuReply('{"dishes":[{"name":"X","day":"mon","ingredients":[]}]}');
+    const result = parseMenuReply(
+      '{"note":"","dishes":[{"name":"X","day":"mon","requested":false,"ingredients":[]}]}',
+    );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toContain("phases");
   });
@@ -74,5 +78,74 @@ describe("parseJsonReply", () => {
       ok: false,
       error: "La réponse n'est pas du JSON lisible.",
     });
+  });
+});
+
+describe("parseMenuReply : requested et note", () => {
+  const twoDishes = (note: string): string => {
+    const reply = JSON.parse(json) as { note: string; dishes: Record<string, unknown>[] };
+    const [soup] = reply.dishes;
+    return JSON.stringify({
+      note,
+      dishes: [
+        { ...soup, requested: false },
+        { ...soup, name: "Bœuf bourguignon", day: "tue", requested: true },
+      ],
+    });
+  };
+
+  it("lit `requested` et `note`, et rend un `Menu` sans eux", () => {
+    const result = parseMenuReply(twoDishes("J'ai ajouté le bœuf."));
+    if (!result.ok) throw new Error(result.error);
+    expect(result.note).toBe("J'ai ajouté le bœuf.");
+    expect(result.requested).toEqual(["Bœuf bourguignon"]);
+    expect(result.menu.dishes).toHaveLength(2);
+    for (const dish of result.menu.dishes) {
+      expect(Object.keys(dish).sort()).toEqual(["day", "ingredients", "name", "phases"]);
+    }
+  });
+
+  it("une réponse sans `requested` ou sans `note` est illisible", () => {
+    const parsed = JSON.parse(json) as { note?: string; dishes: Record<string, unknown>[] };
+    const withoutNote = { dishes: parsed.dishes };
+    const withoutRequested = {
+      note: "",
+      dishes: parsed.dishes.map((dish) =>
+        Object.fromEntries(Object.entries(dish).filter(([key]) => key !== "requested")),
+      ),
+    };
+    for (const reply of [withoutNote, withoutRequested]) {
+      expect(MenuReplySchema.safeParse(reply).success).toBe(false);
+      expect(parseMenuReply(JSON.stringify(reply)).ok).toBe(false);
+    }
+  });
+});
+
+describe("parseMenuReply : messages en français", () => {
+  const parsed = JSON.parse(json) as { note?: unknown; dishes: Record<string, unknown>[] };
+  const errorOf = (reply: unknown): string => {
+    const result = parseMenuReply(JSON.stringify(reply));
+    if (result.ok) throw new Error("réponse acceptée");
+    return result.error;
+  };
+
+  it("dit en français que `note` manque ou n'est pas un texte", () => {
+    for (const note of [undefined, 3]) {
+      const error = errorOf({ ...parsed, note });
+      expect(error).toContain("`note` est absente ou n'est pas un texte");
+      expect(error).not.toMatch(/Invalid|expected|Required|received/);
+    }
+  });
+
+  it("dit en français que `requested` manque ou n'est pas un booléen", () => {
+    const withValue = (requested: unknown) => ({
+      ...parsed,
+      dishes: parsed.dishes.map((dish) => ({ ...dish, requested })),
+    });
+    for (const requested of [undefined, "oui"]) {
+      const error = errorOf(withValue(requested));
+      expect(error).toContain("`requested` est absent ou n'est pas un booléen");
+      expect(error).not.toMatch(/Invalid|expected|Required|received/);
+    }
   });
 });

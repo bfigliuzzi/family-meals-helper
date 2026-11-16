@@ -32,6 +32,7 @@ export * from "./rules/check-balance.ts";
 export * from "./rules/check-conservation.ts";
 export * from "./rules/check-exclusions.ts";
 export * from "./rules/check-menu.ts";
+export * from "./rules/check-pinned.ts";
 export * from "./rules/check-quantities.ts";
 export * from "./rules/conservation-table.ts";
 export type * from "./rules/context.ts";

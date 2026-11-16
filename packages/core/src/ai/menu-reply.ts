@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MenuSchema } from "../domain/menu.ts";
+import { DishSchema } from "../domain/menu.ts";
 import type { Menu } from "../domain/menu.ts";
 
 // Lit une réponse JSON de l'IA, avec ou sans bloc de code, et la valide avec le schéma donné.
@@ -26,9 +26,46 @@ export function parseJsonReply<T>(
   return { ok: true, value: parsed.data };
 }
 
+// Réponse de l'IA : le menu, plus ce qui n'existe que dans la conversation (`requested`, `note`). Le type `Menu`
+// n'a ni l'un ni l'autre : `parseMenuReply` les en sépare.
+export const DishReplySchema = DishSchema.extend({
+  requested: z.boolean({
+    error: "`requested` est absent ou n'est pas un booléen : mets true ou false pour chaque plat.",
+  }),
+});
+export const MenuReplySchema = z.object({
+  note: z.string({
+    error:
+      "`note` est absente ou n'est pas un texte : écris une ou deux phrases pour l'utilisateur.",
+  }),
+  dishes: z.array(DishReplySchema),
+});
+
+export interface MenuReply {
+  menu: Menu;
+  // Noms des plats que la demande ou le message nomme, dans l'ordre du menu.
+  requested: string[];
+  note: string;
+}
+
 export function parseMenuReply(
   text: string,
-): { ok: true; menu: Menu } | { ok: false; error: string } {
-  const parsed = parseJsonReply(text, MenuSchema);
-  return parsed.ok ? { ok: true, menu: parsed.value } : parsed;
+): ({ ok: true } & MenuReply) | { ok: false; error: string } {
+  const parsed = parseJsonReply(text, MenuReplySchema);
+  if (!parsed.ok) return parsed;
+  const { note, dishes } = parsed.value;
+  return {
+    ok: true,
+    // Champs recopiés un à un : un champ ajouté à `Dish` fait échouer le typage ici, pas en silence.
+    menu: {
+      dishes: dishes.map((dish) => ({
+        name: dish.name,
+        day: dish.day,
+        ingredients: dish.ingredients,
+        phases: dish.phases,
+      })),
+    },
+    requested: dishes.filter((dish) => dish.requested).map((dish) => dish.name),
+    note,
+  };
 }

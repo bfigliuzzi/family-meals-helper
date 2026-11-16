@@ -5,7 +5,8 @@ import { HOUSEHOLD_EQUIPMENT, equipmentPromptLines } from "../equipment/househol
 import { REFERENTIAL } from "../ingredients/referential.ts";
 import { KEEPING_BY_NAME } from "../rules/conservation-table.ts";
 import { MONTH_NAMES_FR } from "../season/months.ts";
-import { buildSystemPrompt, buildUserPrompt } from "./prompt.ts";
+import { balancedMenu } from "../rules/fixtures/menus.ts";
+import { buildSystemPrompt, buildUserPrompt, conversationLines } from "./prompt.ts";
 
 const base = {
   request: "un bœuf bourguignon, 5 dîners",
@@ -238,5 +239,106 @@ describe("buildSystemPrompt : équipement réglé", () => {
       spec.id === "oven" ? { ...spec, slots: 3 } : spec,
     );
     expect(buildSystemPrompt(REFERENTIAL, equipment)).toContain("four 3 (");
+  });
+});
+
+describe("buildSystemPrompt : requested et note", () => {
+  const system = buildSystemPrompt(REFERENTIAL, HOUSEHOLD_EQUIPMENT);
+  it("décrit `requested` et `note` dans le format de réponse", () => {
+    expect(system).toContain(
+      'Réponds uniquement par un objet JSON {"note","dishes":[{"name","day","requested","ingredients":',
+    );
+    expect(system).toContain(
+      "`requested` : true seulement pour un plat que la demande ou le nouveau message nomme (« un bœuf bourguignon »), false sinon.",
+    );
+    expect(system).toContain(
+      "`note` : une ou deux phrases pour l'utilisateur, en français : ce que tu proposes ou ce que tu as changé. Si tu as dû changer un autre plat que celui visé, nomme-le et dis pourquoi.",
+    );
+  });
+});
+
+describe("buildUserPrompt : épingles, historique, révision", () => {
+  const pastMenus = Array.from({ length: 6 }, (_, i) => ({
+    date: `2026-11-0${i + 1}`,
+    dishes: [`Plat ${i}a`, `Plat ${i}b`],
+  }));
+
+  it("sans épingles, historique ni révision, le prompt est celui d'avant", () => {
+    const expected = [
+      "Demande : un bœuf bourguignon, 5 dîners",
+      "Nombre de dîners : 5",
+      "Mois : novembre",
+      "Session de cuisine : dimanche. Jours écoulés au dîner : lundi 1, mardi 2, mercredi 3, jeudi 4, vendredi 5.",
+      "De saison ce mois-ci (fruits et légumes frais) : potimarron, poireau",
+      "Ingrédients exclus : courgette, poulet",
+    ].join("\n");
+    expect(buildUserPrompt(base)).toBe(expected);
+    expect(buildUserPrompt({ ...base, pinned: [], history: [] })).toBe(expected);
+  });
+
+  it("donne les plats épinglés et les derniers menus, au plus 5", () => {
+    const user = buildUserPrompt({
+      ...base,
+      pinned: ["Bœuf bourguignon", "Soupe"],
+      history: pastMenus,
+    });
+    expect(user).toContain("Plats épinglés, à garder sous ce nom : Bœuf bourguignon, Soupe.");
+    expect(user).toContain(
+      "Plats des semaines passées, à ne pas reprendre sauf si la demande les nomme :",
+    );
+    expect(user).toContain("2026-11-01 : Plat 0a, Plat 0b");
+    expect(user).toContain("2026-11-05 : Plat 4a, Plat 4b");
+    expect(user).not.toContain("2026-11-06");
+  });
+
+  it("en révision, donne la demande d'origine, le menu courant, la conversation et le nouveau message", () => {
+    const current = balancedMenu();
+    const user = buildUserPrompt({
+      ...base,
+      request: "remplace le plat c",
+      revision: {
+        initialRequest: "un bœuf bourguignon, 5 dîners",
+        current,
+        conversation: ["a", "b"],
+      },
+    });
+    expect(user).toContain("Demande d'origine : un bœuf bourguignon, 5 dîners");
+    expect(user).toContain(`Menu courant : ${JSON.stringify(current)}`);
+    expect(user).toContain("Conversation (messages précédents) :\n- a\n- b");
+    expect(user).toContain("Nouveau message : remplace le plat c");
+    expect(user).toContain("Modifie le menu courant selon le nouveau message");
+    expect(user).not.toContain("Demande : ");
+    expect(user).not.toContain("passe de");
+  });
+
+  it("en révision, dit de combien de plats le menu passe quand le nombre de dîners change", () => {
+    const current = balancedMenu();
+    current.dishes.pop();
+    const user = buildUserPrompt({
+      ...base,
+      dinners: 5,
+      revision: { initialRequest: "x", current, conversation: [] },
+    });
+    expect(user).toContain(
+      "Le menu passe de 4 à 5 dîners : ajoute ou retire des plats en gardant les épinglés.",
+    );
+    expect(user).not.toContain("Conversation (messages précédents)");
+  });
+});
+
+describe("conversationLines", () => {
+  it("garde les 10 derniers messages", () => {
+    const lines = conversationLines(Array.from({ length: 12 }, (_, i) => `message ${i}`));
+    expect(lines).toHaveLength(10);
+    expect(lines[0]).toBe("- message 2");
+    expect(lines[9]).toBe("- message 11");
+  });
+  it("coupe un message de 400 caractères à 300, avec « … »", () => {
+    const [line] = conversationLines(["x".repeat(400)]);
+    expect(line).toBe(`- ${"x".repeat(300)}…`);
+    expect(conversationLines(["x".repeat(300)])[0]).toBe(`- ${"x".repeat(300)}`);
+  });
+  it("retire les caractères de contrôle", () => {
+    expect(conversationLines(["a\u0007b\nc\u200bd"])).toEqual(["- a b cd"]);
   });
 });

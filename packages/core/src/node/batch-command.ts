@@ -3,10 +3,10 @@ import { dirname, resolve } from "node:path";
 import type { z } from "zod";
 import { batchExitCode, batchMenu } from "../ai/batch.ts";
 import { buildDetailSystemPrompt, buildDetailUserPrompt } from "../ai/detail-prompt.ts";
+import { MenuReplySchema } from "../ai/menu-reply.ts";
 import type { Feature, Model } from "../ai/model.ts";
 import { renderBatchResult } from "../ai/render.ts";
 import { DetailSchema } from "../domain/detail.ts";
-import { MenuSchema } from "../domain/menu.ts";
 import { HOUSEHOLD_EQUIPMENT } from "../equipment/household.ts";
 import { buildIngredientIndex } from "../ingredients/index-lookup.ts";
 import { REFERENTIAL } from "../ingredients/referential.ts";
@@ -124,6 +124,8 @@ export async function runBatchCommand(argv: readonly string[], io: BatchIo): Pro
     month,
     sessionDay: args.sessionDay,
     maxAttempts: args.maxAttempts,
+    pinned: [],
+    history: [],
   };
 
   for (const term of unknownExclusionTerms(input.exclusions, buildIngredientIndex(REFERENTIAL))) {
@@ -194,7 +196,7 @@ export async function runBatchCommand(argv: readonly string[], io: BatchIo): Pro
   };
   const result = await batchMenu(input, {
     models: {
-      compose: io.createModel(MenuSchema, modelConfig),
+      compose: io.createModel(MenuReplySchema, modelConfig),
       detail: io.createModel(DetailSchema, modelConfig),
     },
     refs: REFERENTIAL,

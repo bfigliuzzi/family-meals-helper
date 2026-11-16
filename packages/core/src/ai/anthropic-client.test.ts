@@ -6,6 +6,7 @@ import { APPLIANCES, MenuSchema } from "../domain/menu.ts";
 import type { HttpClient } from "../ports/http-client.ts";
 import { createAnthropicModel, describeApiError, redact } from "./anthropic-client.ts";
 import type { AnthropicOptions } from "./anthropic-client.ts";
+import { MenuReplySchema } from "./menu-reply.ts";
 import type { Feature } from "./model.ts";
 
 function fixture(name: string): string {
@@ -113,6 +114,29 @@ describe("createAnthropicModel", () => {
     await createAnthropicModel(options(off.http, { schema, disabled })).complete(prompt);
     const offConfig = (await bodyOf(off.requests[0]))["output_config"] as { format?: unknown };
     expect(offConfig.format).toBeUndefined();
+  });
+
+  it("le corps envoyé porte MenuReplySchema : `note` et, par plat, `requested`, tous requis et fermés", async () => {
+    const { http, requests } = fakeHttp(200, fixture("messages-ok.json"));
+    await createAnthropicModel(options(http, { schema: MenuReplySchema })).complete(prompt);
+    interface JsonSchema {
+      type?: string;
+      additionalProperties?: unknown;
+      required?: string[];
+      properties?: Record<string, JsonSchema>;
+      items?: JsonSchema;
+    }
+    const config = (await bodyOf(requests[0]))["output_config"] as {
+      format: { schema: JsonSchema };
+    };
+    const root = config.format.schema;
+    expect(root.additionalProperties).toBe(false);
+    expect(root.required).toEqual(expect.arrayContaining(["note", "dishes"]));
+    expect(root.properties?.["note"]?.type).toBe("string");
+    const dish = root.properties?.["dishes"]?.items;
+    expect(dish?.additionalProperties).toBe(false);
+    expect(dish?.required).toContain("requested");
+    expect(dish?.properties?.["requested"]?.type).toBe("boolean");
   });
 
   it("envoie un schéma du détail fermé, tous champs requis, appareil en enum", async () => {
