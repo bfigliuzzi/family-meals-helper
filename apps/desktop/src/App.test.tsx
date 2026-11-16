@@ -1,22 +1,39 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createSettingsKeeper } from "core";
+import { createSession, createSettingsKeeper } from "core";
 import { describe, expect, it } from "vitest";
 import { App } from "./App.tsx";
 import { createKeychainSecretAdmin } from "./platform/keychain-secret-admin.ts";
 import type { Invoke } from "./platform/tauri-error.ts";
-import { fakeSecretAdmin, fakeSettingsStore, lastWritten } from "./test/fakes.ts";
+import {
+  fakeMenuModel,
+  fakeSecretAdmin,
+  fakeSettingsStore,
+  fixedClock,
+  lastWritten,
+} from "./test/fakes.ts";
+import menuReply from "./test/fixtures/menu-reply.json";
 import { renderWithMantine } from "./test/render.tsx";
 
-function setup() {
+function setup(replies: string[] = []) {
   const settings = fakeSettingsStore();
   const secrets = fakeSecretAdmin();
   const keeper = createSettingsKeeper(settings.store);
-  renderWithMantine(<App services={{ settings: keeper, secretAdmin: secrets.admin }} />);
-  return { settings, secrets, user: userEvent.setup() };
+  const model = fakeMenuModel(replies);
+  const session = createSession({
+    settings: keeper,
+    clock: fixedClock,
+    createModel: model.createModel,
+  });
+  const services = { settings: keeper, secretAdmin: secrets.admin, session };
+  const { unmount } = renderWithMantine(<App services={services} />);
+  return { settings, secrets, model, session, services, unmount, user: userEvent.setup() };
 }
 
 const nav = (name: string) => screen.getByRole("button", { name });
+const sessionNav = () => screen.getByRole("button", { name: /^Nouvelle session/ });
+const MENU = JSON.stringify(menuReply);
+const FIRST_DISH = "a. Cabillaud, fondue de poireaux et riz complet";
 const heading = (name: string) => screen.getByRole("heading", { name });
 const addCeleri = async (user: ReturnType<typeof userEvent.setup>, term = "céleri") => {
   await user.type(screen.getByLabelText("Aliment"), term);
@@ -234,8 +251,15 @@ describe("aller-retour d'écran pendant une écriture", () => {
       }
       return Promise.resolve((stored.value !== null) as T);
     };
+    const session = createSession({
+      settings: keeper,
+      clock: fixedClock,
+      createModel: fakeMenuModel([]).createModel,
+    });
     renderWithMantine(
-      <App services={{ settings: keeper, secretAdmin: createKeychainSecretAdmin(invoke) }} />,
+      <App
+        services={{ settings: keeper, secretAdmin: createKeychainSecretAdmin(invoke), session }}
+      />,
     );
     const user = userEvent.setup();
     await user.click(nav("Réglages"));
@@ -253,5 +277,168 @@ describe("aller-retour d'écran pendant une écriture", () => {
     expect(await screen.findByText("Clé enregistrée")).toBeTruthy();
     expect(commands).toEqual(["secret_status", "secret_set", "secret_status"]);
     expect(document.body.textContent).not.toContain("sk-test-factice");
+  });
+});
+
+describe("session pendant un changement d'écran", () => {
+  async function startCompose(replies: string[]) {
+    const harness = setup(replies);
+    const { user, model } = harness;
+    await screen.findByRole("button", { name: "Composer le menu" });
+    model.state.hold = true;
+    await user.type(screen.getByRole("textbox", { name: "Demande" }), "un bœuf bourguignon");
+    await user.click(screen.getByRole("button", { name: "Composer le menu" }));
+    await waitFor(() => {
+      expect(model.calls).toHaveLength(1);
+    });
+    return harness;
+  }
+
+  it("quitter l'écran pendant l'appel puis revenir : le résultat s'affiche, sans second appel", async () => {
+    const { user, model } = await startCompose([MENU]);
+    await user.click(nav("Réglages"));
+    // L'appel continue : la navigation montre un chargement, avec un nom accessible.
+    expect(sessionNav().querySelector(".mantine-Loader-root")).not.toBeNull();
+    expect(screen.getByRole("button", { name: /Appel en cours/ })).toBeTruthy();
+    expect(sessionNav().textContent).not.toContain("Nouveau");
+    model.release(0);
+    await waitFor(() => {
+      expect(sessionNav().textContent).toContain("Nouveau");
+    });
+    expect(sessionNav().querySelector(".mantine-Loader-root")).toBeNull();
+
+    await user.click(sessionNav());
+    expect(await screen.findByText(FIRST_DISH)).toBeTruthy();
+    expect(sessionNav().textContent).not.toContain("Nouveau");
+    expect(model.created()).toBe(1);
+    expect(model.calls).toHaveLength(1);
+  });
+
+  it("revenir avant la réponse : « Vérification en cours », puis le menu, sans « Nouveau »", async () => {
+    const { user, model } = await startCompose([MENU]);
+    await user.click(nav("Réglages"));
+    await user.click(sessionNav());
+    expect(screen.getAllByRole("status")[0]?.textContent).toContain("Vérification en cours");
+    model.release(0);
+    expect(await screen.findByText(FIRST_DISH)).toBeTruthy();
+    expect(sessionNav().textContent).not.toContain("Nouveau");
+    expect(model.calls).toHaveLength(1);
+  });
+});
+
+describe("la session survit à l'écran, et même à l'app rendue de nouveau", () => {
+  it("démontage pendant l'appel : un nouvel <App> sur les mêmes services affiche le résultat, sans second appel", async () => {
+    const { user, model, services, unmount } = setup([MENU]);
+    await screen.findByRole("button", { name: "Composer le menu" });
+    model.state.hold = true;
+    await user.type(screen.getByRole("textbox", { name: "Demande" }), "un bœuf bourguignon");
+    await user.click(screen.getByRole("button", { name: "Composer le menu" }));
+    await waitFor(() => {
+      expect(model.calls).toHaveLength(1);
+    });
+    unmount();
+    expect(services.session.snapshot().pending).not.toBeNull();
+
+    renderWithMantine(<App services={services} />);
+    expect(await screen.findByText("Vérification en cours")).toBeTruthy();
+    model.release(0);
+    expect(await screen.findByText(FIRST_DISH)).toBeTruthy();
+    expect(model.created()).toBe(1);
+    expect(model.calls).toHaveLength(1);
+  });
+
+  it("aller-retour sans appel : brouillon, jour, nombre de dîners, épingle décochée, échange et menu sont gardés", async () => {
+    const { user, services, unmount } = setup([MENU]);
+    const request = await screen.findByRole("textbox", { name: "Demande" });
+    await user.type(request, "un bœuf bourguignon");
+    await user.click(screen.getByRole("button", { name: "Composer le menu" }));
+    await screen.findByText(FIRST_DISH);
+    await user.type(screen.getByRole("textbox", { name: "Modification" }), "brouillon en cours");
+    await user.click(screen.getByRole("radio", { name: "Samedi" }));
+    const dinners = screen.getByRole("textbox", { name: /Nombre de dîners/ });
+    await user.clear(dinners);
+    await user.type(dinners, "3");
+    await user.click(screen.getByRole("checkbox", { name: `Épinglé : ${FIRST_DISH}` }));
+    await user.click(nav("Réglages"));
+    unmount();
+
+    renderWithMantine(<App services={services} />);
+    await user.click(nav("Réglages"));
+    await user.click(sessionNav());
+    expect(screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Modification" }).value).toBe(
+      "brouillon en cours",
+    );
+    expect(screen.getByRole<HTMLInputElement>("radio", { name: "Samedi" }).checked).toBe(true);
+    expect(screen.getByRole<HTMLInputElement>("textbox", { name: /Nombre de dîners/ }).value).toBe(
+      "3",
+    );
+    expect(
+      screen.getByRole<HTMLInputElement>("checkbox", { name: `Épinglé : ${FIRST_DISH}` }).checked,
+    ).toBe(false);
+    expect(screen.getByText("un bœuf bourguignon")).toBeTruthy();
+    expect(screen.getByText(FIRST_DISH)).toBeTruthy();
+    const snapshot = services.session.snapshot();
+    expect(snapshot.draft).toBe("brouillon en cours");
+    expect(snapshot.sessionDay).toBe("sat");
+    expect(snapshot.dinners).toBe(3);
+    expect(snapshot.pinned).toEqual([]);
+    expect(snapshot.exchanges).toHaveLength(1);
+    expect(snapshot.current?.menu.dishes).toHaveLength(5);
+  });
+});
+
+describe("focus quand le menu est remplacé", () => {
+  it("retour sur l'écran avant la réponse, fenêtre « éviter » ouverte : le focus va au champ de l'écran monté", async () => {
+    const swapped = structuredClone(menuReply);
+    swapped.dishes[0]!.ingredients[0]!.name = "navet";
+    const { user, model } = setup([MENU, JSON.stringify(swapped)]);
+    await user.type(await screen.findByRole("textbox", { name: "Demande" }), "un menu");
+    await user.click(screen.getByRole("button", { name: "Composer le menu" }));
+    await screen.findByText(FIRST_DISH);
+
+    model.state.hold = true;
+    await user.type(screen.getByRole("textbox", { name: "Modification" }), "change");
+    await user.click(screen.getByRole("button", { name: "Envoyer la modification" }));
+    await waitFor(() => {
+      expect(model.calls).toHaveLength(2);
+    });
+    await user.click(nav("Réglages"));
+    await user.click(sessionNav());
+    await user.click(screen.getByRole("button", { name: /^poireau 600 g/ }));
+    await user.type(screen.getByRole("textbox", { name: "Raison (facultative)" }), "trop cher");
+
+    model.state.hold = false;
+    model.release(0);
+    await screen.findByRole("button", { name: /^navet 600 g/ });
+    expect(screen.queryByRole("textbox", { name: "Raison (facultative)" })).toBeNull();
+    await waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByRole("textbox", { name: "Modification" }));
+    });
+  });
+});
+
+describe("aliment ajouté par « éviter »", () => {
+  it("un nom avec U+202E et U+200B s'affiche nettoyé dans Réglages, et « Retirer » retire le terme brut", async () => {
+    const dirty = structuredClone(menuReply);
+    dirty.dishes[0]!.ingredients[0]!.name = "poireau\u202e\u200b";
+    const { user, settings } = setup([JSON.stringify(dirty)]);
+    await user.type(await screen.findByRole("textbox", { name: "Demande" }), "un menu");
+    await user.click(screen.getByRole("button", { name: "Composer le menu" }));
+    await user.click(await screen.findByRole("button", { name: /^poireau 600 g/ }));
+    await user.click(screen.getByRole("button", { name: "Éviter" }));
+    await waitFor(() => {
+      expect(lastWritten(settings.written).exclusions).toHaveLength(1);
+    });
+    expect(lastWritten(settings.written).exclusions[0]?.term).toBe("poireau\u202e\u200b");
+
+    await user.click(nav("Réglages"));
+    const row = (await screen.findByText("poireau")).closest("tr")!;
+    expect(row.textContent).not.toMatch(/[\u202e\u200b]/);
+    const remove = within(row).getByRole("button", { name: "Retirer poireau" });
+    expect(remove.getAttribute("aria-label")).not.toMatch(/[\u202e\u200b]/);
+    await user.click(remove);
+    await waitFor(() => {
+      expect(lastWritten(settings.written).exclusions).toEqual([]);
+    });
   });
 });

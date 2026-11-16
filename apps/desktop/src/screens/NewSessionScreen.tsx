@@ -1,0 +1,189 @@
+import {
+  Button,
+  Grid,
+  Group,
+  Input,
+  NumberInput,
+  SegmentedControl,
+  Stack,
+  Text,
+  Title,
+} from "@mantine/core";
+import { SESSION_DAYS, SESSION_DAY_LABELS, monthName } from "core";
+import type { Session, SettingsKeeper } from "core";
+import { useEffect, useId, useRef, useState } from "react";
+import { useSessionSnapshot } from "../useSessionSnapshot.ts";
+import { useSettingsSnapshot } from "../useSettingsSnapshot.ts";
+import { ExchangeList } from "./session/ExchangeList.tsx";
+import { MenuPanel } from "./session/MenuPanel.tsx";
+import { RequestPanel } from "./session/RequestPanel.tsx";
+import { TEXTS } from "./session/texts.ts";
+
+const BREAKPOINTS = { xs: "480px", sm: "700px", md: "900px", lg: "1100px", xl: "1300px" };
+
+const DAY_OPTIONS = SESSION_DAYS.map((day) => ({
+  value: day,
+  label: SESSION_DAY_LABELS[day].charAt(0).toUpperCase() + SESSION_DAY_LABELS[day].slice(1),
+}));
+
+// L'écran ne garde rien d'important : la conversation, le menu, les épingles et l'appel en cours sont dans le
+// propriétaire de la session, qui survit au changement d'écran.
+export function NewSessionScreen({
+  session,
+  settings,
+  onOpenSettings,
+}: {
+  session: Session;
+  settings: SettingsKeeper;
+  onOpenSettings: () => void;
+}) {
+  const snapshot = useSessionSnapshot(session);
+  const settingsSnapshot = useSettingsSnapshot(settings);
+  const [confirming, setConfirming] = useState(false);
+  const field = useRef<HTMLTextAreaElement>(null);
+  const dayLabelId = useId();
+  // Champ du nombre de dîners : un brouillon, comme la capacité d'un appareil dans Réglages.
+  const [dinners, setDinners] = useState<number | string>(snapshot.dinners);
+  const [shownDinners, setShownDinners] = useState(snapshot.dinners);
+  if (shownDinners !== snapshot.dinners) {
+    setShownDinners(snapshot.dinners);
+    setDinners(snapshot.dinners);
+  }
+
+  useEffect(() => {
+    settings.load();
+  }, [settings]);
+
+  // Un nouveau résultat remonte tout l'affichage du menu : une fenêtre « éviter » ouverte disparaît, et le focus
+  // qu'elle avait tombe sur la page. Il revient alors au champ de cet écran (monté), pas à celui de l'écran qui a
+  // lancé l'appel (peut-être déjà quitté).
+  const results = useRef(snapshot.exchanges.length);
+  useEffect(() => {
+    if (results.current === snapshot.exchanges.length) return;
+    results.current = snapshot.exchanges.length;
+    if (document.activeElement === document.body) field.current?.focus();
+  }, [snapshot.exchanges.length]);
+
+  const busy = snapshot.pending !== null;
+  const { current } = snapshot;
+  const canRestart =
+    !busy && (snapshot.exchanges.length > 0 || snapshot.draft !== "" || snapshot.failure !== null);
+
+  return (
+    <Stack gap="lg">
+      <Group justify="space-between" align="flex-start">
+        <Stack gap="xs" maw={560}>
+          <Title order={2}>{TEXTS.title}</Title>
+          <Text size="sm" c="dimmed">
+            {TEXTS.intro}
+          </Text>
+          <Text size="sm" c="dimmed">
+            {TEXTS.lost}
+          </Text>
+        </Stack>
+        <Button
+          variant="subtle"
+          color="gray"
+          disabled={!canRestart}
+          onClick={() => {
+            setConfirming(true);
+          }}
+        >
+          {TEXTS.restart}
+        </Button>
+      </Group>
+      {confirming && canRestart && (
+        <Stack gap="xs" align="flex-start">
+          <Text size="sm">{TEXTS.restartAsk}</Text>
+          <Group gap="xs">
+            <Button
+              color="red"
+              size="xs"
+              onClick={() => {
+                session.reset();
+                setConfirming(false);
+                field.current?.focus();
+              }}
+            >
+              {TEXTS.erase}
+            </Button>
+            <Button
+              variant="default"
+              size="xs"
+              onClick={() => {
+                setConfirming(false);
+              }}
+            >
+              {TEXTS.cancel}
+            </Button>
+          </Group>
+        </Stack>
+      )}
+      <Group wrap="wrap" align="flex-end" gap="lg">
+        <Stack gap={4}>
+          <Input.Wrapper label={TEXTS.dayLabel} labelProps={{ id: dayLabelId }}>
+            <SegmentedControl
+              aria-labelledby={dayLabelId}
+              data={DAY_OPTIONS}
+              value={snapshot.sessionDay}
+              disabled={busy}
+              onChange={(value) => {
+                const day = SESSION_DAYS.find((candidate) => candidate === value);
+                if (day !== undefined) session.setSessionDay(day);
+              }}
+            />
+          </Input.Wrapper>
+          {current !== null && current.sessionDay !== snapshot.sessionDay && (
+            <Text size="sm">{TEXTS.dayChanged}</Text>
+          )}
+        </Stack>
+        <Stack gap={4}>
+          <NumberInput
+            label={TEXTS.dinnersLabel}
+            description={TEXTS.dinnersHint}
+            min={1}
+            max={5}
+            allowDecimal={false}
+            clampBehavior="strict"
+            w={180}
+            disabled={busy}
+            value={dinners}
+            onChange={(value) => {
+              setDinners(value);
+              if (typeof value === "number") session.setDinners(value);
+            }}
+            onBlur={() => {
+              if (dinners === "") setDinners(snapshot.dinners);
+            }}
+          />
+          {current !== null && current.dinners !== snapshot.dinners && (
+            <Text size="sm">{TEXTS.dinnersChanged}</Text>
+          )}
+        </Stack>
+        <Text size="sm">Saison : {monthName(snapshot.month)}</Text>
+      </Group>
+      <Grid type="container" breakpoints={BREAKPOINTS}>
+        <Grid.Col span={{ base: 12, sm: 5 }}>
+          <Stack gap="md">
+            <RequestPanel
+              session={session}
+              snapshot={snapshot}
+              settings={settingsSnapshot}
+              field={field}
+              onOpenSettings={onOpenSettings}
+            />
+            <ExchangeList exchanges={snapshot.exchanges} />
+          </Stack>
+        </Grid.Col>
+        <Grid.Col span={{ base: 12, sm: 7 }}>
+          <MenuPanel
+            snapshot={snapshot}
+            session={session}
+            settings={settings}
+            onOpenSettings={onOpenSettings}
+          />
+        </Grid.Col>
+      </Grid>
+    </Stack>
+  );
+}

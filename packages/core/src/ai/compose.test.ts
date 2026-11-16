@@ -974,3 +974,71 @@ describe("épinglage et révision", () => {
     });
   });
 });
+
+describe("nombre de dîners fixé par l'appelant", () => {
+  const FIXED_LINE = "fixé par l'utilisateur";
+  const fourDinners: ComposeInput = { ...input, request: "compose-moi 4 dîners" };
+  const fourDishes = variant((menu) => {
+    menu.dishes.pop();
+  });
+
+  it("`dinners` l'emporte sur la demande : prompt à 5 avec la ligne « fixé », 4 plats refusés, 5 plats acceptés", async () => {
+    const four = fakeModel([reply(fourDishes)]);
+    const refused = await composeMenu(
+      { ...fourDinners, dinners: 5, maxAttempts: 1 },
+      deps(four.model),
+    );
+    expect(four.prompts[0]?.user).toContain("Nombre de dîners : 5");
+    expect(four.prompts[0]?.user).toContain(FIXED_LINE);
+    expect(refused.best?.check.findings.some((finding) => finding.rule === "menu-shape")).toBe(
+      true,
+    );
+
+    const five = fakeModel([reply(asReply(balancedMenu()))]);
+    const accepted = await composeMenu(
+      { ...fourDinners, dinners: 5, maxAttempts: 1 },
+      deps(five.model),
+    );
+    expect(accepted.best?.check.findings.some((finding) => finding.rule === "menu-shape")).toBe(
+      false,
+    );
+  });
+
+  it("sans `dinners`, rien ne change : le nombre vient de la demande, sans la ligne « fixé »", async () => {
+    const { model, prompts } = fakeModel([reply(asReply(balancedMenu()))]);
+    await composeMenu({ ...fourDinners, maxAttempts: 1 }, deps(model));
+    expect(prompts[0]?.user).toContain("Nombre de dîners : 4");
+    expect(prompts[0]?.user).not.toContain(FIXED_LINE);
+  });
+
+  it("refuse 0, 6 et 2,5 avant tout appel", async () => {
+    for (const dinners of [0, 6, 2.5]) {
+      const { model, prompts } = fakeModel([reply(asReply(balancedMenu()))]);
+      await expect(composeMenu({ ...input, dinners }, deps(model))).rejects.toThrow(
+        "Le nombre de dîners doit être un entier de 1 à 5.",
+      );
+      expect(prompts).toHaveLength(0);
+    }
+  });
+
+  it("une révision avec `dinners` porte la ligne « fixé », sans `dinners` elle ne la porte pas", async () => {
+    const revision: ReviseInput = {
+      initialRequest: "un bœuf bourguignon",
+      message: "remplace le plat c",
+      current: balancedMenu(),
+      conversation: [],
+      exclusions: [],
+      month: 11,
+      sessionDay: "sun",
+      maxAttempts: 1,
+      pinned: [],
+      history: [],
+    };
+    const fixed = fakeModel([reply(asReply(balancedMenu()))]);
+    await reviseMenu({ ...revision, dinners: 5 }, deps(fixed.model));
+    expect(fixed.prompts[0]?.user).toContain(FIXED_LINE);
+    const free = fakeModel([reply(asReply(balancedMenu()))]);
+    await reviseMenu(revision, deps(free.model));
+    expect(free.prompts[0]?.user).not.toContain(FIXED_LINE);
+  });
+});

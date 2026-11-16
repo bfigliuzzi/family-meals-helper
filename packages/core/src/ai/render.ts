@@ -53,7 +53,7 @@ const STOP_MESSAGES: Partial<Record<StopCause, string>> = {
   "pinned-removed": "L'IA a retiré un plat épinglé : aucun menu retenu.",
 };
 
-function describeIngredient(ingredient: MenuIngredient): string {
+export function describeIngredient(ingredient: MenuIngredient): string {
   const unit =
     ingredient.unit === "piece" ? (ingredient.qty > 1 ? "pièces" : "pièce") : ingredient.unit;
   const defaultForm = index.find(ingredient.name)?.defaultForm ?? "fresh";

@@ -19,6 +19,7 @@ Ce fichier dit comment écrire du code dans `packages/core` sans casser la front
 
 - Scripts et modules du lot 5 : le module `settings/` contient `settings.ts` (schéma, validation, `loadSettings`, `applyEquipmentSettings`, `checkApiKey`, qui n'accepte que des lettres sans accent, des chiffres, `-` et `_`, comme `check_secret` côté Rust) et `settings-keeper.ts` (`createSettingsKeeper`, le propriétaire du document de réglages, qui écrit dans l'ordre). Les ports sont `SettingsStore` (`read` et `write` transportent du **texte** : parsing, validation et sérialisation restent dans `core`), `SecretStore` (`get`, réservé à l'appel à l'API ; son implémentation Node ne change pas) et `SecretAdmin` (`has`, `set`, `delete` : il ne lit jamais la valeur de la clé). Les implémentations pour l'app sont dans `apps/desktop/src/platform/`, pas dans `core`.
 - **Faire évoluer le document de réglages** : la `version` s'incrémente à tout changement de forme, `loadSettings` porte une transformation explicite de chaque version précédente, et une version future est refusée sans écriture. `MAX_DOCUMENT_BYTES` est le même qu'en Rust (`settings_db.rs`), et `MAX_EXCLUSIONS` est choisi pour que le pire document valide tienne dedans (un test le vérifie).
+- **Session de composition (lot 6.4)** : le module `session/` contient `session.ts` (`createSession`, le propriétaire de la conversation, du menu courant, des épingles et de l'opération en cours, créé une fois pour toute l'app comme le keeper). Le verrou est pris avant tout `await` : `send` n'est pas `async`, sa partie synchrone contrôle « déjà en cours », prépare l'entrée et publie `pending`, puis rend la promesse de l'opération. Les entrées de l'appel (réglages lus, équipement, exclusions, modèle, menu, épingles) sont calculées une fois au clic puis gelées (`deepFreeze`), et les changements faits pendant l'appel sont ignorés. `send` ne rejette jamais : tout échec devient un `failure` du snapshot. Le résultat est publié en une seule fois, avec `pending` nul et `outcomes + 1`.
 - Messages de validation en français : chaque schéma Zod porte son `error`, et un test vérifie qu'aucun message ne contient « Invalid », « expected », « Required » ni « received ».
 
 ## 2. SDK Anthropic
@@ -39,6 +40,8 @@ Le client est construit dans `src/ai/anthropic-client.ts` avec des options toute
 **Dette nommée** : le constructeur du SDK lit toujours `ANTHROPIC_CUSTOM_HEADERS`, aucune option ne l'empêche. C'est un code venu d'une dépendance qui accède lui-même à l'extérieur (§6, point 1) : accepté.
 
 Autre dette du même ordre : pour un modèle déprécié, le SDK écrit directement dans `console.warn`, même avec un `logger` fourni.
+
+`core` exporte la session (`createSession`), le schéma de réponse (`MenuReplySchema`) et des aides d'affichage (`RULE_LABELS`, `describeIngredient`, `printable`), sans le SDK. `composeMenu` et `reviseMenu` sont appelés par la session et ne sont pas exportés : `session.ts` n'importe que `ai/compose.ts`, qui n'importe pas le SDK. `platform/services.ts` charge `platform/ai-model.ts` par `import()` au premier appel ; c'est ce module qui importe `core/ai`, dans un morceau JS à part.
 
 Le SDK est exposé par un point d'entrée à part, `core/ai` (`src/ai/index.ts`, hors de `src/index.ts` pour que l'écran Réglages n'importe pas le SDK). Il exporte aussi `TransportError`, l'erreur d'un transport qui échoue en local (trousseau, taille, réseau, délai) : son message, déjà en français et sans la clé, s'affiche tel quel, `describeApiError` le rendant quand elle est la `cause` d'une erreur de connexion du SDK. Le script `test` charge ce point d'entrée sous Node (`node src/ai/index.ts`).
 
@@ -68,6 +71,7 @@ Le `throw` qui suit ce `catch` porte `// eslint-disable-next-line preserve-caugh
 ## 2 ter. Texte venu de l'IA
 
 - Avant d'imprimer et avant de comparer des noms (`lightNormalize`, exclusions), les caractères `\p{Default_Ignorable_Code_Point}` sont supprimés (`domain/invisible.ts`). Les contrôles C0/C1 et U+2028/2029 deviennent une espace (`printable`, `src/ai/printable.ts`). Un texte vide une fois imprimé est refusé par le contrôle (`isBlankWhenPrinted`).
+- Dans l'app, tout texte venu de l'IA (noms de plats et d'ingrédients, note, messages des constats, erreur technique) s'affiche après `printable`, qui est exporté par `core`. Les données de la session ne sont pas modifiées : le nettoyage se fait à l'affichage. Un aliment ajouté par « éviter » garde son nom brut dans les réglages, et l'écran Réglages l'affiche lui aussi par `printable`.
 - Les repères `{a.1}` du détail sont lus par un seul analyseur (`parseStepText`, `src/pdf/step-text.ts`), partagé par le contrôle et le rendu.
 
 ## 3. Globales

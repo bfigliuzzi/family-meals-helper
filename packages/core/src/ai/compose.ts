@@ -30,6 +30,8 @@ export interface ComposeInput {
   maxAttempts: 1 | 2 | 3;
   pinned: readonly string[];
   history: readonly PastMenu[];
+  // Nombre de dîners voulu (entier de 1 à 5) ; absent : le nombre écrit dans la demande ; donné, il n'est jamais lu dans la demande.
+  dinners?: number;
 }
 
 // Même règle que `ComposeInput` : l'entrée n'est pas modifiée pendant l'appel, seules les épingles sont copiées.
@@ -195,6 +197,12 @@ function pinnedOf(
   return result;
 }
 
+function checkDinners(dinners: number): void {
+  if (!Number.isInteger(dinners) || dinners < 1 || dinners > 5) {
+    throw new Error("Le nombre de dîners doit être un entier de 1 à 5.");
+  }
+}
+
 // Ne rejette jamais : une erreur du modèle devient stop "technical-error", les essais déjà payés restent.
 async function runCycle(cycle: Cycle, deps: ComposeDeps): Promise<ComposeResult> {
   const { ctx, inputPinned, baseline } = cycle;
@@ -348,9 +356,11 @@ async function runCycle(cycle: Cycle, deps: ComposeDeps): Promise<ComposeResult>
   };
 }
 
-// Ne rejette jamais, comme `runCycle`.
+// Rejette (avant tout appel) un `dinners` hors des entiers de 1 à 5 : c'est une erreur de l'appelant, pas de l'IA.
+// Pour le reste, ne rejette jamais, comme `runCycle`.
 export async function composeMenu(input: ComposeInput, deps: ComposeDeps): Promise<ComposeResult> {
-  const dinners = expectedDinners(input.request);
+  const dinners = input.dinners ?? expectedDinners(input.request);
+  checkDinners(dinners);
   const inSeason = inSeasonNames(input.month, deps.refs, deps.seasonTable);
   return runCycle(
     {
@@ -372,6 +382,7 @@ export async function composeMenu(input: ComposeInput, deps: ComposeDeps): Promi
           month: input.month,
           sessionDay: input.sessionDay,
           dinners,
+          dinnersFixed: input.dinners !== undefined,
           inSeason,
           pinned,
           history: input.history,
@@ -393,9 +404,7 @@ export async function composeMenu(input: ComposeInput, deps: ComposeDeps): Promi
 // `pinnedRemoved` peut aussi être rempli avec "refusal", "truncated" ou "technical-error" (voir `ComposeResult`).
 export async function reviseMenu(input: ReviseInput, deps: ComposeDeps): Promise<ComposeResult> {
   const dinners = input.dinners ?? input.current.dishes.length;
-  if (!Number.isInteger(dinners) || dinners < 1 || dinners > 5) {
-    throw new Error("Le nombre de dîners doit être un entier de 1 à 5.");
-  }
+  checkDinners(dinners);
   const inSeason = inSeasonNames(input.month, deps.refs, deps.seasonTable);
   return runCycle(
     {
@@ -419,6 +428,7 @@ export async function reviseMenu(input: ReviseInput, deps: ComposeDeps): Promise
           month: input.month,
           sessionDay: input.sessionDay,
           dinners,
+          dinnersFixed: input.dinners !== undefined,
           inSeason,
           pinned,
           history: input.history,

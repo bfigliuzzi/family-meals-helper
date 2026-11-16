@@ -129,6 +129,17 @@ describe("buildSystemPrompt : conservation, équilibre et poisson", () => {
 });
 
 describe("buildUserPrompt", () => {
+  it("dit que le nombre de dîners est fixé seulement quand `dinnersFixed` est vrai", () => {
+    const fixed = "Ce nombre est fixé par l'utilisateur";
+    const lines = buildUserPrompt({ ...base, dinnersFixed: true }).split("\n");
+    const at = lines.indexOf("Nombre de dîners : 5");
+    expect(at).toBeGreaterThan(-1);
+    expect(lines[at + 1]).toContain(fixed);
+    expect(buildUserPrompt(base)).not.toContain("fixé par l'utilisateur");
+    expect(buildUserPrompt({ ...base, dinnersFixed: false })).not.toContain(
+      "fixé par l'utilisateur",
+    );
+  });
   it("donne la demande, le mois, les dîners, la saison et les exclusions", () => {
     const user = buildUserPrompt(base);
     expect(user).toContain("un bœuf bourguignon, 5 dîners");

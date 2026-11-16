@@ -1,4 +1,4 @@
-import type { SecretAdmin, SettingsStore } from "core";
+import type { Model, SecretAdmin, Settings, SettingsStore } from "core";
 
 export interface HeldWrite {
   document: string;
@@ -89,4 +89,56 @@ export function lastWritten(written: readonly string[]): {
   const document = written.at(-1);
   if (document === undefined) throw new Error("aucune écriture");
   return JSON.parse(document) as ReturnType<typeof lastWritten>;
+}
+
+// Le 16 novembre 2026 : le mois de la fixture de menu (saison de novembre).
+export const fixedClock = { now: () => new Date(2026, 10, 16) };
+
+type Reply = Awaited<ReturnType<Model["complete"]>>;
+
+// Faux modèle de composition. Chaque `complete` répond la réponse suivante de `replies`, la dernière se répétant.
+// `stopReasons` donne, appel par appel, la raison d'arrêt (« end_turn » par défaut).
+// Avec `hold = true`, chaque `complete` attend `release` ou `fail` (rang de l'appel, depuis 0).
+export function fakeMenuModel(replies: string[], stopReasons: (string | null)[] = []) {
+  const calls: { system: string; user: string }[] = [];
+  const received: Settings[] = [];
+  const waiting: { reply: Reply; resolve(reply: Reply): void; reject(error: Error): void }[] = [];
+  let created = 0;
+  const state = { hold: false };
+  const model: Model = {
+    complete(prompt) {
+      calls.push(prompt);
+      const text = replies[Math.min(calls.length, replies.length) - 1] ?? "";
+      const reply: Reply = {
+        text,
+        stopReason: stopReasons[calls.length - 1] ?? "end_turn",
+        usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 },
+      };
+      if (!state.hold) return Promise.resolve(reply);
+      return new Promise<Reply>((resolve, reject) => {
+        waiting.push({ reply, resolve, reject });
+      });
+    },
+  };
+  return {
+    state,
+    calls,
+    received,
+    created: () => created,
+    createModel: (settings: Settings): Promise<Model> => {
+      created += 1;
+      received.push(settings);
+      return Promise.resolve(model);
+    },
+    release(index: number) {
+      const call = waiting[index];
+      if (call === undefined) throw new Error(`aucun appel ${String(index)} en attente`);
+      call.resolve(call.reply);
+    },
+    fail(index: number, error: Error) {
+      const call = waiting[index];
+      if (call === undefined) throw new Error(`aucun appel ${String(index)} en attente`);
+      call.reject(error);
+    },
+  };
 }

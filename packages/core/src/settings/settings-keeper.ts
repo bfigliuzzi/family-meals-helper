@@ -34,7 +34,7 @@ export interface SettingsKeeper {
   retrySave(): void;
 }
 
-function deepFreeze<T>(value: T): T {
+export function deepFreeze<T>(value: T): T {
   if (typeof value === "object" && value !== null) {
     Object.freeze(value);
     for (const child of Object.values(value)) deepFreeze(child);

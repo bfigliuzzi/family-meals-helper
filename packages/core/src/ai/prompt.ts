@@ -111,6 +111,8 @@ export function buildUserPrompt(input: {
   month: Month;
   sessionDay: SessionDay;
   dinners: number;
+  // Le nombre vient d'un champ de l'utilisateur : un autre nombre écrit dans la demande ne compte pas.
+  dinnersFixed?: boolean;
   inSeason: readonly string[];
   previous?: { menu: Menu | null; rawText: string; findings: readonly Finding[] };
   pinned?: readonly string[];
@@ -134,6 +136,11 @@ export function buildUserPrompt(input: {
           "Modifie le menu courant selon le nouveau message : ne change que ce qu'il vise, sauf si une règle l'exige (dis-le dans `note`). Renvoie le menu complet.",
         ];
   lines.push(`Nombre de dîners : ${input.dinners}`);
+  if (input.dinnersFixed === true) {
+    lines.push(
+      "Ce nombre est fixé par l'utilisateur : un autre nombre de dîners écrit dans la demande ou dans un message ne compte pas.",
+    );
+  }
   if (revision !== undefined && revision.current.dishes.length !== input.dinners) {
     lines.push(
       `Le menu passe de ${revision.current.dishes.length} à ${input.dinners} dîners : ajoute ou retire des plats en gardant les épinglés.`,

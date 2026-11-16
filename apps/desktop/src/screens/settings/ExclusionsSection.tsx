@@ -3,6 +3,7 @@ import {
   REFERENTIAL,
   buildIngredientIndex,
   normalizeName,
+  printable,
   removeExclusion,
   unknownExclusionTerms,
 } from "core";
@@ -132,7 +133,7 @@ export function ExclusionsSection({
                 {exclusions.map((exclusion) => (
                   <Table.Tr key={normalizeName(exclusion.term)}>
                     <Table.Td>
-                      {exclusion.term}
+                      {printable(exclusion.term)}
                       {unknown.has(exclusion.term) && (
                         <Text size="xs" c="orange">
                           Inconnu du référentiel : seuls les noms de plats et d'ingrédients inconnus
@@ -148,7 +149,7 @@ export function ExclusionsSection({
                         variant="subtle"
                         color="red"
                         size="xs"
-                        aria-label={`Retirer ${exclusion.term}`}
+                        aria-label={`Retirer ${printable(exclusion.term)}`}
                         onClick={() => {
                           remove(exclusion.term);
                         }}

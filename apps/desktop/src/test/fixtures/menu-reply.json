@@ -1,0 +1,250 @@
+{
+  "note": "Menu de saison, sans poisson frais.",
+  "dishes": [
+    {
+      "name": "Cabillaud, fondue de poireaux et riz complet",
+      "day": "mon",
+      "ingredients": [
+        {
+          "name": "poireau",
+          "qty": 600,
+          "unit": "g",
+          "form": "fresh",
+          "category": null,
+          "sameDay": false
+        },
+        {
+          "name": "cabillaud",
+          "qty": 600,
+          "unit": "g",
+          "form": "frozen",
+          "category": null,
+          "sameDay": true
+        },
+        {
+          "name": "riz complet",
+          "qty": 300,
+          "unit": "g",
+          "form": "dry",
+          "category": null,
+          "sameDay": true
+        }
+      ],
+      "phases": [
+        {
+          "id": "a1",
+          "description": "Laver et émincer les poireaux",
+          "minutes": 15,
+          "appliance": "none",
+          "attended": true,
+          "after": []
+        },
+        {
+          "id": "a2",
+          "description": "Fondue de poireaux",
+          "minutes": 25,
+          "appliance": "induction",
+          "attended": false,
+          "after": ["a1"]
+        }
+      ],
+      "requested": true
+    },
+    {
+      "name": "Poulet aux carottes",
+      "day": "tue",
+      "ingredients": [
+        {
+          "name": "cuisse de poulet",
+          "qty": 600,
+          "unit": "g",
+          "form": "fresh",
+          "category": null,
+          "sameDay": false
+        },
+        {
+          "name": "carotte",
+          "qty": 500,
+          "unit": "g",
+          "form": "fresh",
+          "category": null,
+          "sameDay": false
+        },
+        {
+          "name": "oignon",
+          "qty": 100,
+          "unit": "g",
+          "form": "fresh",
+          "category": null,
+          "sameDay": false
+        }
+      ],
+      "phases": [
+        {
+          "id": "b1",
+          "description": "Éplucher et couper carottes et oignon",
+          "minutes": 20,
+          "appliance": "none",
+          "attended": true,
+          "after": []
+        },
+        {
+          "id": "b2",
+          "description": "Saisir le poulet",
+          "minutes": 10,
+          "appliance": "induction",
+          "attended": true,
+          "after": ["b1"]
+        },
+        {
+          "id": "b3",
+          "description": "Mijoter",
+          "minutes": 40,
+          "appliance": "induction",
+          "attended": false,
+          "after": ["b2"]
+        }
+      ],
+      "requested": false
+    },
+    {
+      "name": "Bœuf braisé aux carottes",
+      "day": "wed",
+      "ingredients": [
+        {
+          "name": "bœuf à braiser",
+          "qty": 600,
+          "unit": "g",
+          "form": "fresh",
+          "category": null,
+          "sameDay": false
+        },
+        {
+          "name": "carotte",
+          "qty": 600,
+          "unit": "g",
+          "form": "fresh",
+          "category": null,
+          "sameDay": false
+        }
+      ],
+      "phases": [
+        {
+          "id": "c1",
+          "description": "Préchauffer le four",
+          "minutes": 15,
+          "appliance": "oven",
+          "attended": false,
+          "after": []
+        },
+        {
+          "id": "c2",
+          "description": "Couper le bœuf et les carottes",
+          "minutes": 15,
+          "appliance": "none",
+          "attended": true,
+          "after": []
+        },
+        {
+          "id": "c3",
+          "description": "Braiser au four",
+          "minutes": 120,
+          "appliance": "oven",
+          "attended": false,
+          "after": ["c1", "c2"]
+        }
+      ],
+      "requested": false
+    },
+    {
+      "name": "Dal de lentilles corail au potiron",
+      "day": "thu",
+      "ingredients": [
+        {
+          "name": "lentilles corail",
+          "qty": 250,
+          "unit": "g",
+          "form": "dry",
+          "category": null,
+          "sameDay": false
+        },
+        {
+          "name": "potiron",
+          "qty": 600,
+          "unit": "g",
+          "form": "fresh",
+          "category": null,
+          "sameDay": false
+        }
+      ],
+      "phases": [
+        {
+          "id": "d1",
+          "description": "Éplucher et couper le potiron (dal et soupe)",
+          "minutes": 20,
+          "appliance": "none",
+          "attended": true,
+          "after": []
+        },
+        {
+          "id": "d2",
+          "description": "Cuire le dal",
+          "minutes": 25,
+          "appliance": "thermomix",
+          "attended": false,
+          "after": ["d1"]
+        }
+      ],
+      "requested": false
+    },
+    {
+      "name": "Soupe de potiron et navet",
+      "day": "fri",
+      "ingredients": [
+        {
+          "name": "potiron",
+          "qty": 600,
+          "unit": "g",
+          "form": "fresh",
+          "category": null,
+          "sameDay": false
+        },
+        {
+          "name": "navet",
+          "qty": 400,
+          "unit": "g",
+          "form": "fresh",
+          "category": null,
+          "sameDay": false
+        }
+      ],
+      "phases": [
+        {
+          "id": "e1",
+          "description": "Couper le navet",
+          "minutes": 10,
+          "appliance": "none",
+          "attended": true,
+          "after": []
+        },
+        {
+          "id": "e2",
+          "description": "Cuire la soupe",
+          "minutes": 30,
+          "appliance": "kenwood",
+          "attended": false,
+          "after": ["d1", "e1"]
+        },
+        {
+          "id": "e3",
+          "description": "Mixer la soupe",
+          "minutes": 5,
+          "appliance": "none",
+          "attended": true,
+          "after": ["e2"]
+        }
+      ],
+      "requested": false
+    }
+  ]
+}
