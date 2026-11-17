@@ -152,7 +152,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 - **Poisson seulement surgelé ou en conserve**, jamais frais (constat `error` de la règle `fish`), et **pas de constat « menu sans poisson »** : le foyer en mange peu. Écart voulu avec la conception §6.3 (note datée dans la conception). Le thon est accepté ; sardine et maquereau, que le foyer n'aime pas, passent par `--exclude`, pas par le code. Les poissons du référentiel (`saumon`, `maquereau`, `cabillaud`, `colin`) sont en forme par défaut `frozen`, rayon surgelés. *Les rayons ont été retirés du référentiel au lot 4 (2026-11-14) : seule la forme par défaut `frozen` reste.*
 - **Pommes de terre préparées d'avance : 2 jours** au frigo.
 - **Table de saison = union** des mois ADEME et des mois du calendrier mangerbouger (`packages/core/src/season/manual-months.ts`) : une ligne mangerbouger ajoute des mois, elle n'en retire jamais. Carotte et chou rouge sont donc de saison toute l'année, l'endive retrouve mai.
-- **Plat demandé protégé par le prompt seul** (§5.1). Le code ne devine pas quel plat la demande nomme. Tout constat de plafond (`meat`, `cured-meat`) ou de `same-protein` est renvoyé une fois à l'IA, avec la phrase « Si la demande nomme un de ces plats, garde-le et ajuste les autres. ». Si l'IA retire quand même le plat demandé, rien ne le signale : la vraie garantie (épingler un plat dans l'app) est au lot 6.
+- **Plat demandé protégé par le prompt seul** (§5.1). Le code ne devine pas quel plat la demande nomme. Tout constat de plafond (`meat`, `cured-meat`) ou de `same-protein` est renvoyé une fois à l'IA, avec la phrase « Si la demande nomme un de ces plats, garde-le et ajuste les autres. ». Si l'IA retire quand même le plat demandé, rien ne le signale : la vraie garantie (épingler un plat dans l'app) est au lot 6. *Note du 2026-11-16 (lot 6.2) : l'épinglage, par l'IA (`requested`) ou par l'utilisateur, est livré ; le code refuse le retrait d'un plat épinglé.*
 - Une première version détectait le plat demandé dans le code (règle `requested`, drapeau `fromRequest`). Elle a été **supprimée** avant le commit : elle produisait des régressions à chaque relecture. Elle ne vaut plus et n'existe pas dans le dépôt.
 
 **Livrable vérifiable** : un test par règle, avec un menu-fixture qui la viole et un qui la respecte ; `compose` affiche les constats `warning` et les plats à congeler.
@@ -192,7 +192,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
   - « pâtés » (au pluriel) donne encore la clé de `pâtes` ;
   - « mais » écrit pour « maïs » dans la demande n'exempte plus le maïs du contrôle de saison (sens prudent) ;
   - la clé du mot « mais » reste celle de « maïs » : `--exclude mais` exclut toujours le maïs.
-- **Plat demandé non épinglé** : les règles `meat`, `cured-meat` et `same-protein` ne savent pas quel plat la demande nomme ; l'épinglage est au lot 6 (voir « Ce qui a changé en cours de lot »).
+- **Plat demandé non épinglé** : les règles `meat`, `cured-meat` et `same-protein` ne savent pas quel plat la demande nomme ; l'épinglage est au lot 6 (voir « Ce qui a changé en cours de lot »). *Note du 2026-11-16 (lot 6.2) : réglé par l'épinglage.*
 - **Aucune démonstration réelle** : voir le bilan. À faire avec la clé Mammouth (appels rares), à la première occasion. **Toujours à faire au 2026-11-14** : le lot 4 ne l'a pas faite non plus (pas de clé dans l'environnement de construction) ; une seule démonstration de `batch`, lancée par l'utilisateur, couvre les lots 2, 3 et 4 (voir « Reliquats du lot 4 »).
 
 ## Lot 3 : équipement et planning de session
@@ -210,7 +210,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 - **Capacités** au plus : four 2, plaque 4, Thermomix 1, Kenwood 1, chaque appareil d'appoint 1 ; un seul appareil d'appoint par session.
 - **Des maximums, pas un idéal** : le prompt le dit, pour que l'IA n'utilise pas tous les appareils par principe.
 - **Plus de 3 h = `error`** ; **2 h 30 : objectif demandé dans le prompt et rappelé dans l'affichage, sans constat** : entre 2 h 30 et 3 h, aucun constat.
-- **Équipement constant, sans option de ligne de commande** : `HOUSEHOLD_EQUIPMENT` (`equipment/household.ts`) jusqu'au lot 5. Pas un fichier par appareil, contrairement à ce que prévoyait « Contenu » (note datée dans la conception, §3.2). *Note du 2026-11-15 : les réglages d'équipement sont livrés au lot 5, mais la composition utilise toujours `HOUSEHOLD_EQUIPMENT` ; leur application vient au lot 6.*
+- **Équipement constant, sans option de ligne de commande** : `HOUSEHOLD_EQUIPMENT` (`equipment/household.ts`) jusqu'au lot 5. Pas un fichier par appareil, contrairement à ce que prévoyait « Contenu » (note datée dans la conception, §3.2). *Note du 2026-11-15 : les réglages d'équipement sont livrés au lot 5, mais la composition utilise toujours `HOUSEHOLD_EQUIPMENT` ; leur application vient au lot 6.* *Note du 2026-11-16 (lot 6.1) : la composition applique l'équipement réglé ; la CLI garde `HOUSEHOLD_EQUIPMENT`.*
 - **Plats entièrement `sameDay` hors planning** : ils se font le soir.
 - **Plafond de jetons par défaut passé de 4000 à 8000** (`max_tokens` dans `anthropic-client.ts`, une option `maxTokens` peut le remplacer) : la réponse porte maintenant les phases de chaque plat.
 - **Planificateur à deux ordres** (révision après relecture) : glouton par insertion, il essaie deux ordres et garde le plus court. La première version n'en essayait qu'un.
@@ -375,7 +375,7 @@ Contenu prévu à l'origine : recettes, conversion en unités d'achat, rayons, P
 - **Aucun appel réel à l'IA** dans ce lot.
 
 **Ce que ça ne fera PAS (visible)**
-- Pas de composition dans l'app : « Nouvelle session », « Ingrédients » et « Historique » affichent seulement « À venir ». **Les réglages ne servent encore à rien** : l'équipement, les exclusions et le modèle ne sont lus par aucune commande (`compose` et `batch` gardent `HOUSEHOLD_EQUIPMENT` et `--exclude`), ils serviront au lot 6.
+- Pas de composition dans l'app : « Nouvelle session », « Ingrédients » et « Historique » affichent seulement « À venir ». **Les réglages ne servent encore à rien** : l'équipement, les exclusions et le modèle ne sont lus par aucune commande (`compose` et `batch` gardent `HOUSEHOLD_EQUIPMENT` et `--exclude`), ils serviront au lot 6. *Note du 2026-11-17 (lot 6) : les trois écrans sont livrés et les réglages sont lus par la composition (6.1).*
 - **200 aliments à éviter au plus** ; **capacité de 1 à 10** : le champ borne la saisie, le plafond protège surtout la taille du document.
 - **Brouillons perdus** : un aliment, un modèle ou une clé tapés sans être enregistrés sont oubliés quand on quitte Réglages (c'est dit à l'écran). Si un enregistrement échoue et qu'on quitte l'app, les changements non enregistrés sont perdus.
 - **Seconde instance refusée** : elle s'ouvre, mais ses réglages sont refusés (« Réglages indisponibles »), avec un message qui dit de fermer l'autre fenêtre. Sa section « Clé d'API » reste utilisable. La « première » est celle qui a accédé aux réglages la première, pas celle qui a démarré la première ; l'autre fenêtre n'est pas remise au premier plan.
@@ -384,16 +384,16 @@ Contenu prévu à l'origine : recettes, conversion en unités d'achat, rayons, P
 - La clé tapée passe une fois par la vue web ; ensuite, seul le Rust la voit.
 - WebRTC et la préconnexion ne sont pas bloqués : ils n'ont aucun secret à emporter.
 - Le verrou des réglages n'arrête pas `sqlite3` ni un autre programme.
-- Pas de bouton « Tester la clé », pas d'adresse d'API réglable (la clé Mammouth demande `https://api.mammouth.ai`) : le fournisseur sera choisi avant le lot 6, voir « Questions ouvertes ».
+- Pas de bouton « Tester la clé », pas d'adresse d'API réglable (la clé Mammouth demande `https://api.mammouth.ai`) : le fournisseur sera choisi avant le lot 6, voir « Questions ouvertes ». *Note du 2026-11-17 (lot 6.3) : fournisseur tranché, seul Mammouth est appelé ; toujours ni bouton ni adresse réglable.*
 - Pas d'ajout ni de suppression d'appareil, pas d'ustensiles. Pas de modification d'une exclusion (on la retire puis on l'ajoute de nouveau). Pas d'annulation, d'import ni d'export. Pas de table de prix (lot 7).
 - Un document de réglages abîmé à la main, une migration ratée ou un document d'une version future laissent l'écran en erreur, sans bouton pour repartir des valeurs par défaut.
 - Le mode clair ou sombre suit macOS, sans réglage. La fenêtre ne garde ni sa taille ni sa position. L'app n'est pas signée.
   > **Note du 2026-11-16 (lot 5 bis) :** le `.app` est signé depuis le lot 5 bis. Reste vrai pour `tauri dev` (signature ad hoc).
 
 **Reliquats du lot 5** (dettes connues, chacune reprise dans le lot qui doit la traiter)
-- (lot 6) **Brancher `applyEquipmentSettings`, les exclusions enregistrées et le modèle choisi** partout où `HOUSEHOLD_EQUIPMENT`, `--exclude` et le modèle par défaut servent en dur : `rules/check-menu.ts`, `ai/prompt.ts`, `ai/batch.ts`, `pdf/sheet.ts`.
-- (lot 6) **Brouillon de capacité jamais remis à jour, et retrait d'un aliment par sa position**, à revoir quand le keeper sera partagé avec l'action « éviter cet ingrédient ».
-- (lot 6) **Un abonné du keeper qui lève une erreur est ignoré sans trace** (choix écrit en commentaire).
+- ~~(lot 6) **Brancher `applyEquipmentSettings`, les exclusions enregistrées et le modèle choisi** partout où `HOUSEHOLD_EQUIPMENT`, `--exclude` et le modèle par défaut servent en dur : `rules/check-menu.ts`, `ai/prompt.ts`, `ai/batch.ts`, `pdf/sheet.ts`.~~ Réglé au lot 6.1 (équipement dans `CheckContext`, les prompts et `SheetInput`) et 6.3 (modèle choisi, par `createAppModel`). `HOUSEHOLD_EQUIPMENT` ne sert plus que de valeur de base et à la CLI.
+- ~~(lot 6) **Brouillon de capacité jamais remis à jour, et retrait d'un aliment par sa position**, à revoir quand le keeper sera partagé avec l'action « éviter cet ingrédient ».~~ Réglé au lot 6.1 : la capacité affichée suit une écriture venue d'ailleurs, un aliment se retire par son terme.
+- ~~(lot 6) **Un abonné du keeper qui lève une erreur est ignoré sans trace** (choix écrit en commentaire).~~ Réglé au lot 6.1 : le keeper donne l'erreur à `onListenerError`, que l'app écrit dans la console.
 - (lot 5 bis) **Demande d'accès au trousseau et suppression impossible après une nouvelle version.** Traité au lot 5 bis (2026-11-16, `8bcf097`) pour le `.app` signé ; la demande d'accès reste pour `tauri dev`.
 - (non planifié) Un échec de `app_config_dir()` empêche l'app de démarrer ; seulement sans `HOME`.
 - (non planifié) Le paquet JS fait environ 517 kB (avertissement de Vite).
@@ -448,12 +448,14 @@ Contenu prévu à l'origine : recettes, conversion en unités d'achat, rayons, P
 
 ## Lot 6 : app desktop, session, ingrédients et historique
 
+**Statut** : `livré (code et preuves hors ligne, 2026-11-17, 2319dc9) ; démonstration payée à faire`. Les preuves dans le `.app` signé, sans appel payé, sont faites : 6.4 par l'utilisateur, 6.5 (F.9) et 6.6 (G.9) par un agent qui pilotait l'interface, à la demande de l'utilisateur. Reste la démonstration payée F.10 (vrais appels à Claude), qui dépend de l'utilisateur.
+
 **Objectif** : le parcours complet dans l'app.
 
 **Contenu** (conception §5.2 à §5.4, §9)
 - Écran Nouvelle session : conversation, menu courant à côté, « vérification en cours », constats et avertissements.
 - Modification du menu courant (§5.3) : demandes ciblées, résumé de conversation, action « éviter cet ingrédient ».
-- **Épingler un plat demandé** : un plat que la demande nomme, ou que l'utilisateur épingle, ne peut pas être retiré par l'IA (conception §5.1). Au lot 2, la protection tient au prompt seul et rien ne signale un plat retiré ; c'est ce lot qui en fait une vraie garantie.
+- **Épingler un plat demandé** : un plat que la demande nomme, ou que l'utilisateur épingle, ne peut pas être retiré par l'IA (conception §5.1). *Livré au lot 6.2 : le retrait d'un plat effectivement épinglé est refusé. Claude peut épingler un nouveau plat via `requested` ; un plat déjà présent doit être épinglé manuellement.* Au lot 2, la protection tient au prompt seul et rien ne signale un plat retiré ; c'est ce lot qui en fait une vraie garantie.
 - Validation, détail, export du PDF.
 - ~~Écran Ingrédients : liste avec cases à cocher (l'état coché est conservé). *Au lot 4, les rayons ont été retirés (courses en drive) : la liste est alphabétique, sans rayon. Reste à trancher avant ce lot si l'écran reste par rayon (voir « Questions ouvertes »).*~~ Tranché : la liste est alphabétique, sans rayon (lot 6.6).
 - Historique des 5 derniers menus, transmis à l'IA, avec réouverture du PDF.
@@ -462,26 +464,40 @@ Contenu prévu à l'origine : recettes, conversion en unités d'achat, rayons, P
 **Obligations reportées du lot 5** (2026-11-15)
 - **Transport vers Claude par une commande Rust qui ajoute elle-même la clé** (`Authorization: Bearer`, que Mammouth attend aussi), vers des hôtes fixes (Anthropic ou Mammouth, selon le choix du fournisseur : voir « Questions ouvertes »). La clé ne passe jamais par la vue web. Décidé : le transport, c'est-à-dire que la clé reste côté Rust. Reste à décider (point suivant) : où vit le SDK, dans la vue web avec un `fetch` adapté, ou plus du tout. Le reliquat du lot 1 « `ai/` n'est pas réexporté » se règle avec ce choix : si la vue web garde le SDK, `ai/` devra être réexporté.
 - Aucune commande ne rend la clé (`secret_status` ne rend qu'un booléen) et la vue web ne fournit pas de proxy. Les redirections sont refusées hors des hôtes permis, ou il n'y en a pas du tout.
-- **Le SDK Anthropic dans une vue web** : il détecte `window`, donc il faudrait `dangerouslyAllowBrowser: true`. Son `fetch` serait adapté vers la commande Rust, avec une `apiKey` factice que le Rust remplace. L'autre voie : la commande Rust fait l'appel sans SDK. À trancher dans le plan du lot 6. Si l'appel garde une `Origin`, vérifier l'en-tête `anthropic-dangerous-direct-browser-access`.
+- **Le SDK Anthropic dans une vue web** : il détecte `window`, donc il faudrait `dangerouslyAllowBrowser: true`. Son `fetch` serait adapté vers la commande Rust, avec une `apiKey` factice que le Rust remplace. L'autre voie : la commande Rust fait l'appel sans SDK. ~~À trancher dans le plan du lot 6.~~ Tranché au lot 6.3 : la commande Rust `ai_send` fait l'appel ; la vue web charge le SDK (`platform/ai-model.ts`) avec un `fetch` adapté vers cette commande. Si l'appel garde une `Origin`, vérifier l'en-tête `anthropic-dangerous-direct-browser-access`.
 - **Masquage de la clé** dans les erreurs et les journaux : le Rust refait ce que fait `redact` dans `core`, et aucune erreur renvoyée à la vue web ne contient la clé.
 - **Nouvelles tables** (historique) : de nouvelles commandes Rust dans `settings_db.rs` ou un module voisin, avec une migration `user_version` 2. Jamais de SQL fourni par la vue web.
 - **Le keeper partagé** par les écrans (action « éviter cet ingrédient ») ; reprendre les reliquats du lot 5 (brouillon de capacité, retrait par position, abonné qui lève une erreur).
 - **Brancher les réglages** : `applyEquipmentSettings`, les exclusions enregistrées et le modèle choisi (reliquat du lot 5).
 - Toute nouvelle commande est ajoutée à `AppManifest::commands` (`build.rs`), à `capabilities/default.json` et à `generate_handler!` (`src/main.rs`), et son fichier `permissions/autogenerated/*.toml` est committé ; le `.toml` d'une commande retirée se supprime à la main.
 
-**Notes de livraison, sous-lot 6.5b** (2026-11-16, code seulement : preuve dans le `.app` signé et démonstration payée restent à faire par l'utilisateur)
+**Notes de livraison, sous-lot 6.5b** (2026-11-16 ; preuve hors ligne dans le `.app` signé faite en F.9 ; la démonstration payée F.10 reste à faire par l'utilisateur)
 - 6.5a (déjà commité) : historique en base (table `history`, fiche PDF en BLOB), écran Historique, rendu PDF dans la vue web.
 - 6.5b : « Valider ce menu » contrôle le menu avec les réglages, le jour et le nombre de dîners du moment, puis fait rédiger le détail (1 à 3 appels), rend la fiche, l'enregistre dans l'historique et l'ouvre dans Aperçu. Plus de 3 h, ou détail inutilisable : l'app demande (« Revenir au menu » ou « Garder la fiche »). Une seule fonction de la session (`operate`) publie la fin d'une opération ; un échec local se reprend sans nouvel appel à Claude (mêmes octets, même jeton).
 - Version d'essai (`pnpm --filter desktop build:essai`, mode Vite `essai`) : réponses d'exemple, sans Claude ; absente du build normal (prouvé par recherche du texte dans `dist`).
 
-**Notes de livraison, sous-lot 6.6** (2026-11-17, code seulement : preuve dans le `.app` signé et démonstration payée (F.10) restent à faire)
+**Notes de livraison, sous-lot 6.6** (2026-11-17 ; preuve hors ligne dans le `.app` signé faite en G.9 ; la démonstration payée F.10 reste à faire)
 - Écran Ingrédients : la liste de courses du dernier menu validé (la ligne la plus récente de l'historique, même illisible), par ordre alphabétique, avec une case par ligne et une pour le placard. Les cases cochées sont gardées dans `history.checked`, écrites par la commande Rust `history_set_checked` (état complet, sans migration).
 - Les cases passent par un propriétaire unique (`createCheckKeeper`, créé dans `services.ts`) : une écriture à la fois par entrée, le dernier état voulu part en dernier. Quitter l'écran pendant une écriture puis revenir ne réaffiche pas l'ancien état.
 - La lecture de l'historique (compteur de tentatives, lecture plus ancienne ignorée) est partagée par Historique et Ingrédients dans le hook `useLatestRead`.
 
 **Livrable vérifiable** : tests de la modification du menu courant avec un faux client IA, dont un test où l'IA tente de retirer un plat épinglé ; dans l'app, l'utilisateur compose, modifie un plat, valide et obtient le PDF ; le menu apparaît dans l'historique.
 
-**Ce que ça ne fera PAS (visible)** : pas de prix.
+**Ce que ça ne fera PAS (visible)**
+- **Pas de prix** (lot 7).
+- **Une clé Anthropic directe ne marche pas** : l'app n'appelle que `https://api.mammouth.ai/v1/messages`. Pas de réglage de fournisseur ni d'adresse, pas de bouton « Tester la clé », pas de proxy (l'app ignore ceux du système).
+- **Session perdue en quittant l'app** (conversation, menu non validé, épingles) ; « Recommencer » l'efface sans quitter. Pas d'annulation d'un appel en cours (2 min au plus par appel, jusqu'à 3 essais), pas d'affichage progressif. On peut changer d'écran pendant un appel : il continue et son résultat s'affiche au retour.
+- **Nombre de dîners** : il se fixe seulement par le champ de l'écran (5 par défaut) ; « 4 dîners » écrit dans la demande ne compte pas dans l'app (la CLI le lit). Changer le jour de session ou le nombre de dîners ne recalcule rien tout de suite : le menu affiché reste inchangé ; ces valeurs sont utilisées au message suivant et dès la prochaine validation.
+- **Épinglage** : un plat que la demande nomme n'est épinglé que si Claude le marque comme demandé ; sinon l'utilisateur coche « Épinglé ». Un plat épinglé peut changer tant qu'il garde son nom ; seul son retrait est refusé (« désépinglez-le d'abord »).
+- **Un aliment ajouté par « éviter »** ne retire rien du menu affiché ; il compte au message suivant, et la validation le contrôle. Les raisons des aliments à éviter ne sont pas données à l'IA.
+- **Validation** : le menu est recontrôlé avec les réglages, le jour et le nombre de dîners du moment ; un aliment devenu exclu ou un nombre de dîners changé bloque jusqu'à correction. Plus de 3 h ou détail inutilisable : l'app demande ; « Revenir au menu » abandonne le détail déjà payé, et une nouvelle validation crée une **nouvelle** entrée d'historique.
+- **Historique** : 5 menus ; le sixième efface le plus ancien et sa fiche. Pas de suppression à la main, pas de reprise d'un ancien menu pour le modifier. Les plats des 5 derniers menus sont donnés à Claude ; pour en reprendre un, il faut le nommer.
+- **Fiche PDF** : elle s'ouvre dans Aperçu (une copie, réécrite à chaque ouverture : une annotation n'est pas gardée ; exporter d'abord). « Exporter » copie dans `~/Downloads/menu-batch-AAAA-MM-JJ.pdf`, puis `-2`, `-3`…, sans fenêtre « Enregistrer sous » ; macOS demande l'accès à Téléchargements au premier export. La fenêtre peut se figer une seconde pendant la préparation. Le bandeau « Ranger chaque préparation… » peut être coupé entre deux pages (déjà le cas au lot 4).
+- **Durée et appareils de la fiche** : recalculés à partir des étapes détaillées, ils peuvent différer de ceux du menu affiché (2 h 15 contre « environ 2 h 30 » sur l'exemple), et l'écran ne l'explique pas. Proposition pour un lot suivant : afficher « Durée recalculée d'après les étapes ».
+- **Version de l'app antérieure à 6.5** : elle refuse la base en version 2 (« Base créée par une version plus récente de l'app. »).
+- **Écran Ingrédients** : seulement le dernier menu validé, alphabétique, sans rayon ni coût ; une seule case pour tout le placard ; pas de « Tout décocher », pas d'ajout ni de retrait à la main, pas d'impression de la liste seule. Un nouveau menu validé remplace la liste, cases décochées. Si le dernier menu est illisible, l'écran le dit, sans liste. Les lignes cochées restent à leur place, barrées ; pas de bouton « Ouvrir la fiche » (elle s'ouvre depuis Historique).
+- **Cases** : une coche non enregistrée est perdue en quittant l'app ; tant que l'app reste ouverte, elle reste affichée et « Réessayer » la renvoie. Après un échec d'enregistrement des cases qui n'est pas une purge, « Relire l'historique » ne change rien de visible. Une coche dont l'ingrédient a été renommé par une mise à jour du référentiel n'apparaît plus.
+- **CLI** (`compose`, `batch`) : elle ne lit pas les réglages de l'app ; elle garde l'équipement du code et `--exclude`.
 
 ## Lot 7 : prix
 
@@ -506,5 +522,5 @@ Contenu prévu à l'origine : recettes, conversion en unités d'achat, rayons, P
 - ~~**Avant le lot 0** : le remote git et la branche de travail ; le profil Codex du projet.~~ Tranché : remote GitHub public https://github.com/bfigliuzzi/family-meals-helper, une branche par lot (`lot-0-socle`) ; profil Codex `~/.codex/family-meals-helper.config.toml` en gpt-6.1-sol, effort high.
 - ~~**Avant le lot 5** : nico-build-plan suppose un Storybook (`packages/design-system`) et une procédure Claude Design pour tout composant d'interface. Ce projet n'en a pas : décider s'il en crée un, ou si les lots UI utilisent une bibliothèque de composants existante.~~ Tranché le 2026-11-14 : Mantine 9.8.0, sans Storybook ni procédure Claude Design.
 - ~~**Avant le lot 5** : groupes d'allergènes dans le référentiel, par exemple les 14 allergènes de l'étiquetage européen, rattachés à chaque entrée, avec une source dans `docs/research/`. Recommandation du décideur : un petit lot dédié. (Voir « Reliquats du lot 4 ».)~~ Abandonné le 2026-11-14 : personne n'est allergique dans le foyer, il n'y aura pas de groupes d'allergènes. On exclut chaque ingrédient par son nom.
-- **Avant le lot 6** : l'adresse de l'API dans l'app. La clé de l'utilisateur est une clé Mammouth, qui demande `https://api.mammouth.ai` ; sans réglage, l'app appellerait `api.anthropic.com` avec cette clé, et l'appel échouerait. Recommandation du décideur : un choix « Fournisseur : Anthropic ou Mammouth » dans Réglages, qui fixe les deux seuls hôtes permis à la commande Rust ; pas d'adresse libre, qui ouvrirait la clé à n'importe quel hôte. À trancher par l'utilisateur.
+- ~~**Avant le lot 6** : l'adresse de l'API dans l'app. La clé de l'utilisateur est une clé Mammouth, qui demande `https://api.mammouth.ai` ; sans réglage, l'app appellerait `api.anthropic.com` avec cette clé, et l'appel échouerait. Recommandation du décideur : un choix « Fournisseur : Anthropic ou Mammouth » dans Réglages, qui fixe les deux seuls hôtes permis à la commande Rust ; pas d'adresse libre, qui ouvrirait la clé à n'importe quel hôte. À trancher par l'utilisateur.~~ Tranché au lot 6.3 : pas de choix de fournisseur ; `ai_send` n'appelle que `https://api.mammouth.ai/v1/messages` (`MAMMOUTH_MESSAGES_URL`, `ai_transport.rs`). Une clé Anthropic directe ne marche pas.
 - ~~**Avant le lot 6** : l'écran Ingrédients reste-t-il par rayon ? Les rayons ont été retirés du référentiel au lot 4 (courses en drive) ; les rajouter serait une donnée par entrée.~~ Tranché : la liste est alphabétique, sans rayon (lot 6.6).

@@ -2,6 +2,8 @@
 
 Statut : validée par l'utilisateur le 12/11/2026. Ce document est la source de vérité du produit. Le découpage en lots est dans `docs/roadmap.md`.
 
+Mise à jour du 17/11/2026, après le lot 6 : le code et les preuves hors ligne dans le `.app` signé sont livrés (2319dc9) ; la démonstration payée (vrais appels à Claude) reste à faire par l'utilisateur. Des notes datées en §5.3, §5.4, §9 et §10 disent ce qui a changé.
+
 Mise à jour du 16/11/2026, après le lot 5 bis : une note datée en §10 dit que le `.app` est signé par une identité Apple Development, et que `tauri dev` reste en signature ad hoc.
 
 Mise à jour du 15/11/2026, après le lot 5 : des notes datées en §3.1, §3.2, §6.5, §9 et §10 disent ce qui a changé (réglages enregistrés par des commandes Rust, trousseau par `keyring`, plus de plugin SQL ni HTTP, équipement réglable par disponibilité et capacité, pas de groupes d'allergènes). Le texte qui ne vaut plus est gardé, marqué « ne vaut plus depuis ».
@@ -36,7 +38,7 @@ Le partage du travail entre l'IA et le code :
 ### 3.1 Personnes et repas
 - 4 personnes : 2 adultes qui mangent de tout, 2 enfants de 5 et 8 ans sans goût particulier.
 - **Quantités pour 4 portions adultes pleines.** Les restes servent au déjeuner du lendemain.
-- Le menu couvre uniquement les dîners de semaine. Le nombre de dîners suit la demande, 5 par défaut.
+- Le menu couvre uniquement les dîners de semaine. Le nombre de dîners suit la demande, 5 par défaut. *Note du 17/11/2026 (lot 6.4) : depuis le lot 6.4, l'app utilise exclusivement le champ « Nombre de dîners » (1 à 5, 5 par défaut) ; seule la CLI lit ce nombre dans la demande.*
 - Une alimentation variée, équilibrée et healthy, selon mangerbouger.fr (§6.3). Les plats hors de ces recommandations (très riches, frits) apparaissent seulement si la demande les mentionne.
 - Une liste d'ingrédients à éviter, toujours appliquée. Chaque entrée a une raison facultative (« n'aime pas », « introuvable »).
 - La session de cuisine dure 3 h au maximum. L'objectif est 2 h à 2 h 30.
@@ -56,6 +58,8 @@ Le partage du travail entre l'IA et le code :
 > **Note du 2026-11-13 (lot 3)** : jusqu'au lot 5, l'équipement est la constante gelée `HOUSEHOLD_EQUIPMENT` (`packages/core/src/equipment/household.ts`), sans option de ligne de commande. L'écart avec ce qui précède : il n'y a pas un fichier par appareil, mais une seule table. Les capacités sont des maximums, pas un objectif : four 2 plats, plaque 4 feux, Thermomix 1, Kenwood 1, et 1 pour chaque appareil d'appoint. Une session n'utilise qu'un seul appareil d'appoint. Les réglages modifiables arrivent au lot 5.
 
 > **Note du 15/11/2026 (lot 5).** L'équipement réglable, c'est la **disponibilité** et la **capacité** (entier de 1 à 10) de chaque appareil de la table du code. On ne peut ni ajouter ni retirer d'appareil. Ne valent plus depuis cette date : « chaque appareil est décrit par un fichier de données » et « ajouter un appareil revient à ajouter un fichier » (déjà écartés par la note du lot 3). `applyEquipmentSettings` applique les réglages à la table, mais la composition ne l'utilise pas encore : c'est le lot 6.
+>
+> **Note du 17/11/2026 (lot 6.1).** Livré au lot 6.1 dans l'app (composition, validation et fiche) ; la CLI conserve l'équipement du code.
 
 ## 4. Périmètre
 
@@ -86,7 +90,7 @@ L'utilisateur écrit en langage libre :
 
 Une demande explicite l'emporte sur une règle souple. Un bourguignon demandé compte dans le plafond de viande rouge, mais il ne doit pas être retiré à cause de ce plafond : l'IA ajuste les autres plats. Les règles bloquantes s'appliquent toujours.
 
-> **Note du 13/11/2026 (lot 2, décision de l'utilisateur).** Cette priorité tient au **prompt seul**. Le code ne devine pas quel plat la demande nomme. Tout constat de plafond (`meat`, `cured-meat`) ou de `same-protein` est renvoyé une fois à l'IA, avec la phrase « Si la demande nomme un de ces plats, garde-le et ajuste les autres. ». Si l'IA retire quand même le plat demandé, rien ne le signale. La vraie garantie, épingler un plat dans l'app pour que l'IA ne puisse pas le retirer, est prévue au lot 6. La version précédente (« il n'est jamais retiré à cause de ce plafond ») se lisait comme une garantie du code ; elle ne vaut plus depuis cette date. Une première version avait un détecteur de plat demandé dans le code ; elle a été supprimée parce qu'elle produisait des régressions.
+> **Note du 13/11/2026 (lot 2, décision de l'utilisateur).** Cette priorité tient au **prompt seul**. Le code ne devine pas quel plat la demande nomme. Tout constat de plafond (`meat`, `cured-meat`) ou de `same-protein` est renvoyé une fois à l'IA, avec la phrase « Si la demande nomme un de ces plats, garde-le et ajuste les autres. ». Si l'IA retire quand même le plat demandé, rien ne le signale. La vraie garantie, épingler un plat dans l'app pour que l'IA ne puisse pas le retirer, est prévue au lot 6. *Note du 17/11/2026 (lot 6.2) : livré. Le retrait d'un plat effectivement épinglé est refusé. Claude peut épingler un nouveau plat via `requested` ; un plat déjà présent doit être épinglé manuellement.* La version précédente (« il n'est jamais retiré à cause de ce plafond ») se lisait comme une garantie du code ; elle ne vaut plus depuis cette date. Une première version avait un détecteur de plat demandé dans le code ; elle a été supprimée parce qu'elle produisait des régressions.
 >
 > Les plafonds de budget de la demande sont reportés au lot 7 (§6.6).
 
@@ -100,14 +104,14 @@ Une demande explicite l'emporte sur une règle souple. Un bourguignon demandé c
 - Chaque message de l'utilisateur produit une **modification** du menu courant, qui repasse par les étapes 2 et 3.
 - Une demande ciblée (« remplace le plat 3 ») ne change que ce qu'elle vise. L'IA peut toucher un autre plat si une règle l'exige, par exemple pour garder un ingrédient partagé ; elle nomme alors ce plat et dit pourquoi.
 - L'IA reçoit le menu courant en données structurées, un résumé de la conversation et les 5 derniers menus de l'historique.
-- Sur un ingrédient du menu, une action « éviter cet ingrédient » l'ajoute à la liste d'exclusions avec une raison.
+- Sur un ingrédient du menu, une action « éviter cet ingrédient » l'ajoute à la liste d'exclusions avec une raison. *Note du 17/11/2026 (lot 6.4) : livré dans l'écran Nouvelle session. L'aliment compte à partir du message suivant et à la validation, sans retirer rien du menu affiché ; ses raisons ne sont pas données à l'IA. Un plat épinglé garde son nom : sa modification est permise, son retrait est refusé.*
 
 ### 5.4 Après la validation
 1. L'IA rédige le détail : les recettes, les étapes de la session et ce qu'il reste à faire chaque soir.
 2. Le code recalcule le planning à partir des étapes détaillées. S'il dépasse 3 h, l'IA corrige les étapes sans changer les plats, en 3 essais au plus. En cas d'échec, l'app propose de revenir au menu pour remplacer le plat le plus long.
 3. Le code produit la liste de courses et le PDF. Le menu entre dans l'historique, qui garde les 5 derniers menus validés.
 
-> **Note du 14/11/2026 (lot 4).** En ligne de commande (`batch`) : l'IA rédige un détail court (étapes avec repères d'ingrédients, une ligne par soir). Le code recalcule le planning et contrôle le détail : repères, exclusions, appareils, 3 h. Plus de 3 h après 3 essais : PDF avec avertissement, code 1. Détail faux ou illisible : fiche de repli avec les grandes phases de la composition, code 1. Pas de PDF seulement sans menu utilisable (code 2). L'historique est pour le lot 6. *Le retour au menu proposé à l'étape 2 n'existe pas en ligne de commande : il viendra avec l'app (lot 6).*
+> **Note du 14/11/2026 (lot 4).** En ligne de commande (`batch`) : l'IA rédige un détail court (étapes avec repères d'ingrédients, une ligne par soir). Le code recalcule le planning et contrôle le détail : repères, exclusions, appareils, 3 h. Plus de 3 h après 3 essais : PDF avec avertissement, code 1. Détail faux ou illisible : fiche de repli avec les grandes phases de la composition, code 1. Pas de PDF seulement sans menu utilisable (code 2). L'historique est livré au lot 6.5a. *Le retour au menu proposé à l'étape 2 n'existe pas en ligne de commande : il est livré dans l'app au lot 6.5b.*
 
 > **Note du 16/11/2026 (lot 6.5b).** Dans l'app : au clic « Valider ce menu », le menu est contrôlé de nouveau avec les réglages, le jour et le nombre de dîners affichés (un `error` bloque, sans appel). Puis l'IA rédige le détail (1 à 3 appels, nombre réel affiché). Plus de 3 h, ou détail inutilisable : l'app demande, avec deux boutons égaux, « Revenir au menu » (le détail payé est abandonné) ou « Garder la fiche » (avertissement ou grandes phases). La fiche est rendue dans la vue web, enregistrée dans l'historique, puis ouverte dans Aperçu ; elle peut être exportée dans Téléchargements, sans jamais écraser un fichier.
 
@@ -261,7 +265,7 @@ Il n'existe pas d'API publique de prix pour les enseignes françaises, et les CG
 
 **L'interface** :
 - **Nouvelle session** : la conversation avec l'IA, et le menu courant affiché à côté, mis à jour à chaque modification.
-- **Ingrédients** : la liste de courses par rayon, avec des cases à cocher, les coûts estimés et le total. *Note du 14/11/2026 (lot 4) : les rayons sont retirés ; reste à trancher avant le lot 6 si cet écran reste par rayon (`docs/roadmap.md`, « Questions ouvertes »).* *Note du 17/11/2026 (lot 6.6) : code seulement, preuve dans le .app signé à faire ; sans rayon ni coût (le coût arrive au lot 7). L'écran montre la liste du dernier menu validé seulement, par ordre alphabétique : le nom d'abord, puis la quantité et la répartition entre plats. Une case par ligne et une seule pour tout le placard. Les cases cochées sont gardées avec le menu dans l'historique.*
+- **Ingrédients** : la liste de courses par rayon, avec des cases à cocher, les coûts estimés et le total. *Note du 14/11/2026 (lot 4) : les rayons sont retirés ; tranché au lot 6.6 : l'écran reste alphabétique, sans rayon.* *Note du 17/11/2026 (lot 6.6) : livré, preuve hors ligne faite dans le .app signé (la démonstration payée du lot reste à faire) ; sans rayon ni coût (le coût arrive au lot 7). L'écran montre la liste du dernier menu validé seulement, par ordre alphabétique : le nom d'abord, puis la quantité et la répartition entre plats. Une case par ligne et une seule pour tout le placard. Les cases cochées sont gardées avec le menu dans l'historique.*
 - **Réglages** : les ingrédients à éviter, l'équipement, la clé d'API, le modèle, la table de prix. *Note du 15/11/2026 (lot 5) : livrés, trois sections. « Connexion à Claude » (clé d'API et modèle), « Aliments à éviter » et « Équipement ». L'enregistrement est immédiat. La table de prix arrive avec le lot 7. L'interface utilise Mantine.*
 - **Historique** : les 5 derniers menus, avec leur PDF. *Note du 16/11/2026 (lot 6.5) : livré. Chaque entrée montre la date, la demande, les plats et un badge d'avertissement ; « Ouvrir la fiche » (Aperçu) et « Exporter dans Téléchargements ». Les plats des 5 derniers menus sont donnés à l'IA pour qu'elle ne les reprenne pas.*
 - L'utilisateur veut une app soignée : une interface propre et sobre.
@@ -314,7 +318,7 @@ Il n'existe pas d'API publique de prix pour les enseignes françaises, et les CG
 - `core` ne voit qu'un port `HttpClient`.
 - Pour un site web, la clé passera côté serveur.
 
-> **Note du 15/11/2026 (lot 5) : les deux premières lignes ne valent plus depuis cette date.** La clé ne quitte jamais le Rust, sauf vers l'API Claude, au lot 6. La vue web ne voit que sa présence (`secret_status` rend un booléen) ; elle peut l'enregistrer ou la supprimer, jamais la lire. L'appel à Claude passera par une commande Rust qui ajoute la clé, vers des hôtes fixes, sans plugin HTTP. La CSP et la garde de navigation sont une défense en plus. Limites écrites : WebRTC et la préconnexion ne sont pas bloqués (sans secret à emporter), et la clé tapée dans Réglages passe une fois par la vue web. Le choix entre Anthropic et Mammouth pour l'adresse de l'API se fait avant le lot 6 (`docs/roadmap.md`, « Questions ouvertes »).
+> **Note du 15/11/2026 (lot 5) : les deux premières lignes ne valent plus depuis cette date.** La clé ne quitte jamais le Rust, sauf vers l'API Claude (livré au lot 6.3 : la commande `ai_send`). La vue web ne voit que sa présence (`secret_status` rend un booléen) ; elle peut l'enregistrer ou la supprimer, jamais la lire. L'appel à Claude passe par une commande Rust qui ajoute la clé, vers un hôte fixe, sans plugin HTTP. La CSP et la garde de navigation sont une défense en plus. Limites écrites : WebRTC et la préconnexion ne sont pas bloqués (sans secret à emporter), et la clé tapée dans Réglages passe une fois par la vue web. Choix fait au lot 6.3 : seul `https://api.mammouth.ai/v1/messages` est appelé, sans réglage de fournisseur ; une clé Anthropic directe ne marche pas.
 
 **Organisation du code** :
 ```
@@ -328,13 +332,15 @@ packages/core/src/
   ingredients/   référentiel, normalisation
   shopping/      liste de courses (ajouté au lot 4, note du 14/11/2026)
   pricing/       sources de prix et estimation
-  pdf/           description de la fiche PDF d'un menu validé (la fiche, sans effet de bord) ; le rendu en octets, l'écriture du fichier et la date sont dans `node/` (note du 14/11/2026, lot 4)
+  pdf/           description de la fiche PDF d'un menu validé (la fiche, sans effet de bord) ; le rendu en octets est dans `node/` pour la CLI et dans `apps/desktop/src/platform/pdf-renderer.ts` pour l'app (notes du 14/11 et du 17/11/2026)
+  session/       conversation, menu courant, épingles et validation (lot 6.4 et 6.5b, note du 17/11/2026)
+  history/       entrées de l'historique, cases cochées de l'écran Ingrédients (lot 6.5a et 6.6, note du 17/11/2026)
   settings/      document de réglages (schéma, validation, versions) et son propriétaire, `createSettingsKeeper` (ajouté au lot 5, note du 15/11/2026)
   ports/         interfaces : stockage, HTTP, horloge, secrets (`SettingsStore` ; `SecretStore`, lecture réservée à l'appel à l'API ; `SecretAdmin`, présence, écriture et suppression sans lecture)
   node/          implémentations Node des ports et commandes de développement (seul dossier, avec les tests, où Node est permis)
 apps/desktop/    Tauri + React : écrans et implémentations des ports
-  src/platform/  implémentations des ports qui appellent les commandes Rust (lot 5)
-  src-tauri/src/ commandes Rust : réglages, trousseau, garde de navigation (lot 5)
+  src/platform/  implémentations des ports qui appellent les commandes Rust, et rendu PDF (lots 5 et 6)
+  src-tauri/src/ commandes Rust : réglages, trousseau, garde de navigation (lot 5), transport vers Claude `ai_send` (6.3), historique (6.5 et 6.6)
 docs/research/   sources des règles (cuisine-addict, mangerbouger, prix)
 ```
 Les règles d'écriture de `core` (frontière du code pur, globales permises, heure par le port `Clock`) sont dans `docs/conventions-core.md`. Chaque module de `core` se teste seul. Les identifiants de code sont en anglais ; les textes affichés, le PDF et les docs sont en français.
