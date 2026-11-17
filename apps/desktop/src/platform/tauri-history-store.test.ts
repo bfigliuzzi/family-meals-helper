@@ -60,6 +60,16 @@ describe("createTauriHistoryStore", () => {
     ]);
   });
 
+  it("`setChecked` appelle history_set_checked avec un tableau simple", async () => {
+    const { invoke, calls } = recordingInvoke(() => Promise.resolve(undefined));
+    const store = createTauriHistoryStore(invoke);
+    const frozen = Object.freeze(["a"]);
+    await store.setChecked(3, frozen);
+    expect(calls).toEqual([{ command: "history_set_checked", args: { id: 3, checked: ["a"] } }]);
+    expect(calls[0]?.args?.["checked"]).not.toBe(frozen);
+    expect(Object.isFrozen(calls[0]?.args?.["checked"])).toBe(false);
+  });
+
   it("une erreur texte du Rust arrive telle quelle, pour chaque commande", async () => {
     // Tauri rejette avec un texte, pas avec une Error.
     const store = createTauriHistoryStore(
@@ -71,6 +81,7 @@ describe("createTauriHistoryStore", () => {
     await expect(store.list()).rejects.toThrow("Fiche refusée");
     await expect(store.openPdf(1)).rejects.toThrow("Fiche refusée");
     await expect(store.exportPdf(1)).rejects.toThrow("Fiche refusée");
+    await expect(store.setChecked(1, ["a"])).rejects.toThrow("Fiche refusée");
   });
 
   it("un rejet qui n'est pas un texte donne le repli", async () => {
@@ -78,6 +89,7 @@ describe("createTauriHistoryStore", () => {
       vi.fn<() => Promise<never>>().mockRejectedValue({ detail: "x" }),
     );
     await expect(store.list()).rejects.toThrow("Erreur inconnue de l'historique.");
+    await expect(store.setChecked(1, [])).rejects.toThrow("Erreur inconnue de l'historique.");
     await expect(store.add("j", "{}", new Uint8Array([1]))).rejects.toThrow(
       "Erreur inconnue de l'historique.",
     );

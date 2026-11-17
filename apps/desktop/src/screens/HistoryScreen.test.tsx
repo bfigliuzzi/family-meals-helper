@@ -427,3 +427,23 @@ describe("HistoryScreen : relecture", () => {
     expect(screen.getByText("lundi 23 novembre 2026")).toBeTruthy();
   });
 });
+
+describe("HistoryScreen : gardes de relecture", () => {
+  // Ne prouve que le `loading` du bouton : la garde `if (reading)` de `useLatestRead` n'est rouge qu'avec la mutation
+  // combinée (garde et `loading` retirés, mise à jour fonctionnelle).
+  it("deux clics sur « Réessayer » dans la même tâche, après une erreur : une seule relecture (loading du bouton)", async () => {
+    const { history } = setup([rowOf(1)], (store) => {
+      store.failNext("list", "Base indisponible");
+    });
+    await screen.findByText("Historique indisponible");
+    expect(history.lists.count).toBe(1);
+    history.hold("list");
+    const retry = screen.getByRole("button", { name: "Réessayer" });
+    fireEvent.click(retry);
+    fireEvent.click(retry);
+    expect(history.lists.count).toBe(2);
+    history.release();
+    expect(await screen.findByText("lundi 16 novembre 2026")).toBeTruthy();
+    expect(history.lists.count).toBe(2);
+  });
+});

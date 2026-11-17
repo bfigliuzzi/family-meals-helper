@@ -22,6 +22,8 @@ export * from "./scheduling/plan-session.ts";
 export * from "./shopping/quantity-text.ts";
 export * from "./shopping/shopping-list.ts";
 export * from "./history/history.ts";
+export * from "./history/checks.ts";
+export * from "./history/check-keeper.ts";
 export * from "./pdf/pdfmake-input.ts";
 export * from "./pdf/sheet.ts";
 export * from "./pdf/step-text.ts";

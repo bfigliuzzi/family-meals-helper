@@ -103,6 +103,7 @@ function fakeHistory(options: { clockless?: boolean } = {}) {
       });
     },
     exportPdf: () => Promise.reject(new Error("jamais appelé")),
+    setChecked: () => Promise.reject(new Error("non utilisé")),
   };
   return { store, rows, added, opened, state, openGate };
 }

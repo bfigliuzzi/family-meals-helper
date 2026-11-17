@@ -52,6 +52,7 @@ function listOnly(list: () => Promise<HistoryRow[]>): HistoryStore {
     list,
     openPdf: () => Promise.reject(new Error("jamais appelé")),
     exportPdf: () => Promise.reject(new Error("jamais appelé")),
+    setChecked: () => Promise.reject(new Error("non utilisé")),
   };
 }
 

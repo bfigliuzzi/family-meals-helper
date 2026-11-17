@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createSession, createSettingsKeeper } from "core";
+import { createCheckKeeper, createSession, createSettingsKeeper } from "core";
 import { describe, expect, it } from "vitest";
 import { App } from "./App.tsx";
 import { createKeychainSecretAdmin } from "./platform/keychain-secret-admin.ts";
@@ -39,6 +39,7 @@ function setup(replies: string[] = [], detailReplies: string[] = []) {
     secretAdmin: secrets.admin,
     session,
     history: history.store,
+    checks: createCheckKeeper(history.store),
   };
   const { unmount } = renderWithMantine(<App services={services} />);
   return {
@@ -85,6 +86,9 @@ describe("navigation", () => {
 
     await user.click(nav("Ingrédients"));
     expect(heading("Ingrédients")).toBeTruthy();
+    expect(await screen.findByText(/Aucun menu validé pour l'instant/)).toBeTruthy();
+    expect(screen.queryByText("À venir")).toBeNull();
+    expect(screen.queryByText(/prochaine version/)).toBeNull();
   });
   it("« Ouvrir les réglages » affiche l'écran Réglages", async () => {
     const { user } = setup();
@@ -292,6 +296,7 @@ describe("aller-retour d'écran pendant une écriture", () => {
           secretAdmin: createKeychainSecretAdmin(invoke),
           session,
           history,
+          checks: createCheckKeeper(history),
         }}
       />,
     );

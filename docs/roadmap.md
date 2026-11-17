@@ -455,7 +455,7 @@ Contenu prévu à l'origine : recettes, conversion en unités d'achat, rayons, P
 - Modification du menu courant (§5.3) : demandes ciblées, résumé de conversation, action « éviter cet ingrédient ».
 - **Épingler un plat demandé** : un plat que la demande nomme, ou que l'utilisateur épingle, ne peut pas être retiré par l'IA (conception §5.1). Au lot 2, la protection tient au prompt seul et rien ne signale un plat retiré ; c'est ce lot qui en fait une vraie garantie.
 - Validation, détail, export du PDF.
-- Écran Ingrédients : liste avec cases à cocher (l'état coché est conservé). *Au lot 4, les rayons ont été retirés (courses en drive) : la liste est alphabétique, sans rayon. Reste à trancher avant ce lot si l'écran reste par rayon (voir « Questions ouvertes »).*
+- ~~Écran Ingrédients : liste avec cases à cocher (l'état coché est conservé). *Au lot 4, les rayons ont été retirés (courses en drive) : la liste est alphabétique, sans rayon. Reste à trancher avant ce lot si l'écran reste par rayon (voir « Questions ouvertes »).*~~ Tranché : la liste est alphabétique, sans rayon (lot 6.6).
 - Historique des 5 derniers menus, transmis à l'IA, avec réouverture du PDF.
 - Si le plan relance `tauri dev` : vérifier après l'arrêt que le port 1420 est libre et que l'app ne tourne plus (pnpm 12, un groupe de processus par script).
 
@@ -473,6 +473,11 @@ Contenu prévu à l'origine : recettes, conversion en unités d'achat, rayons, P
 - 6.5a (déjà commité) : historique en base (table `history`, fiche PDF en BLOB), écran Historique, rendu PDF dans la vue web.
 - 6.5b : « Valider ce menu » contrôle le menu avec les réglages, le jour et le nombre de dîners du moment, puis fait rédiger le détail (1 à 3 appels), rend la fiche, l'enregistre dans l'historique et l'ouvre dans Aperçu. Plus de 3 h, ou détail inutilisable : l'app demande (« Revenir au menu » ou « Garder la fiche »). Une seule fonction de la session (`operate`) publie la fin d'une opération ; un échec local se reprend sans nouvel appel à Claude (mêmes octets, même jeton).
 - Version d'essai (`pnpm --filter desktop build:essai`, mode Vite `essai`) : réponses d'exemple, sans Claude ; absente du build normal (prouvé par recherche du texte dans `dist`).
+
+**Notes de livraison, sous-lot 6.6** (2026-11-17, code seulement : preuve dans le `.app` signé et démonstration payée (F.10) restent à faire)
+- Écran Ingrédients : la liste de courses du dernier menu validé (la ligne la plus récente de l'historique, même illisible), par ordre alphabétique, avec une case par ligne et une pour le placard. Les cases cochées sont gardées dans `history.checked`, écrites par la commande Rust `history_set_checked` (état complet, sans migration).
+- Les cases passent par un propriétaire unique (`createCheckKeeper`, créé dans `services.ts`) : une écriture à la fois par entrée, le dernier état voulu part en dernier. Quitter l'écran pendant une écriture puis revenir ne réaffiche pas l'ancien état.
+- La lecture de l'historique (compteur de tentatives, lecture plus ancienne ignorée) est partagée par Historique et Ingrédients dans le hook `useLatestRead`.
 
 **Livrable vérifiable** : tests de la modification du menu courant avec un faux client IA, dont un test où l'IA tente de retirer un plat épinglé ; dans l'app, l'utilisateur compose, modifie un plat, valide et obtient le PDF ; le menu apparaît dans l'historique.
 
@@ -502,4 +507,4 @@ Contenu prévu à l'origine : recettes, conversion en unités d'achat, rayons, P
 - ~~**Avant le lot 5** : nico-build-plan suppose un Storybook (`packages/design-system`) et une procédure Claude Design pour tout composant d'interface. Ce projet n'en a pas : décider s'il en crée un, ou si les lots UI utilisent une bibliothèque de composants existante.~~ Tranché le 2026-11-14 : Mantine 9.8.0, sans Storybook ni procédure Claude Design.
 - ~~**Avant le lot 5** : groupes d'allergènes dans le référentiel, par exemple les 14 allergènes de l'étiquetage européen, rattachés à chaque entrée, avec une source dans `docs/research/`. Recommandation du décideur : un petit lot dédié. (Voir « Reliquats du lot 4 ».)~~ Abandonné le 2026-11-14 : personne n'est allergique dans le foyer, il n'y aura pas de groupes d'allergènes. On exclut chaque ingrédient par son nom.
 - **Avant le lot 6** : l'adresse de l'API dans l'app. La clé de l'utilisateur est une clé Mammouth, qui demande `https://api.mammouth.ai` ; sans réglage, l'app appellerait `api.anthropic.com` avec cette clé, et l'appel échouerait. Recommandation du décideur : un choix « Fournisseur : Anthropic ou Mammouth » dans Réglages, qui fixe les deux seuls hôtes permis à la commande Rust ; pas d'adresse libre, qui ouvrirait la clé à n'importe quel hôte. À trancher par l'utilisateur.
-- **Avant le lot 6** : l'écran Ingrédients reste-t-il par rayon ? Les rayons ont été retirés du référentiel au lot 4 (courses en drive) ; les rajouter serait une donnée par entrée.
+- ~~**Avant le lot 6** : l'écran Ingrédients reste-t-il par rayon ? Les rayons ont été retirés du référentiel au lot 4 (courses en drive) ; les rajouter serait une donnée par entrée.~~ Tranché : la liste est alphabétique, sans rayon (lot 6.6).

@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import { createSession, createSettingsKeeper } from "core";
-import type { HistoryStore, SecretAdmin, Session, SettingsKeeper } from "core";
+import { createCheckKeeper, createSession, createSettingsKeeper } from "core";
+import type { CheckKeeper, HistoryStore, SecretAdmin, Session, SettingsKeeper } from "core";
 import { createKeychainSecretAdmin } from "./keychain-secret-admin.ts";
 import { createTauriHistoryStore } from "./tauri-history-store.ts";
 import { createTauriSettingsStore } from "./tauri-settings-store.ts";
@@ -10,6 +10,7 @@ export interface Services {
   secretAdmin: SecretAdmin;
   session: Session;
   history: HistoryStore;
+  checks: CheckKeeper;
 }
 
 // À appeler une seule fois, hors de tout composant : le propriétaire du document et la file du trousseau vivent
@@ -25,6 +26,11 @@ export function createServices(): Services {
     settings,
     secretAdmin: createKeychainSecretAdmin(invoke),
     history,
+    checks: createCheckKeeper(history, {
+      onListenerError: (error) => {
+        console.error("Abonné des cases en erreur", error);
+      },
+    }),
     session: createSession({
       settings,
       clock: { now: () => new Date() },

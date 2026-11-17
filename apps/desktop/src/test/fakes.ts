@@ -1,4 +1,4 @@
-import { DetailSchema } from "core";
+import { DetailSchema, MAX_CHECKED_BYTES } from "core";
 import type {
   HistoryRow,
   HistoryStore,
@@ -238,12 +238,16 @@ export function fakeNewToken(): () => string {
   };
 }
 
-type HistoryCall = "add" | "list" | "open" | "export";
+type HistoryCall = "add" | "list" | "open" | "export" | "check";
 
 const SAVE_REFUSED = "Enregistrement dans l'historique impossible.";
 const ENTRY_UNREADABLE = "Entrée d'historique illisible.";
 const NOT_A_PDF = "Fiche refusée : ce n'est pas un PDF.";
 export const PDF_GONE = "Cette fiche n'existe plus : elle a été retirée de l'historique.";
+// Les mêmes phrases que le Rust (history.rs) : fakes.test.ts le vérifie en lisant ce fichier.
+export const CHECKS_REFUSED = "Cases cochées refusées.";
+export const CHECKS_GONE =
+  "Ce menu n'est plus dans l'historique : ses cases ne peuvent plus être enregistrées.";
 
 interface StoredEntry {
   id: number;
@@ -278,6 +282,18 @@ function checkAdd(token: string, entry: string, pdf: Uint8Array): void {
   }
 }
 
+// Les mêmes refus que le Rust (history.rs : `check_keys`), dans le même ordre : clé vide, doublon, octets UTF-8.
+function checkKeys(checked: readonly string[]): void {
+  const seen = new Set<string>();
+  let total = 0;
+  const encoder = new TextEncoder();
+  for (const key of checked) {
+    total += encoder.encode(key).length;
+    if (key === "" || seen.has(key) || total > MAX_CHECKED_BYTES) throw new Error(CHECKS_REFUSED);
+    seen.add(key);
+  }
+}
+
 const sameBytes = (a: Uint8Array, b: Uint8Array): boolean =>
   a.length === b.length && a.every((byte, index) => byte === b[index]);
 
@@ -285,7 +301,10 @@ const sameBytes = (a: Uint8Array, b: Uint8Array): boolean =>
 // avec le même contenu et est refusé avec un autre. Il enregistre les appels (`added`, `opened`, `exported`).
 // `failNext` fait échouer le prochain appel du genre ; `loseNextReply` enregistre le prochain `add` puis rejette
 // (l'accusé IPC perdu) ; `hold` retient le prochain appel du genre jusqu'à `release()` : il répond alors ce qu'il
-// aurait répondu au moment de l'appel.
+// aurait répondu au moment de l'appel. Pour « check » (`setChecked`), tout se règle à la libération, comme dans la
+// vraie vie où l'écriture a lieu quand la base répond : arguments copiés à l'appel, contrôles et écriture au
+// règlement, un échec injecté ou une retenue consommés dès l'appel. `checkedCalls` garde les appels,
+// `checkedWrites` les écritures faites, `checksInFlight` le nombre d'appels non réglés (`now`) et son maximum.
 export function fakeHistoryStore(initial: HistoryRow[] = []) {
   const entries: StoredEntry[] = initial.map((row) => ({
     id: row.id,
@@ -304,6 +323,9 @@ export function fakeHistoryStore(initial: HistoryRow[] = []) {
   const lists = { count: 0 };
   const exportsPerDate = new Map<string, number>();
   const pendingReleases: (() => void)[] = [];
+  const checkedCalls: { id: number; keys: string[] }[] = [];
+  const checkedWrites: { id: number; keys: string[] }[] = [];
+  const checksInFlight = { now: 0, max: 0 };
 
   // Applique un échec ou une retenue demandés, puis rend le résultat calculé tout de suite.
   function respond<T>(call: HistoryCall, compute: () => T): Promise<T> {
@@ -362,6 +384,35 @@ export function fakeHistoryStore(initial: HistoryRow[] = []) {
         if (!entries.some((stored) => stored.id === id)) throw new Error(PDF_GONE);
       });
     },
+    setChecked(id, checked) {
+      const keys = [...checked];
+      checkedCalls.push({ id, keys });
+      checksInFlight.now += 1;
+      checksInFlight.max = Math.max(checksInFlight.max, checksInFlight.now);
+      const failure = failures.get("check");
+      failures.delete("check");
+      const held = holds.delete("check");
+      const settle = (): Promise<void> => {
+        checksInFlight.now -= 1;
+        try {
+          if (failure !== undefined) throw new Error(failure);
+          checkKeys(keys);
+          const stored = entries.find((candidate) => candidate.id === id);
+          if (stored === undefined) throw new Error(CHECKS_GONE);
+          stored.checked = JSON.stringify(keys);
+          checkedWrites.push({ id, keys });
+          return Promise.resolve();
+        } catch (error) {
+          return Promise.reject(error instanceof Error ? error : new Error("erreur"));
+        }
+      };
+      if (!held) return settle();
+      return new Promise<void>((resolve, reject) => {
+        pendingReleases.push(() => {
+          settle().then(resolve, reject);
+        });
+      });
+    },
     exportPdf(id) {
       exported.push(id);
       return respond("export", () => {
@@ -381,6 +432,14 @@ export function fakeHistoryStore(initial: HistoryRow[] = []) {
     exported,
     lists,
     rows,
+    checkedCalls,
+    checkedWrites,
+    checksInFlight,
+    // Simule une purge : retire l'entrée.
+    remove(id: number) {
+      const at = entries.findIndex((stored) => stored.id === id);
+      if (at !== -1) entries.splice(at, 1);
+    },
     failNext(call: HistoryCall, message: string) {
       failures.set(call, message);
     },

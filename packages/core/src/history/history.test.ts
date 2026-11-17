@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { balancedMenu } from "../rules/fixtures/menus.ts";
-import { MAX_PDF_BYTES } from "../ports/history-store.ts";
+import { MAX_CHECKED_BYTES, MAX_PDF_BYTES } from "../ports/history-store.ts";
 import type { HistoryRow } from "../ports/history-store.ts";
 import {
   HistoryEntrySchema,
@@ -141,5 +141,18 @@ describe("MAX_PDF_BYTES", () => {
     expect(rust).not.toBeNull();
     const value = rust![1]!.split("*").reduce((product, part) => product * Number(part.trim()), 1);
     expect(value).toBe(MAX_PDF_BYTES);
+  });
+});
+
+describe("MAX_CHECKED_BYTES", () => {
+  it("est le même qu'en Rust (history.rs)", () => {
+    const source = readFileSync(
+      new URL("../../../../apps/desktop/src-tauri/src/history.rs", import.meta.url),
+      "utf8",
+    );
+    const rust = /const MAX_CHECKED_BYTES: usize = ([\d* ]+);/.exec(source);
+    expect(rust).not.toBeNull();
+    const value = rust![1]!.split("*").reduce((product, part) => product * Number(part.trim()), 1);
+    expect(value).toBe(MAX_CHECKED_BYTES);
   });
 });

@@ -17,6 +17,8 @@ const MAX_ENTRIES: i64 = 5;
 const MAX_ENTRY_BYTES: usize = 256 * 1024;
 // Le même qu'en core (ports/history-store.ts) : un test de core le vérifie en lisant ce fichier.
 const MAX_PDF_BYTES: usize = 1024 * 1024;
+// Le même qu'en core (ports/history-store.ts) : un test de core le vérifie en lisant ce fichier.
+const MAX_CHECKED_BYTES: usize = 256 * 1024;
 const HISTORY_DIR: &str = "history";
 const MAX_EXPORT_NAMES: u32 = 99;
 
@@ -30,6 +32,10 @@ const READ_FAILED: &str = "Lecture de l'historique impossible.";
 const EXPORT_DENIED: &str = "Copie dans Téléchargements refusée par macOS : autorisez l'accès dans Réglages Système → Confidentialité et sécurité → Fichiers et dossiers.";
 const EXPORT_FAILED: &str = "Copie dans Téléchargements impossible.";
 const NO_DOWNLOADS: &str = "Dossier Téléchargements introuvable.";
+const CHECKS_REFUSED: &str = "Cases cochées refusées.";
+const CHECKS_GONE: &str =
+    "Ce menu n'est plus dans l'historique : ses cases ne peuvent plus être enregistrées.";
+const CHECKS_FAILED: &str = "Enregistrement des cases impossible.";
 
 #[derive(Debug, Serialize)]
 pub struct HistoryRow {
@@ -189,6 +195,36 @@ fn list(connection: &Connection) -> rusqlite::Result<Vec<HistoryRow>> {
     rows.collect()
 }
 
+// Les cases cochées de l'écran Ingrédients : des clés non vides, sans doublon, de `MAX_CHECKED_BYTES` octets UTF-8
+// au plus en tout (les clés viennent des noms de l'entrée, bornée à la même taille).
+fn check_keys(checked: &[String]) -> Result<(), String> {
+    let mut seen = std::collections::HashSet::new();
+    let mut total: usize = 0;
+    for key in checked {
+        total = total.saturating_add(key.len());
+        if key.is_empty() || !seen.insert(key.as_str()) || total > MAX_CHECKED_BYTES {
+            return Err(CHECKS_REFUSED.to_string());
+        }
+    }
+    Ok(())
+}
+
+// Remplace les cases cochées de l'entrée (état complet). Une seule instruction : atomique par SQLite.
+fn set_checked(connection: &Connection, id: i64, checked: &[String]) -> Result<(), String> {
+    check_keys(checked)?;
+    let text = serde_json::to_string(checked).map_err(|_| CHECKS_FAILED.to_string())?;
+    let touched = connection
+        .execute(
+            "UPDATE history SET checked = ?2 WHERE id = ?1",
+            rusqlite::params![id, text],
+        )
+        .map_err(|_| CHECKS_FAILED.to_string())?;
+    if touched == 0 {
+        return Err(CHECKS_GONE.to_string());
+    }
+    Ok(())
+}
+
 fn ids(connection: &Connection) -> Result<Vec<i64>, String> {
     let read = || -> rusqlite::Result<Vec<i64>> {
         let mut statement = connection.prepare("SELECT id FROM history")?;
@@ -330,6 +366,21 @@ pub async fn history_list(app: AppHandle) -> Result<Vec<HistoryRow>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         app.state::<SettingsDb>()
             .with_db(|connection, _| list(connection).map_err(|_| READ_FAILED.to_string()))
+    })
+    .await
+    .map_err(join_failure)?
+}
+
+#[tauri::command]
+pub async fn history_set_checked(
+    app: AppHandle,
+    id: i64,
+    checked: Vec<String>,
+) -> Result<(), String> {
+    check_keys(&checked)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<SettingsDb>()
+            .with_db(|connection, _| set_checked(connection, id, &checked))
     })
     .await
     .map_err(join_failure)?
@@ -770,6 +821,125 @@ mod tests {
         ] {
             assert!(!check_date(bad), "{bad}");
         }
+    }
+
+    fn checked_of(connection: &Connection, id: i64) -> String {
+        connection
+            .query_row("SELECT checked FROM history WHERE id = ?1", [id], |row| {
+                row.get(0)
+            })
+            .expect("checked")
+    }
+
+    fn keys(items: &[&str]) -> Vec<String> {
+        items.iter().map(|item| (*item).to_string()).collect()
+    }
+
+    #[test]
+    fn set_checked_stores_json_and_list_returns_it() {
+        let connection = memory();
+        let text = entry("2026-11-16", "x");
+        let bytes = pdf("x");
+        let id = add(&connection, "jeton", &text, &bytes).expect("ajout");
+        let before: (String, Vec<u8>, String, String) = connection
+            .query_row(
+                "SELECT entry, pdf, token, created_at FROM history WHERE id = ?1",
+                [id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .expect("avant");
+        set_checked(&connection, id, &keys(&["frozen|cabillaud", "placard"])).expect("cases");
+        let rows = list(&connection).expect("liste");
+        assert_eq!(rows[0].checked, "[\"frozen|cabillaud\",\"placard\"]");
+        let after: (String, Vec<u8>, String, String) = connection
+            .query_row(
+                "SELECT entry, pdf, token, created_at FROM history WHERE id = ?1",
+                [id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .expect("après");
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn set_checked_on_missing_entry_is_refused() {
+        let connection = memory();
+        assert_eq!(
+            set_checked(&connection, 42, &keys(&["a"])),
+            Err(CHECKS_GONE.to_string())
+        );
+        add_numbered(&connection, 6);
+        assert_eq!(all_ids(&connection), vec![6, 5, 4, 3, 2]);
+        assert_eq!(
+            set_checked(&connection, 1, &keys(&["a"])),
+            Err(CHECKS_GONE.to_string())
+        );
+        for id in 2..=6 {
+            assert_eq!(checked_of(&connection, id), "[]");
+        }
+    }
+
+    #[test]
+    fn set_checked_refuses_bad_keys_without_writing() {
+        let connection = memory();
+        let id = add(&connection, "jeton", &entry("2026-11-16", "x"), &pdf("x")).expect("ajout");
+        set_checked(&connection, id, &keys(&["ancien"])).expect("cases");
+        let old = checked_of(&connection, id);
+        // « é » : 2 octets, 1 caractère. Compter des caractères laisserait passer ce cas.
+        let too_big = "é".repeat(MAX_CHECKED_BYTES / 2 + 1);
+        let cases: Vec<Vec<String>> = vec![
+            keys(&[""]),
+            keys(&["a", "b", "a"]),
+            vec![too_big],
+            vec!["a".repeat(MAX_CHECKED_BYTES), "b".to_string()],
+        ];
+        for (index, case) in cases.iter().enumerate() {
+            assert_eq!(
+                set_checked(&connection, id, case),
+                Err(CHECKS_REFUSED.to_string()),
+                "cas {index}"
+            );
+            assert_eq!(check_keys(case), Err(CHECKS_REFUSED.to_string()));
+            assert_eq!(checked_of(&connection, id), old, "cas {index}");
+        }
+        // Contre-épreuve : la borne exacte en octets passe.
+        let exact = "é".repeat(MAX_CHECKED_BYTES / 2);
+        assert_eq!(exact.len(), MAX_CHECKED_BYTES);
+        assert_eq!(set_checked(&connection, id, &[exact]), Ok(()));
+    }
+
+    #[test]
+    fn set_checked_empty_list_unchecks_all() {
+        let connection = memory();
+        let id = add(&connection, "jeton", &entry("2026-11-16", "x"), &pdf("x")).expect("ajout");
+        set_checked(&connection, id, &keys(&["a", "b"])).expect("cases");
+        assert_eq!(checked_of(&connection, id), "[\"a\",\"b\"]");
+        set_checked(&connection, id, &[]).expect("vide");
+        assert_eq!(checked_of(&connection, id), "[]");
+    }
+
+    #[test]
+    fn set_checked_touches_only_its_row() {
+        let connection = memory();
+        add_numbered(&connection, 2);
+        set_checked(&connection, 2, &keys(&["a"])).expect("cases");
+        assert_eq!(checked_of(&connection, 2), "[\"a\"]");
+        assert_eq!(checked_of(&connection, 1), "[]");
+    }
+
+    #[test]
+    fn failed_set_checked_is_reported_without_sqlite_text() {
+        let connection = memory();
+        let id = add(&connection, "jeton", &entry("2026-11-16", "x"), &pdf("x")).expect("ajout");
+        connection
+            .execute_batch(
+                "CREATE TEMP TRIGGER t BEFORE UPDATE ON history BEGIN SELECT RAISE(ABORT, 'x'); END",
+            )
+            .expect("déclencheur");
+        let error = set_checked(&connection, id, &keys(&["a"])).expect_err("échec attendu");
+        assert_eq!(error, CHECKS_FAILED);
+        assert!(!error.contains('x'));
+        assert_eq!(checked_of(&connection, id), "[]");
     }
 
     #[test]

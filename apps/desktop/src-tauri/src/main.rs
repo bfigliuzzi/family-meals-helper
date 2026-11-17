@@ -28,7 +28,8 @@ fn main() {
             history::history_add,
             history::history_list,
             history::history_open_pdf,
-            history::history_export_pdf
+            history::history_export_pdf,
+            history::history_set_checked
         ])
         .run(tauri::generate_context!())
         .expect("échec du lancement de l'application Tauri");

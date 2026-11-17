@@ -13,8 +13,8 @@ import { useState } from "react";
 import type { Services } from "./platform/services.ts";
 import { SaveFailure, SaveSuccess } from "./SaveStatus.tsx";
 import { HistoryScreen } from "./screens/HistoryScreen.tsx";
+import { IngredientsScreen } from "./screens/IngredientsScreen.tsx";
 import { NewSessionScreen } from "./screens/NewSessionScreen.tsx";
-import { PlaceholderScreen } from "./screens/PlaceholderScreen.tsx";
 import { SettingsScreen } from "./screens/SettingsScreen.tsx";
 import { useSessionSnapshot } from "./useSessionSnapshot.ts";
 
@@ -27,12 +27,10 @@ const SCREENS: readonly { id: ScreenId; label: string }[] = [
   { id: "settings", label: "Réglages" },
 ];
 
-const COMING_SOON = "Cet écran arrive dans une prochaine version.";
-
 export function App({
   services,
 }: {
-  services: Pick<Services, "settings" | "secretAdmin" | "session" | "history">;
+  services: Pick<Services, "settings" | "secretAdmin" | "session" | "history" | "checks">;
 }) {
   // Pas de routeur : pas d'URL, pas de lien profond, pas de retour arrière. Seul l'écran actif est monté.
   const [screen, setScreen] = useState<ScreenId>("new-session");
@@ -112,9 +110,13 @@ export function App({
               />
             )}
             {screen === "ingredients" && (
-              <PlaceholderScreen
-                title="Ingrédients"
-                text={`Ici s'affichera la liste de courses du menu validé, avec une case à cocher par ingrédient. ${COMING_SOON}`}
+              <IngredientsScreen
+                history={services.history}
+                checks={services.checks}
+                refresh={session.outcomes}
+                onNewSession={() => {
+                  go("new-session");
+                }}
               />
             )}
             {screen === "history" && (

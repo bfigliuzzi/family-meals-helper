@@ -7,7 +7,9 @@ import { cookingQuantityText, quantityPhrase, quantityText } from "./quantity-te
 import {
   buildShoppingList,
   ingredientKey,
+  pantryLineDetail,
   pantryLineText,
+  shoppingLineDetail,
   shoppingLineText,
 } from "./shopping-list.ts";
 import type { ShoppingLine } from "./shopping-list.ts";
@@ -263,5 +265,41 @@ describe("quantityText", () => {
     expect(quantityText(1.5, "piece")).toBe("1,5 pièce");
     expect(quantityText(0.004, "piece")).toBe("0,01 pièce");
     expect(quantityText(0.333333, "piece")).toBe("0,34 pièce");
+  });
+});
+
+describe("shoppingLineDetail et pantryLineDetail", () => {
+  it("donne la quantité et la répartition, sans le nom", () => {
+    expect(shoppingLineDetail(lineOf(menuOf([item("poireau", 600)]), "poireau"))).toBe("600 g (a)");
+    const split = menuOf([item("carotte", 500)], [item("carotte", 600)]);
+    expect(shoppingLineDetail(lineOf(split, "carotte"))).toBe("1,1 kg (a : 500 g, b : 600 g)");
+  });
+  it("garde les notes « soir » et « à confirmer », jamais la forme", () => {
+    const evening = menuOf([item("cabillaud", 600, { form: "frozen", sameDay: true })]);
+    expect(shoppingLineDetail(lineOf(evening, "cabillaud"))).toBe("600 g (a) · soir");
+    const unknown = menuOf([item("Pintade", 400, { category: "poultry" })]);
+    expect(shoppingLineDetail(lineOf(unknown, "Pintade"))).toBe("400 g (a) · à confirmer");
+    const ambiguous = menuOf(
+      [item("haricot rouge", 200, { form: "dry" })],
+      [item("haricot rouge", 400)],
+    );
+    for (const line of buildShoppingList(ambiguous, index).lines) {
+      expect(shoppingLineDetail(line)).not.toMatch(/frais|sec/);
+    }
+  });
+  it("joint deux unités par « + »", () => {
+    const menu = menuOf([item("oignon", 100), item("oignon", 2, { unit: "piece" })]);
+    expect(shoppingLineDetail(lineOf(menu, "oignon"))).toBe("100 g + 2 pièces (a)");
+  });
+  it("laisse la fiche telle quelle : shoppingLineText et pantryLineText", () => {
+    const line = lineOf(
+      menuOf([item("cabillaud", 600, { form: "frozen", sameDay: true })]),
+      "cabillaud",
+    );
+    expect(shoppingLineText(line)).toBe("600 g de cabillaud (a) · surgelé · soir");
+  });
+  it("placard : la quantité et les plats, sans répartition des quantités", () => {
+    const list = buildShoppingList(autumnMenu(), index);
+    expect(list.pantry.map(pantryLineDetail)).toEqual(["3 g (d)", "100 ml (a, b, c, d)"]);
   });
 });

@@ -11,6 +11,7 @@ fn main() {
             "history_list",
             "history_open_pdf",
             "history_export_pdf",
+            "history_set_checked",
         ]),
     ))
     .expect("échec de tauri-build");

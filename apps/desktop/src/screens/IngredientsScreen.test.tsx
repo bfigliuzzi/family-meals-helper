@@ -1,0 +1,605 @@
+import { MantineProvider } from "@mantine/core";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import {
+  MenuSchema,
+  createCheckKeeper,
+  createSession,
+  createSettingsKeeper,
+  serializeHistoryEntry,
+} from "core";
+import type { HistoryEntry, HistoryRow } from "core";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { App } from "../App.tsx";
+import { createKeychainSecretAdmin } from "../platform/keychain-secret-admin.ts";
+import type { Invoke } from "../platform/tauri-error.ts";
+import {
+  CHECKS_GONE,
+  fakeHistoryStore,
+  fakeMenuModel,
+  fakeNewToken,
+  fakeRenderPdf,
+  fakeSettingsStore,
+  fixedClock,
+} from "../test/fakes.ts";
+import menuReply from "../test/fixtures/menu-reply.json";
+import { renderWithMantine } from "../test/render.tsx";
+import { theme } from "../theme.ts";
+import { IngredientsScreen } from "./IngredientsScreen.tsx";
+
+const INVISIBLE = /[\u202E\u200B]/;
+const PDF = new TextEncoder().encode("%PDF-1.7 exemple");
+
+interface Ingredient {
+  name: string;
+  qty: number;
+  unit: "g" | "ml" | "piece";
+  form: "fresh" | "canned" | "frozen" | "dry";
+  category: string | null;
+  sameDay: boolean;
+}
+const ing = (name: string, qty: number, over: Partial<Ingredient> = {}): Ingredient => ({
+  name,
+  qty,
+  unit: "g",
+  form: "fresh",
+  category: null,
+  sameDay: false,
+  ...over,
+});
+
+// Le menu d'exemple, avec le placard du menu d'automne (huile d'olive dans 4 plats, cumin dans le plat d).
+function withPantry(dishes = menuReply.dishes) {
+  const oil = [30, 30, 20, 20];
+  return dishes.map((dish, at) => ({
+    ...dish,
+    ingredients: [
+      ...dish.ingredients,
+      ...(at < 4 ? [ing("huile d'olive", oil[at]!, { unit: "ml" })] : []),
+      ...(at === 3 ? [ing("cumin", 3, { form: "dry" })] : []),
+    ],
+  }));
+}
+const MENU = MenuSchema.parse({ ...menuReply, dishes: withPantry() });
+
+function rowOf(id: number, overrides: Partial<HistoryEntry> = {}, checked = "[]"): HistoryRow {
+  const entry: HistoryEntry = {
+    version: 1,
+    date: "2026-11-17",
+    request: "fiche d'exemple",
+    sessionDay: "sun",
+    menu: MENU,
+    sheet: "detail",
+    ...overrides,
+  };
+  return { id, entry: serializeHistoryEntry(entry), checked };
+}
+const broken = (id: number): HistoryRow => ({ id, entry: "{pas du json", checked: "[]" });
+
+function setup(
+  rows: HistoryRow[] = [],
+  prepare: (history: ReturnType<typeof fakeHistoryStore>) => void = () => undefined,
+) {
+  const history = fakeHistoryStore(rows);
+  prepare(history);
+  const checks = createCheckKeeper(history.store);
+  const onNewSession = vi.fn();
+  const view = (refresh: number) => (
+    <IngredientsScreen
+      history={history.store}
+      checks={checks}
+      refresh={refresh}
+      onNewSession={onNewSession}
+    />
+  );
+  const { rerender, unmount } = renderWithMantine(view(0));
+  return {
+    history,
+    checks,
+    onNewSession,
+    unmount,
+    user: userEvent.setup(),
+    refresh: (value: number) => {
+      rerender(
+        <MantineProvider theme={theme} env="test">
+          {view(value)}
+        </MantineProvider>,
+      );
+    },
+  };
+}
+
+const boxes = () => screen.getAllByRole<HTMLInputElement>("checkbox");
+const box = (name: RegExp | string) => screen.getByRole<HTMLInputElement>("checkbox", { name });
+// Mantine range la case et son libellé côte à côte : le `<label>` est relié par `for`.
+const labelOf = (input: HTMLInputElement): HTMLLabelElement | null =>
+  document.querySelector<HTMLLabelElement>(`label[for="${input.id}"]`);
+const labelText = (input: HTMLInputElement): string => labelOf(input)?.textContent ?? "";
+const carrot = () => box(/^Carotte /);
+const leek = () => box(/^Poireau /);
+const counter = () => screen.getByRole("status").textContent;
+const flush = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe("IngredientsScreen : états", () => {
+  it("montre le chargement, puis la liste", async () => {
+    setup([rowOf(1)]);
+    expect(screen.getByText("Chargement de la liste de courses…")).toBeTruthy();
+    await screen.findByRole("heading", { level: 3, name: "Liste de courses" });
+    expect(screen.queryByText("Chargement de la liste de courses…")).toBeNull();
+  });
+
+  it("historique vide : le texte et « Aller à Nouvelle session »", async () => {
+    const { onNewSession, user } = setup();
+    expect(await screen.findByText(/Aucun menu validé pour l'instant/)).toBeTruthy();
+    expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+    await user.click(screen.getByRole("button", { name: "Aller à Nouvelle session" }));
+    expect(onNewSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("ligne la plus récente illisible, une plus ancienne lisible : l'alerte, aucune case", async () => {
+    setup([broken(2), rowOf(1)]);
+    expect(await screen.findByText(/Le dernier menu de l'historique est illisible/)).toBeTruthy();
+    expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+    expect(screen.queryByText("Liste de courses")).toBeNull();
+  });
+
+  it("erreur de lecture : alerte et « Réessayer », qui relit", async () => {
+    const { user } = setup([rowOf(1)], (history) => {
+      history.failNext("list", "Base indisponible\u202E");
+    });
+    expect(await screen.findByText("Liste de courses indisponible")).toBeTruthy();
+    expect(screen.getByText("Base indisponible")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(INVISIBLE);
+    await user.click(screen.getByRole("button", { name: "Réessayer" }));
+    expect(await screen.findByRole("heading", { name: "Liste de courses" })).toBeTruthy();
+    expect(screen.queryByText("Liste de courses indisponible")).toBeNull();
+  });
+
+  it("deux clics sur « Réessayer » dans la même tâche : une seule relecture", async () => {
+    const { history } = setup([rowOf(1)], (store) => {
+      store.failNext("list", "Base indisponible");
+    });
+    await screen.findByText("Liste de courses indisponible");
+    history.hold("list");
+    const retry = screen.getByRole("button", { name: "Réessayer" });
+    fireEvent.click(retry);
+    fireEvent.click(retry);
+    expect(history.lists.count).toBe(2);
+    history.release();
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    expect(history.lists.count).toBe(2);
+  });
+});
+
+describe("IngredientsScreen : la liste", () => {
+  it("menu d'exemple : 11 cases dans l'ordre alphabétique, placard en dernier avec ses deux entrées", async () => {
+    setup([rowOf(1)]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    expect(boxes()).toHaveLength(11);
+    const names = boxes().map((input) => labelText(input));
+    expect(names[0]).toMatch(/^Bœuf à braiser/);
+    expect(names[1]).toMatch(/^Cabillaud \(surgelé\)600 g \(a\) · soir/);
+    expect(names[2]).toMatch(/^Carotte1,1 kg \(b : 500 g, c : 600 g\)/);
+    expect(names.slice(0, 10).map((name) => name.split(/\d/)[0])).toEqual([
+      "Bœuf à braiser",
+      "Cabillaud (surgelé)",
+      "Carotte",
+      "Cuisse de poulet",
+      "Lentilles corail",
+      "Navet",
+      "Oignon",
+      "Poireau",
+      "Potiron",
+      "Riz complet",
+    ]);
+    expect(names[10]).toContain("Placard (à vérifier)");
+    expect(names[10]).toContain("Cumin : 3 g (d)");
+    expect(names[10]).toContain("Huile d'olive : 100 ml (a, b, c, d)");
+    expect(screen.getByText(/^soir : utilisé seulement le soir du repas/)).toBeTruthy();
+    expect(screen.queryByText(/^à confirmer :/)).toBeNull();
+    expect(counter()).toBe("0 cochée sur 11");
+  });
+
+  it("en-tête : date en toutes lettres, demande et noms de plats nettoyés", async () => {
+    setup([
+      rowOf(1, {
+        request: "un bœuf\u202E bourguignon\u200B",
+        menu: MenuSchema.parse({
+          ...menuReply,
+          dishes: withPantry().map((dish, at) =>
+            at === 0 ? { ...dish, name: "Cabil\u200Blaud\u202E" } : dish,
+          ),
+        }),
+      }),
+    ]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    expect(screen.getByRole("heading", { level: 3, name: "mardi 17 novembre 2026" })).toBeTruthy();
+    expect(screen.getByText("Session le dimanche · 5 dîners")).toBeTruthy();
+    const request = screen.getByText(/Demande : « un bœuf bourguignon »/);
+    expect(request.getAttribute("title")).toBe("un bœuf bourguignon");
+    expect(screen.getByText("a. Cabillaud")).toBeTruthy();
+    expect(screen.getAllByText(/^[a-e]\. /)).toHaveLength(5);
+    expect(document.body.textContent).not.toMatch(INVISIBLE);
+  });
+
+  it("les cases lues dans la base sont cochées, le compteur les compte", async () => {
+    setup([rowOf(1, {}, '["fresh|carotte","placard"]')]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    expect(carrot().checked).toBe(true);
+    expect(box(/^Placard/).checked).toBe(true);
+    expect(leek().checked).toBe(false);
+    expect(counter()).toBe("2 cochées sur 11");
+  });
+
+  it("une clé périmée n'est pas affichée ; elle quitte la base à la coche suivante", async () => {
+    const { history, user } = setup([rowOf(1, {}, '["fresh|ancien-nom","fresh|carotte"]')]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    expect(counter()).toBe("1 cochée sur 11");
+    await user.click(leek());
+    expect(history.checkedWrites).toEqual([{ id: 1, keys: ["fresh|carotte", "fresh|poireau"] }]);
+  });
+
+  it("cases illisibles : l'alerte, tout décoché, la première coche écrit l'état complet", async () => {
+    const { history, user } = setup([rowOf(1, {}, "pas du json")]);
+    expect(
+      await screen.findByText(/cases cochées enregistrées pour ce menu sont illisibles/),
+    ).toBeTruthy();
+    expect(boxes().every((input) => !input.checked)).toBe(true);
+    await user.click(carrot());
+    expect(history.checkedWrites).toEqual([{ id: 1, keys: ["fresh|carotte"] }]);
+    expect(screen.queryByText(/sont illisibles/)).toBeNull();
+  });
+
+  it("aucune écriture au montage ni à une relecture", async () => {
+    const { history, refresh } = setup([rowOf(1)]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    refresh(1);
+    await waitFor(() => {
+      expect(history.lists.count).toBe(2);
+    });
+    await flush();
+    expect(history.checkedCalls).toEqual([]);
+    expect(history.checkedWrites).toEqual([]);
+  });
+
+  it("sans placard : pas de case, une phrase", async () => {
+    setup([rowOf(1, { menu: MenuSchema.parse(menuReply) })]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    expect(boxes()).toHaveLength(10);
+    expect(screen.getByText("Aucun ingrédient de placard dans ce menu.")).toBeTruthy();
+  });
+
+  it("ingrédient inconnu : légende « à confirmer »", async () => {
+    const dishes = withPantry().map((dish, at) =>
+      at === 0
+        ? {
+            ...dish,
+            ingredients: [...dish.ingredients, ing("Pintade", 400, { category: "poultry" })],
+          }
+        : dish,
+    );
+    setup([rowOf(1, { menu: MenuSchema.parse({ ...menuReply, dishes }) })]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    expect(screen.getByText(/^à confirmer : ingrédient inconnu de l'app/)).toBeTruthy();
+  });
+
+  it("nom d'un ingrédient inconnu nettoyé dans le DOM", async () => {
+    const dishes = withPantry().map((dish, at) =>
+      at === 0
+        ? {
+            ...dish,
+            ingredients: [
+              ...dish.ingredients,
+              ing("Pin\u202Etade\u200B", 400, { category: "poultry" }),
+            ],
+          }
+        : dish,
+    );
+    setup([rowOf(1, { menu: MenuSchema.parse({ ...menuReply, dishes }) })]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    expect(box(/^Pintade /)).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(INVISIBLE);
+  });
+});
+
+describe("IngredientsScreen : noms accessibles et zone de clic", () => {
+  it("le nom accessible commence par le nom, puis la quantité", async () => {
+    setup([rowOf(1)]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    expect(box("Carotte 1,1 kg (b : 500 g, c : 600 g)")).toBeTruthy();
+    expect(box(/^Placard \(à vérifier\).*Cumin : 3 g \(d\)/)).toBeTruthy();
+  });
+
+  it("un clic sur le texte de la quantité coche la case", async () => {
+    const { user } = setup([rowOf(1)]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    await user.click(screen.getByText("1,1 kg (b : 500 g, c : 600 g)"));
+    expect(carrot().checked).toBe(true);
+  });
+
+  it("un clic sur une entrée du placard coche la case du placard", async () => {
+    const { user } = setup([rowOf(1)]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    await user.click(screen.getByText("Cumin : 3 g (d)"));
+    expect(box(/^Placard/).checked).toBe(true);
+  });
+
+  it("le libellé ne contient que des éléments en ligne", async () => {
+    setup([rowOf(1)]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    for (const input of boxes()) {
+      expect(labelOf(input)?.querySelector("div, p, ul, li")).toBeNull();
+    }
+  });
+
+  it("deux lignes du même ingrédient en deux formes ont deux noms", async () => {
+    const dishes = withPantry().map((dish, at) =>
+      at === 0
+        ? {
+            ...dish,
+            ingredients: [
+              ...dish.ingredients,
+              ing("maïs", 200, { form: "canned" }),
+              ing("maïs", 150),
+            ],
+          }
+        : dish,
+    );
+    setup([rowOf(1, { menu: MenuSchema.parse({ ...menuReply, dishes }) })]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    const names = boxes().map((input) => labelText(input));
+    const corn = names.filter((name) => name.startsWith("Maïs"));
+    expect(corn).toHaveLength(2);
+    expect(box(/^Maïs \(frais\)/)).toBeTruthy();
+    expect(box(/^Maïs \(conserve\)/)).toBeTruthy();
+    expect(new Set(names).size).toBe(names.length);
+    expect(corn.find((name) => name.startsWith("Maïs (frais)"))).not.toMatch(/ · (frais|conserve)/);
+  });
+});
+
+describe("IngredientsScreen : cocher", () => {
+  it("une coche écrit l'état complet, s'affiche tout de suite et se barre", async () => {
+    const { history, user } = setup([rowOf(1)]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    history.hold("check");
+    await user.click(carrot());
+    expect(carrot().checked).toBe(true);
+    expect(counter()).toBe("1 cochée sur 11");
+    expect(screen.getByText("Carotte").style.textDecoration).toBe("line-through");
+    // L'indicateur d'écriture est un chargement masqué, hors de la zone `status`.
+    expect(document.querySelector('.mantine-Loader-root[aria-hidden="true"]')).not.toBeNull();
+    expect(screen.getByRole("status").querySelector(".mantine-Loader-root")).toBeNull();
+    history.release();
+    await waitFor(() => {
+      expect(document.querySelector(".mantine-Loader-root")).toBeNull();
+    });
+    expect(history.checkedWrites).toEqual([{ id: 1, keys: ["fresh|carotte"] }]);
+    await user.click(leek());
+    await user.click(carrot());
+    expect(history.checkedWrites.at(-1)).toEqual({ id: 1, keys: ["fresh|poireau"] });
+  });
+
+  it("le nom d'une ligne cochée est barré et atténué, celui d'une ligne décochée ne l'est pas", async () => {
+    const { user } = setup([rowOf(1)]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    expect(screen.getByText("Carotte").style.color).toBe("");
+    expect(screen.getByText("Carotte").style.textDecoration).toBe("");
+    await user.click(carrot());
+    expect(screen.getByText("Carotte").style.color).toContain("dimmed");
+    expect(screen.getByText("Carotte").style.textDecoration).toBe("line-through");
+    expect(screen.getByText("Poireau").style.color).toBe("");
+  });
+
+  it("le second clic écrit l'état complet, pas un delta", async () => {
+    const { history, user } = setup([rowOf(1)]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    await user.click(carrot());
+    await user.click(leek());
+    expect(history.checkedWrites.at(-1)?.keys).toEqual(["fresh|carotte", "fresh|poireau"]);
+    expect(history.rows()[0]?.checked).toBe('["fresh|carotte","fresh|poireau"]');
+  });
+
+  it("file : trois coches pendant une écriture retenue, une seule écriture à la fois, la base finit sur l'état affiché", async () => {
+    const { history, user } = setup([rowOf(1)]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    history.hold("check");
+    await user.click(carrot());
+    await user.click(leek());
+    await user.click(carrot());
+    expect(history.checksInFlight.max).toBe(1);
+    history.release();
+    await waitFor(() => {
+      expect(history.checkedWrites.at(-1)?.keys).toEqual(["fresh|poireau"]);
+    });
+    expect(history.checksInFlight.max).toBe(1);
+    expect(history.rows()[0]?.checked).toBe('["fresh|poireau"]');
+    expect(boxes().filter((input) => input.checked)).toHaveLength(1);
+    expect(leek().checked).toBe(true);
+    expect(carrot().checked).toBe(false);
+  });
+
+  it("double clic sur une case : deux bascules, la base finit dans l'état affiché", async () => {
+    const { history, user } = setup([rowOf(1)]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    await user.dblClick(carrot());
+    expect(carrot().checked).toBe(false);
+    await waitFor(() => {
+      expect(history.rows()[0]?.checked).toBe("[]");
+    });
+    expect(history.checksInFlight.max).toBe(1);
+  });
+
+  it("échec d'écriture : l'alerte est dans la carte de la liste, la case reste cochée, « Réessayer » renvoie", async () => {
+    const { history, user } = setup([rowOf(1)]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    history.failNext("check", "Enregistrement des cases impossible.\u202E");
+    await user.click(carrot());
+    const alert = await screen.findByRole("alert");
+    expect(within(alert).getByText("Cases non enregistrées")).toBeTruthy();
+    expect(alert.textContent).toContain("Enregistrement des cases impossible.");
+    expect(alert.textContent).toContain(
+      "Elles seront perdues si vous quittez l'app sans réessayer.",
+    );
+    expect(alert.textContent).not.toMatch(INVISIBLE);
+    // Sous le titre et le compteur, dans la carte de la liste.
+    const list = screen
+      .getByRole("heading", { name: "Liste de courses" })
+      .closest(".mantine-Paper-root");
+    expect(list).not.toBeNull();
+    expect(list?.contains(alert)).toBe(true);
+    expect(carrot().checked).toBe(true);
+    expect(history.checkedWrites).toEqual([]);
+    await user.click(within(alert).getByRole("button", { name: "Réessayer" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
+    expect(history.checkedWrites).toEqual([{ id: 1, keys: ["fresh|carotte"] }]);
+  });
+
+  it("« Réessayer » réentrant : deux clics dans la même tâche, une seule écriture", async () => {
+    const { history, user } = setup([rowOf(1)]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    history.failNext("check", "Enregistrement des cases impossible.");
+    await user.click(carrot());
+    const alert = await screen.findByRole("alert");
+    history.hold("check");
+    const retry = within(alert).getByRole("button", { name: "Réessayer" });
+    fireEvent.click(retry);
+    fireEvent.click(retry);
+    await waitFor(() => {
+      expect(history.checkedCalls).toHaveLength(2);
+    });
+    await flush();
+    expect(history.checkedCalls).toHaveLength(2);
+    history.release();
+    await flush();
+    expect(history.checkedWrites).toHaveLength(1);
+  });
+
+  it("entrée purgée pendant l'affichage : l'alerte donne la phrase, « Relire l'historique » relit", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { history, user } = setup([rowOf(1)]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    history.remove(1);
+    await user.click(carrot());
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain(CHECKS_GONE);
+    expect(history.rows()).toEqual([]);
+    await user.click(within(alert).getByRole("button", { name: "Relire l'historique" }));
+    expect(await screen.findByText(/Aucun menu validé pour l'instant/)).toBeTruthy();
+    expect(errors).not.toHaveBeenCalled();
+  });
+
+  it("purge pendant l'écriture retenue : le rejet s'affiche, aucune ligne recréée", async () => {
+    const { history, user } = setup([rowOf(1)]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    history.hold("check");
+    await user.click(carrot());
+    history.remove(1);
+    history.release();
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain(CHECKS_GONE);
+    expect(history.rows()).toEqual([]);
+    await user.click(within(alert).getByRole("button", { name: "Relire l'historique" }));
+    expect(await screen.findByText(/Aucun menu validé pour l'instant/)).toBeTruthy();
+  });
+});
+
+describe("IngredientsScreen : relecture", () => {
+  it("`refresh` avec une nouvelle entrée en tête : la nouvelle liste, toutes cases décochées", async () => {
+    const { history, user, refresh } = setup([rowOf(1)]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    await user.click(carrot());
+    await history.store.add("jeton", rowOf(2, { date: "2026-11-24" }).entry, PDF);
+    refresh(1);
+    expect(
+      await screen.findByRole("heading", { level: 3, name: "mardi 24 novembre 2026" }),
+    ).toBeTruthy();
+    expect(boxes().every((input) => !input.checked)).toBe(true);
+    expect(counter()).toBe("0 cochée sur 11");
+  });
+
+  it("une relecture de la même entrée pendant une écriture retenue ne décoche rien", async () => {
+    const { history, user, refresh } = setup([rowOf(1)]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    history.hold("check");
+    await user.click(carrot());
+    refresh(1);
+    await waitFor(() => {
+      expect(history.lists.count).toBe(2);
+    });
+    await flush();
+    expect(carrot().checked).toBe(true);
+    history.release();
+    await flush();
+    expect(carrot().checked).toBe(true);
+  });
+
+  it.each(["succès", "rejet"])(
+    "nouveau menu pendant une écriture de l'ancien (%s) : les cases du nouveau et l'absence d'alerte ne changent pas",
+    async (outcome) => {
+      const { history, user, refresh } = setup([rowOf(1)]);
+      await screen.findByRole("heading", { name: "Liste de courses" });
+      if (outcome === "rejet") history.failNext("check", "Enregistrement des cases impossible.");
+      history.hold("check");
+      await user.click(carrot());
+      await history.store.add("jeton", rowOf(2, { date: "2026-11-24" }).entry, PDF);
+      refresh(1);
+      await screen.findByRole("heading", { level: 3, name: "mardi 24 novembre 2026" });
+      expect(boxes().every((input) => !input.checked)).toBe(true);
+      history.release();
+      await flush();
+      expect(boxes().every((input) => !input.checked)).toBe(true);
+      expect(screen.queryByRole("alert")).toBeNull();
+    },
+  );
+});
+
+function appSetup(rows: HistoryRow[]) {
+  const settings = fakeSettingsStore();
+  const keeper = createSettingsKeeper(settings.store);
+  const history = fakeHistoryStore(rows);
+  const invoke: Invoke = () => Promise.reject(new Error("jamais appelé"));
+  const session = createSession({
+    settings: keeper,
+    clock: fixedClock,
+    history: history.store,
+    createModel: fakeMenuModel([]).createModel,
+    renderPdf: fakeRenderPdf().renderPdf,
+    newToken: fakeNewToken(),
+  });
+  const services = {
+    settings: keeper,
+    secretAdmin: createKeychainSecretAdmin(invoke),
+    session,
+    history: history.store,
+    checks: createCheckKeeper(history.store),
+  };
+  renderWithMantine(<App services={services} />);
+  return { history, user: userEvent.setup() };
+}
+
+describe("IngredientsScreen : dans l'app", () => {
+  it("quitter l'écran pendant une écriture puis revenir : la case reste cochée avant la libération", async () => {
+    const { history, user } = appSetup([rowOf(1)]);
+    await user.click(screen.getByRole("button", { name: "Ingrédients" }));
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    history.hold("check");
+    await user.click(carrot());
+    await user.click(screen.getByRole("button", { name: "Historique" }));
+    await screen.findByText("mardi 17 novembre 2026");
+    await user.click(screen.getByRole("button", { name: "Ingrédients" }));
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    // La base dit encore `[]` : seul le propriétaire a l'état voulu.
+    expect(history.rows()[0]?.checked).toBe("[]");
+    expect(carrot().checked).toBe(true);
+    history.release();
+    await flush();
+    expect(carrot().checked).toBe(true);
+    expect(history.rows()[0]?.checked).toBe('["fresh|carotte"]');
+  });
+});

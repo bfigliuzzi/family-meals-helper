@@ -131,33 +131,56 @@ function lettersOf(line: ShoppingLine): string[] {
   return [...new Set(line.split.map((part) => dishLetter(part.dish)))];
 }
 
+// « soir » et « à confirmer » : les notes qui ne sont pas la forme.
+function flagsOf(line: ShoppingLine): string[] {
+  return [...(line.evening ? ["soir"] : []), ...(line.toConfirm ? ["à confirmer"] : [])];
+}
+
 // Forme, soir même, à confirmer : ce que la ligne doit dire en plus de sa quantité.
 function notesOf(line: ShoppingLine): string[] {
   const form = formSuffix(line.form, line.showForm);
-  return [
-    ...(form === "" ? [] : [form]),
-    ...(line.evening ? ["soir"] : []),
-    ...(line.toConfirm ? ["à confirmer"] : []),
-  ];
+  return [...(form === "" ? [] : [form]), ...flagsOf(line)];
+}
+
+// « a », ou « b : 500 g, c : 600 g » : la répartition entre les plats.
+function splitText(line: ShoppingLine): string {
+  const letters = lettersOf(line);
+  return letters.length === 1
+    ? letters[0]!
+    : letters
+        .map((letter) => {
+          const parts = line.split.filter((part) => dishLetter(part.dish) === letter);
+          return `${letter} : ${parts.map((part) => quantityText(part.qty, part.unit)).join(" + ")}`;
+        })
+        .join(", ");
+}
+
+// « 100 g + 2 pièces » : les sommes par unité, sans le nom.
+function totalsText(line: ShoppingLine): string {
+  return line.totals.map((total) => quantityText(total.qty, total.unit)).join(" + ");
 }
 
 // « 1,2 kg de potiron (d : 600 g, e : 600 g) », « 600 g de poireau (a) », « 600 g de cabillaud (a) · surgelé · soir ».
 export function shoppingLineText(line: ShoppingLine): string {
-  const letters = lettersOf(line);
-  const split =
-    letters.length === 1
-      ? letters[0]!
-      : letters
-          .map((letter) => {
-            const parts = line.split.filter((part) => dishLetter(part.dish) === letter);
-            return `${letter} : ${parts.map((part) => quantityText(part.qty, part.unit)).join(" + ")}`;
-          })
-          .join(", ");
   const notes = notesOf(line);
-  return `${quantityPhrase(line.totals, line.name, "display")} (${split})${notes.map((note) => ` · ${note}`).join("")}`;
+  return `${quantityPhrase(line.totals, line.name, "display")} (${splitText(line)})${notes.map((note) => ` · ${note}`).join("")}`;
+}
+
+// « 600 g (a) », « 1,1 kg (b : 500 g, c : 600 g) », « 600 g (a) · soir » : la ligne sans le nom ni la forme, pour un
+// affichage qui met le nom (avec sa forme) en premier (écran Ingrédients).
+export function shoppingLineDetail(line: ShoppingLine): string {
+  return `${totalsText(line)} (${splitText(line)})${flagsOf(line)
+    .map((note) => ` · ${note}`)
+    .join("")}`;
 }
 
 // Une entrée de la ligne Placard : « 30 ml d'huile d'olive (a, b) ».
 export function pantryLineText(line: ShoppingLine): string {
   return `${quantityPhrase(line.totals, line.name, "display")} (${[...lettersOf(line), ...notesOf(line)].join(", ")})`;
+}
+
+// Une entrée du placard sans le nom ni la forme : « 100 ml (a, b, c, d) ». Le placard sert à vérifier qu'on a
+// l'ingrédient : pas de répartition des quantités par plat.
+export function pantryLineDetail(line: ShoppingLine): string {
+  return `${totalsText(line)} (${[...lettersOf(line), ...flagsOf(line)].join(", ")})`;
 }

@@ -12,14 +12,11 @@ import {
 } from "@mantine/core";
 import { SESSION_DAY_LABELS, dishLetter, printable, readHistory } from "core";
 import type { HistoryItem, HistoryStore } from "core";
-import { useCallback, useEffect, useRef, useState } from "react";
 import { PdfActions } from "./history/PdfActions.tsx";
+import { useLatestRead } from "../useLatestRead.ts";
 import { HISTORY_TEXTS, dinnersText, fullDate, longDate, unreadableText } from "./history/texts.ts";
 
-type State =
-  | { status: "loading" }
-  | { status: "error"; message: string }
-  | { status: "ready"; items: HistoryItem[]; unreadable: number };
+const readEntries = async (store: HistoryStore) => readHistory(await store.list());
 
 function EntryCard({
   item,
@@ -93,48 +90,7 @@ export function HistoryScreen({
   refresh: number;
   onNewSession: () => void;
 }) {
-  const [state, setState] = useState<State>({ status: "loading" });
-  // `attempt` est le numéro de la lecture demandée : il ne fait qu'augmenter, à chaque clic sur « Réessayer » et à
-  // chaque changement de `refresh` ou de `history` (ajusté pendant le rendu, jamais dans un effet). Un seul effet lance les lectures.
-  // `settled` est le numéro de la dernière lecture lancée qui a répondu. Tant qu'ils diffèrent, une lecture est en
-  // cours : `reading` est calculé, jamais stocké.
-  const [attempt, setAttempt] = useState(0);
-  const [settled, setSettled] = useState<number | null>(null);
-  const [previousRefresh, setPreviousRefresh] = useState(refresh);
-  const [previousHistory, setPreviousHistory] = useState(history);
-  if (refresh !== previousRefresh || history !== previousHistory) {
-    setPreviousRefresh(refresh);
-    setPreviousHistory(history);
-    setAttempt(attempt + 1);
-  }
-  const reading = attempt !== settled;
-  // Une lecture qui répond après une lecture plus récente est ignorée.
-  const latestRead = useRef(0);
-
-  const load = useCallback(
-    async (number: number) => {
-      latestRead.current += 1;
-      const mine = latestRead.current;
-      let next: State;
-      try {
-        next = { status: "ready", ...readHistory(await history.list()) };
-      } catch (reason) {
-        next = {
-          status: "error",
-          message: reason instanceof Error ? reason.message : "Erreur inconnue.",
-        };
-      }
-      if (mine === latestRead.current) {
-        setState(next);
-        setSettled(number);
-      }
-    },
-    [history],
-  );
-
-  useEffect(() => {
-    void load(attempt);
-  }, [load, attempt]);
+  const { state, reading, retry } = useLatestRead(history, refresh, readEntries);
 
   return (
     <Stack gap="lg">
@@ -154,14 +110,7 @@ export function HistoryScreen({
         <Alert color="red" variant="light" title={HISTORY_TEXTS.errorTitle}>
           <Stack gap="xs" align="flex-start">
             <Text size="sm">{printable(state.message)}</Text>
-            <Button
-              variant="light"
-              size="xs"
-              loading={reading}
-              onClick={() => {
-                setAttempt(attempt + 1);
-              }}
-            >
+            <Button variant="light" size="xs" loading={reading} onClick={retry}>
               {HISTORY_TEXTS.retry}
             </Button>
           </Stack>
@@ -169,12 +118,12 @@ export function HistoryScreen({
       )}
       {state.status === "ready" && (
         <>
-          {state.unreadable > 0 && (
+          {state.value.unreadable > 0 && (
             <Alert color="yellow" variant="light">
-              {unreadableText(state.unreadable)}
+              {unreadableText(state.value.unreadable)}
             </Alert>
           )}
-          {state.items.length === 0 && (
+          {state.value.items.length === 0 && (
             <Paper withBorder p="lg">
               <Stack gap="md" align="flex-start">
                 <Text c="dimmed">{HISTORY_TEXTS.empty}</Text>
@@ -184,9 +133,9 @@ export function HistoryScreen({
               </Stack>
             </Paper>
           )}
-          {state.items.length > 0 && (
+          {state.value.items.length > 0 && (
             <Stack gap="sm">
-              {state.items.map((item, index) => (
+              {state.value.items.map((item, index) => (
                 <EntryCard key={item.id} item={item} latest={index === 0} history={history} />
               ))}
             </Stack>

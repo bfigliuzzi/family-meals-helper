@@ -3,7 +3,7 @@ import type { HistoryRow, HistoryStore } from "core";
 import { toTauriError } from "./tauri-error.ts";
 import type { Invoke } from "./tauri-error.ts";
 
-// Quatre commandes Rust (src-tauri/src/history.rs) : le front n'a aucun accès SQL ni aucun chemin de fichier.
+// Cinq commandes Rust (src-tauri/src/history.rs) : le front n'a aucun accès SQL ni aucun chemin de fichier.
 export function createTauriHistoryStore(invoke: Invoke): HistoryStore {
   const fallback = "Erreur inconnue de l'historique.";
   const failed = (reason: unknown): never => {
@@ -19,5 +19,8 @@ export function createTauriHistoryStore(invoke: Invoke): HistoryStore {
     list: () => invoke<HistoryRow[]>("history_list").catch(failed),
     openPdf: (id) => invoke<undefined>("history_open_pdf", { id }).catch(failed),
     exportPdf: (id) => invoke<string>("history_export_pdf", { id }).catch(failed),
+    // `invoke` sérialise en JSON : le tableau reçu (gelé) est recopié en tableau simple.
+    setChecked: (id, checked) =>
+      invoke<undefined>("history_set_checked", { id, checked: [...checked] }).catch(failed),
   };
 }
