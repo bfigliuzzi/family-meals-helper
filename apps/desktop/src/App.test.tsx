@@ -8,25 +8,31 @@ import type { Invoke } from "./platform/tauri-error.ts";
 import {
   fakeHistoryStore,
   fakeMenuModel,
+  fakeNewToken,
+  fakeRenderPdf,
   fakeSecretAdmin,
   fakeSettingsStore,
   fixedClock,
   lastWritten,
 } from "./test/fakes.ts";
+import detailReply from "./test/fixtures/detail-reply.json";
 import menuReply from "./test/fixtures/menu-reply.json";
 import { renderWithMantine } from "./test/render.tsx";
 
-function setup(replies: string[] = []) {
+function setup(replies: string[] = [], detailReplies: string[] = []) {
   const settings = fakeSettingsStore();
   const secrets = fakeSecretAdmin();
   const keeper = createSettingsKeeper(settings.store);
-  const model = fakeMenuModel(replies);
+  const model = fakeMenuModel(replies, [], detailReplies);
   const history = fakeHistoryStore();
+  const render = fakeRenderPdf();
   const session = createSession({
     settings: keeper,
     clock: fixedClock,
     history: history.store,
     createModel: model.createModel,
+    renderPdf: render.renderPdf,
+    newToken: fakeNewToken(),
   });
   const services = {
     settings: keeper,
@@ -35,7 +41,17 @@ function setup(replies: string[] = []) {
     history: history.store,
   };
   const { unmount } = renderWithMantine(<App services={services} />);
-  return { settings, secrets, model, session, services, history, unmount, user: userEvent.setup() };
+  return {
+    settings,
+    secrets,
+    model,
+    render,
+    session,
+    services,
+    history,
+    unmount,
+    user: userEvent.setup(),
+  };
 }
 
 const nav = (name: string) => screen.getByRole("button", { name });
@@ -266,6 +282,8 @@ describe("aller-retour d'écran pendant une écriture", () => {
       clock: fixedClock,
       history,
       createModel: fakeMenuModel([]).createModel,
+      renderPdf: fakeRenderPdf().renderPdf,
+      newToken: fakeNewToken(),
     });
     renderWithMantine(
       <App
@@ -456,5 +474,78 @@ describe("aliment ajouté par « éviter »", () => {
     await waitFor(() => {
       expect(lastWritten(settings.written).exclusions).toEqual([]);
     });
+  });
+});
+
+describe("validation pendant un changement d'écran", () => {
+  const DETAIL = JSON.stringify(detailReply);
+
+  async function composeMenu() {
+    const harness = setup([MENU], [DETAIL]);
+    await screen.findByRole("button", { name: "Composer le menu" });
+    await harness.user.type(
+      screen.getByRole("textbox", { name: "Demande" }),
+      "un bœuf bourguignon",
+    );
+    await harness.user.click(screen.getByRole("button", { name: "Composer le menu" }));
+    await screen.findByRole("button", { name: "Valider ce menu" });
+    return harness;
+  }
+
+  it("quitter pendant le détail : « Appel en cours », puis au retour la vue validée, sans second appel", async () => {
+    const { user, model } = await composeMenu();
+    model.detail.state.hold = true;
+    await user.click(screen.getByRole("button", { name: "Valider ce menu" }));
+    await screen.findByRole("heading", { name: "Validation en cours" });
+    await user.click(nav("Réglages"));
+    expect(screen.getByRole("button", { name: /Appel en cours/ })).toBeTruthy();
+    await waitFor(() => {
+      expect(model.detail.calls).toHaveLength(1);
+    });
+    model.detail.release(0);
+    await waitFor(() => {
+      expect(sessionNav().textContent).toContain("Nouveau");
+    });
+    await user.click(sessionNav());
+    expect(await screen.findByRole("heading", { name: "Menu validé" })).toBeTruthy();
+    expect(model.detail.calls).toHaveLength(1);
+    expect(model.detail.created()).toBe(1);
+  });
+
+  it("quitter pendant la préparation de la fiche : au retour la vue validée, un seul `add`", async () => {
+    const { user, render, history } = await composeMenu();
+    render.hold();
+    await user.click(screen.getByRole("button", { name: "Valider ce menu" }));
+    await waitFor(() => {
+      expect(render.calls).toHaveLength(1);
+    });
+    await user.click(nav("Réglages"));
+    expect(screen.getByRole("button", { name: /Appel en cours/ })).toBeTruthy();
+    render.release();
+    await waitFor(() => {
+      expect(sessionNav().textContent).toContain("Nouveau");
+    });
+    await user.click(sessionNav());
+    expect(await screen.findByRole("heading", { name: "Menu validé" })).toBeTruthy();
+    expect(history.added).toHaveLength(1);
+  });
+
+  it("rester sur Historique pendant qu'une validation se termine : l'entrée apparaît sans changer d'écran", async () => {
+    const { user, render } = await composeMenu();
+    render.hold();
+    await user.click(screen.getByRole("button", { name: "Valider ce menu" }));
+    await waitFor(() => {
+      expect(render.calls).toHaveLength(1);
+    });
+    await user.click(nav("Historique"));
+    expect(await screen.findByText(/Aucun menu validé pour l'instant/)).toBeTruthy();
+    render.release();
+    expect(await screen.findByText(/Demande : « un bœuf bourguignon »/)).toBeTruthy();
+    expect(heading("Historique")).toBeTruthy();
+  });
+
+  it("le badge « Version d'essai » est absent par défaut", () => {
+    setup();
+    expect(screen.queryByText(/Version d'essai/)).toBeNull();
   });
 });

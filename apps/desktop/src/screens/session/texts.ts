@@ -67,14 +67,16 @@ export const TEXTS = {
   restart: "Recommencer",
   restartAsk:
     "Recommencer la session ? La conversation, le menu courant et les épingles seront effacés. Les réglages ne changent pas.",
+  restartAskValidation:
+    "Recommencer la session ? La conversation, le menu courant, les épingles et la validation en cours seront effacés. Les réglages et l'historique ne changent pas.",
   erase: "Effacer",
   cancel: "Annuler",
   dayLabel: "Jour de la session de cuisine",
-  dayChanged: "Jour changé : pris en compte au prochain message.",
+  dayChanged: "Jour changé : pris en compte au prochain message et à la validation.",
   dinnersLabel: "Nombre de dîners",
   dinnersHint:
     "Seul ce champ fixe le nombre de dîners (1 à 5) ; un nombre écrit dans la demande ne compte pas.",
-  dinnersChanged: "Nombre changé : pris en compte au prochain message.",
+  dinnersChanged: "Nombre changé : pris en compte au prochain message et à la validation.",
   settingsUnavailable: "Réglages indisponibles",
   settingsNeeded: "La composition a besoin des réglages (modèle, aliments à éviter, équipement).",
   openSettings: "Ouvrir les réglages",
@@ -112,9 +114,76 @@ export const TEXTS = {
   noFinding: "Aucun constat détecté.",
   interrupted: "Cycle interrompu",
   interruptedText: "Le cycle s'est arrêté avant la fin : voici le meilleur menu obtenu.",
-  footer:
-    "La validation du menu (détail des étapes, fiche PDF, historique) arrive dans la prochaine version.",
   reasonLabel: "Raison (facultative)",
   reasonPlaceholder: "ex. : n'aime pas",
   avoid: "Éviter",
 } as const;
+
+export const VALIDATE_TEXTS = {
+  button: "Valider ce menu",
+  help: "La validation contrôle le menu avec vos réglages, le jour et le nombre de dîners affichés. Claude rédige ensuite le détail des étapes (1 à 3 appels, quelques minutes, sans annulation possible), puis l'app prépare la fiche PDF et l'ajoute à l'historique.",
+  blockedTitle: "Validation impossible",
+  blockedIntro: "Le menu ne passe plus le contrôle :",
+  blockedFix:
+    "Si vous avez changé le jour, le nombre de dîners ou les Réglages, remettez-les comme pour ce menu et validez à nouveau, sans appel à Claude. Sinon, demandez une modification.",
+  writeChange: "Écrire une modification",
+  settingsNotReady: "Les réglages ne sont pas encore chargés : réessayez dans un instant.",
+  titles: {
+    detail: "Validation en cours",
+    tooLong: "Session de plus de 3 h",
+    fallback: "Détail des étapes inutilisable",
+    save: "Préparation de la fiche",
+    saveFailed: "Fiche non enregistrée",
+    saved: "Menu validé",
+  },
+  writing: "Rédaction du détail",
+  writingFirst:
+    "Claude rédige les étapes de la session et ce qu'il reste à faire chaque soir, puis l'app recalcule le planning.",
+  writingNext: "Claude corrige les étapes de l'essai précédent.",
+  detailPatience:
+    "Cela peut prendre plusieurs minutes, sans annulation possible. Vous pouvez changer d'écran : le résultat s'affichera ici.",
+  preparing: "Préparation de la fiche PDF…",
+  preparingHint: "La fenêtre peut se figer une seconde.",
+  keep: "Garder la fiche",
+  keepPhases: "Garder la fiche des grandes phases",
+  back: "Revenir au menu",
+  retry: "Réessayer",
+  newSession: "Commencer une nouvelle session",
+  keepFree: "gratuit. La fiche porte un avertissement.",
+  keepPhasesFree: "gratuit.",
+  backTooLong:
+    "gratuit tout de suite, pour remplacer ce plat. Le détail rédigé est abandonné, et la prochaine validation le fera rédiger de nouveau (1 à 3 appels payés).",
+  backFallback:
+    "gratuit tout de suite ; la prochaine validation fera rédiger le détail de nouveau (1 à 3 appels payés).",
+  fallbackExplain:
+    "La fiche peut quand même être produite avec les grandes phases du menu, sans quantités à chaque étape ni consigne du soir rédigée.",
+  saveFailedKept:
+    "Le détail rédigé par Claude est gardé : « Réessayer » refait seulement la fiche et son enregistrement, sans nouvel appel.",
+  saveFailedBack: "Revenir au menu abandonne le détail rédigé.",
+  savedOk: "Menu enregistré dans l'historique. La fiche s'ouvre dans Aperçu.",
+  savedBackHelp:
+    "Revenir au menu garde la conversation : une nouvelle validation ajoutera un autre menu à l'historique.",
+  warningTooLong: "La fiche porte un avertissement : session de plus de 3 h.",
+  warningFallback:
+    "La fiche porte un avertissement : grandes phases seulement, sans détail des étapes.",
+} as const;
+
+export function detailAttemptText(attempt: number): string {
+  return `Essai ${String(attempt)} sur 3 : ${attempt === 1 ? VALIDATE_TEXTS.writingFirst : VALIDATE_TEXTS.writingNext}`;
+}
+
+// Le texte sans espaces autour, avec un point final s'il n'en a pas déjà un (`.`, `!`, `?` ou `…`, même suivi de
+// guillemets ou d'une parenthèse fermante). Vide reste vide : jamais un point seul.
+export function endSentence(text: string): string {
+  const trimmed = text.trim();
+  if (trimmed === "") return "";
+  return /[.!?…][»"”)\s]*$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
+export function savedOpenErrorText(openError: string): string {
+  const base = "Menu enregistré dans l'historique, mais Aperçu n'a pas ouvert la fiche";
+  const phrase = endSentence(printable(openError));
+  // Sans phrase lisible (message vide après nettoyage) : pas de « : » seul, la consigne reste.
+  const reason = phrase === "" ? "." : ` : ${phrase}`;
+  return `${base}${reason} « Ouvrir la fiche » réessaie, sans nouvel appel.`;
+}

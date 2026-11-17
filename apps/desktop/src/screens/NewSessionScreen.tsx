@@ -9,14 +9,15 @@ import {
   Text,
   Title,
 } from "@mantine/core";
-import { SESSION_DAYS, SESSION_DAY_LABELS, monthName } from "core";
-import type { Session, SettingsKeeper } from "core";
+import { SESSION_DAYS, SESSION_DAY_LABELS, isSessionBusy, monthName } from "core";
+import type { HistoryStore, Session, SettingsKeeper } from "core";
 import { useEffect, useId, useRef, useState } from "react";
 import { useSessionSnapshot } from "../useSessionSnapshot.ts";
 import { useSettingsSnapshot } from "../useSettingsSnapshot.ts";
 import { ExchangeList } from "./session/ExchangeList.tsx";
 import { MenuPanel } from "./session/MenuPanel.tsx";
 import { RequestPanel } from "./session/RequestPanel.tsx";
+import { ValidationPanel } from "./session/ValidationPanel.tsx";
 import { TEXTS } from "./session/texts.ts";
 
 const BREAKPOINTS = { xs: "480px", sm: "700px", md: "900px", lg: "1100px", xl: "1300px" };
@@ -31,10 +32,12 @@ const DAY_OPTIONS = SESSION_DAYS.map((day) => ({
 export function NewSessionScreen({
   session,
   settings,
+  history,
   onOpenSettings,
 }: {
   session: Session;
   settings: SettingsKeeper;
+  history: HistoryStore;
   onOpenSettings: () => void;
 }) {
   const snapshot = useSessionSnapshot(session);
@@ -64,10 +67,25 @@ export function NewSessionScreen({
     if (document.activeElement === document.body) field.current?.focus();
   }, [snapshot.exchanges.length]);
 
-  const busy = snapshot.pending !== null;
-  const { current } = snapshot;
+  // « Revenir au menu », « Commencer une nouvelle session » et « Effacer » remplacent la vue de validation par la
+  // grille : le champ n'est pas encore monté dans le gestionnaire du clic. Le focus est demandé ici et donné par
+  // l'effet, après le rendu qui a remonté le champ.
+  const [focusRequest, setFocusRequest] = useState(0);
+  useEffect(() => {
+    if (focusRequest > 0) field.current?.focus();
+  }, [focusRequest]);
+  const askFocus = () => {
+    setFocusRequest((count) => count + 1);
+  };
+
+  const busy = isSessionBusy(snapshot);
+  const { current, validation, validated } = snapshot;
   const canRestart =
-    !busy && (snapshot.exchanges.length > 0 || snapshot.draft !== "" || snapshot.failure !== null);
+    !busy &&
+    (snapshot.exchanges.length > 0 ||
+      snapshot.draft !== "" ||
+      snapshot.failure !== null ||
+      validation !== null);
 
   return (
     <Stack gap="lg">
@@ -94,7 +112,9 @@ export function NewSessionScreen({
       </Group>
       {confirming && canRestart && (
         <Stack gap="xs" align="flex-start">
-          <Text size="sm">{TEXTS.restartAsk}</Text>
+          <Text size="sm">
+            {validation === null ? TEXTS.restartAsk : TEXTS.restartAskValidation}
+          </Text>
           <Group gap="xs">
             <Button
               color="red"
@@ -102,7 +122,7 @@ export function NewSessionScreen({
               onClick={() => {
                 session.reset();
                 setConfirming(false);
-                field.current?.focus();
+                askFocus();
               }}
             >
               {TEXTS.erase}
@@ -119,71 +139,84 @@ export function NewSessionScreen({
           </Group>
         </Stack>
       )}
-      <Group wrap="wrap" align="flex-end" gap="lg">
-        <Stack gap={4}>
-          <Input.Wrapper label={TEXTS.dayLabel} labelProps={{ id: dayLabelId }}>
-            <SegmentedControl
-              aria-labelledby={dayLabelId}
-              data={DAY_OPTIONS}
-              value={snapshot.sessionDay}
-              disabled={busy}
-              onChange={(value) => {
-                const day = SESSION_DAYS.find((candidate) => candidate === value);
-                if (day !== undefined) session.setSessionDay(day);
-              }}
-            />
-          </Input.Wrapper>
-          {current !== null && current.sessionDay !== snapshot.sessionDay && (
-            <Text size="sm">{TEXTS.dayChanged}</Text>
-          )}
-        </Stack>
-        <Stack gap={4}>
-          <NumberInput
-            label={TEXTS.dinnersLabel}
-            description={TEXTS.dinnersHint}
-            min={1}
-            max={5}
-            allowDecimal={false}
-            clampBehavior="strict"
-            w={180}
-            disabled={busy}
-            value={dinners}
-            onChange={(value) => {
-              setDinners(value);
-              if (typeof value === "number") session.setDinners(value);
-            }}
-            onBlur={() => {
-              if (dinners === "") setDinners(snapshot.dinners);
-            }}
-          />
-          {current !== null && current.dinners !== snapshot.dinners && (
-            <Text size="sm">{TEXTS.dinnersChanged}</Text>
-          )}
-        </Stack>
-        <Text size="sm">Saison : {monthName(snapshot.month)}</Text>
-      </Group>
-      <Grid type="container" breakpoints={BREAKPOINTS}>
-        <Grid.Col span={{ base: 12, sm: 5 }}>
-          <Stack gap="md">
-            <RequestPanel
-              session={session}
-              snapshot={snapshot}
-              settings={settingsSnapshot}
-              field={field}
-              onOpenSettings={onOpenSettings}
-            />
-            <ExchangeList exchanges={snapshot.exchanges} />
-          </Stack>
-        </Grid.Col>
-        <Grid.Col span={{ base: 12, sm: 7 }}>
-          <MenuPanel
-            snapshot={snapshot}
-            session={session}
-            settings={settings}
-            onOpenSettings={onOpenSettings}
-          />
-        </Grid.Col>
-      </Grid>
+      {validation !== null && validated !== null ? (
+        <ValidationPanel
+          session={session}
+          history={history}
+          validation={validation}
+          validated={validated}
+          onLeave={askFocus}
+        />
+      ) : (
+        <>
+          <Group wrap="wrap" align="flex-end" gap="lg">
+            <Stack gap={4}>
+              <Input.Wrapper label={TEXTS.dayLabel} labelProps={{ id: dayLabelId }}>
+                <SegmentedControl
+                  aria-labelledby={dayLabelId}
+                  data={DAY_OPTIONS}
+                  value={snapshot.sessionDay}
+                  disabled={busy}
+                  onChange={(value) => {
+                    const day = SESSION_DAYS.find((candidate) => candidate === value);
+                    if (day !== undefined) session.setSessionDay(day);
+                  }}
+                />
+              </Input.Wrapper>
+              {current !== null && current.sessionDay !== snapshot.sessionDay && (
+                <Text size="sm">{TEXTS.dayChanged}</Text>
+              )}
+            </Stack>
+            <Stack gap={4}>
+              <NumberInput
+                label={TEXTS.dinnersLabel}
+                description={TEXTS.dinnersHint}
+                min={1}
+                max={5}
+                allowDecimal={false}
+                clampBehavior="strict"
+                w={180}
+                disabled={busy}
+                value={dinners}
+                onChange={(value) => {
+                  setDinners(value);
+                  if (typeof value === "number") session.setDinners(value);
+                }}
+                onBlur={() => {
+                  if (dinners === "") setDinners(snapshot.dinners);
+                }}
+              />
+              {current !== null && current.dinners !== snapshot.dinners && (
+                <Text size="sm">{TEXTS.dinnersChanged}</Text>
+              )}
+            </Stack>
+            <Text size="sm">Saison : {monthName(snapshot.month)}</Text>
+          </Group>
+          <Grid type="container" breakpoints={BREAKPOINTS}>
+            <Grid.Col span={{ base: 12, sm: 5 }}>
+              <Stack gap="md">
+                <RequestPanel
+                  session={session}
+                  snapshot={snapshot}
+                  settings={settingsSnapshot}
+                  field={field}
+                  onOpenSettings={onOpenSettings}
+                />
+                <ExchangeList exchanges={snapshot.exchanges} />
+              </Stack>
+            </Grid.Col>
+            <Grid.Col span={{ base: 12, sm: 7 }}>
+              <MenuPanel
+                snapshot={snapshot}
+                session={session}
+                settings={settings}
+                field={field}
+                onOpenSettings={onOpenSettings}
+              />
+            </Grid.Col>
+          </Grid>
+        </>
+      )}
     </Stack>
   );
 }

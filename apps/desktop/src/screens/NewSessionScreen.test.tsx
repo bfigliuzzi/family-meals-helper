@@ -4,13 +4,15 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MenuReplySchema, createSession, createSettingsKeeper } from "core";
-import type { Model, Settings } from "core";
+import type { Model, SessionDeps, Settings } from "core";
 import { StrictMode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { createAppModel } from "../platform/ai-model.ts";
 import {
   fakeHistoryStore,
   fakeMenuModel,
+  fakeNewToken,
+  fakeRenderPdf,
   fakeSettingsStore,
   fixedClock,
   lastWritten,
@@ -31,8 +33,12 @@ function menuWith(change: (reply: typeof menuReply) => void): string {
 
 interface Options {
   readError?: string;
-  createModel?: (settings: Settings) => Promise<Model>;
+  createModel?: (
+    settings: Settings,
+    schema: Parameters<SessionDeps["createModel"]>[1],
+  ) => Promise<Model>;
   stopReasons?: (string | null)[];
+  detailReplies?: string[];
   strict?: boolean;
 }
 
@@ -40,21 +46,39 @@ function setup(replies: string[], options: Options = {}) {
   const settings = fakeSettingsStore();
   if (options.readError !== undefined) settings.state.readError = options.readError;
   const keeper = createSettingsKeeper(settings.store);
-  const model = fakeMenuModel(replies, options.stopReasons);
+  const model = fakeMenuModel(replies, options.stopReasons, options.detailReplies);
+  const history = fakeHistoryStore();
+  const render = fakeRenderPdf();
   const session = createSession({
     settings: keeper,
     clock: fixedClock,
-    history: fakeHistoryStore().store,
+    history: history.store,
     createModel: options.createModel ?? model.createModel,
+    renderPdf: render.renderPdf,
+    newToken: fakeNewToken(),
   });
   const onOpenSettings = vi.fn();
   const screenElement = (
-    <NewSessionScreen session={session} settings={keeper} onOpenSettings={onOpenSettings} />
+    <NewSessionScreen
+      session={session}
+      settings={keeper}
+      history={history.store}
+      onOpenSettings={onOpenSettings}
+    />
   );
   renderWithMantine(
     options.strict === true ? <StrictMode>{screenElement}</StrictMode> : screenElement,
   );
-  return { settings, keeper, model, session, onOpenSettings, user: userEvent.setup() };
+  return {
+    settings,
+    keeper,
+    model,
+    history,
+    render,
+    session,
+    onOpenSettings,
+    user: userEvent.setup(),
+  };
 }
 
 type User = ReturnType<typeof userEvent.setup>;
@@ -485,7 +509,9 @@ describe("changements en attente", () => {
     await say(user, "un menu");
     expect(screen.queryByText(/Jour changé/)).toBeNull();
     await user.click(screen.getByRole("radio", { name: "Samedi" }));
-    expect(screen.getByText("Jour changé : pris en compte au prochain message.")).toBeTruthy();
+    expect(
+      screen.getByText("Jour changé : pris en compte au prochain message et à la validation."),
+    ).toBeTruthy();
     await user.click(screen.getByRole("radio", { name: "Dimanche" }));
     expect(screen.queryByText(/Jour changé/)).toBeNull();
   });
@@ -502,7 +528,9 @@ describe("changements en attente", () => {
     const dinners = screen.getByRole("textbox", { name: /Nombre de dîners/ });
     await user.clear(dinners);
     await user.type(dinners, "3");
-    expect(screen.getByText("Nombre changé : pris en compte au prochain message.")).toBeTruthy();
+    expect(
+      screen.getByText("Nombre changé : pris en compte au prochain message et à la validation."),
+    ).toBeTruthy();
     await user.clear(dinners);
     await user.type(dinners, "5");
     expect(screen.queryByText(/Nombre changé/)).toBeNull();

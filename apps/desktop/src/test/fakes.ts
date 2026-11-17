@@ -1,4 +1,16 @@
-import type { HistoryRow, HistoryStore, Model, SecretAdmin, Settings, SettingsStore } from "core";
+import { DetailSchema } from "core";
+import type {
+  HistoryRow,
+  HistoryStore,
+  Model,
+  SecretAdmin,
+  SessionDeps,
+  Settings,
+  SettingsStore,
+} from "core";
+import type { TDocumentDefinitions } from "pdfmake/interfaces.js";
+
+type Schema = Parameters<SessionDeps["createModel"]>[1];
 
 export interface HeldWrite {
   document: string;
@@ -96,14 +108,11 @@ export const fixedClock = { now: () => new Date(2026, 10, 16) };
 
 type Reply = Awaited<ReturnType<Model["complete"]>>;
 
-// Faux modèle de composition. Chaque `complete` répond la réponse suivante de `replies`, la dernière se répétant.
-// `stopReasons` donne, appel par appel, la raison d'arrêt (« end_turn » par défaut).
-// Avec `hold = true`, chaque `complete` attend `release` ou `fail` (rang de l'appel, depuis 0).
-export function fakeMenuModel(replies: string[], stopReasons: (string | null)[] = []) {
+// Un faux modèle à réponses : chaque `complete` répond la réponse suivante de `replies`, la dernière se répétant.
+// Avec `state.hold`, chaque `complete` attend `release` ou `fail` (rang de l'appel, depuis 0).
+function scriptedModel(replies: string[], stopReasons: (string | null)[] = []) {
   const calls: { system: string; user: string }[] = [];
-  const received: Settings[] = [];
   const waiting: { reply: Reply; resolve(reply: Reply): void; reject(error: Error): void }[] = [];
-  let created = 0;
   const state = { hold: false };
   const model: Model = {
     complete(prompt) {
@@ -121,15 +130,9 @@ export function fakeMenuModel(replies: string[], stopReasons: (string | null)[] 
     },
   };
   return {
-    state,
+    model,
     calls,
-    received,
-    created: () => created,
-    createModel: (settings: Settings): Promise<Model> => {
-      created += 1;
-      received.push(settings);
-      return Promise.resolve(model);
-    },
+    state,
     release(index: number) {
       const call = waiting[index];
       if (call === undefined) throw new Error(`aucun appel ${String(index)} en attente`);
@@ -140,6 +143,98 @@ export function fakeMenuModel(replies: string[], stopReasons: (string | null)[] 
       if (call === undefined) throw new Error(`aucun appel ${String(index)} en attente`);
       call.reject(error);
     },
+  };
+}
+
+// Faux modèles de composition (`replies`) et de détail (`detailReplies`) : `createModel` rend l'un ou l'autre selon
+// le schéma demandé. `stopReasons` donne, appel par appel, la raison d'arrêt de la composition (« end_turn » par
+// défaut). `state.hold`, `release` et `fail` concernent la composition ; `detail.state.hold`, `detail.release` et
+// `detail.fail` le détail.
+export function fakeMenuModel(
+  replies: string[],
+  stopReasons: (string | null)[] = [],
+  detailReplies: string[] = [],
+) {
+  const menu = scriptedModel(replies, stopReasons);
+  const detail = scriptedModel(detailReplies);
+  const received: Settings[] = [];
+  const created = { menu: 0, detail: 0 };
+  return {
+    state: menu.state,
+    calls: menu.calls,
+    received,
+    created: () => created.menu,
+    release: (index: number) => {
+      menu.release(index);
+    },
+    fail: (index: number, error: Error) => {
+      menu.fail(index, error);
+    },
+    detail: {
+      state: detail.state,
+      calls: detail.calls,
+      created: () => created.detail,
+      release: (index: number) => {
+        detail.release(index);
+      },
+      fail: (index: number, error: Error) => {
+        detail.fail(index, error);
+      },
+    },
+    createModel: (settings: Settings, schema: Schema): Promise<Model> => {
+      received.push(settings);
+      if (schema === DetailSchema) {
+        created.detail += 1;
+        return Promise.resolve(detail.model);
+      }
+      created.menu += 1;
+      return Promise.resolve(menu.model);
+    },
+  };
+}
+
+// Faux rendu de la fiche : `%PDF-1.7 exemple`. `calls` garde les définitions reçues ; `failNext` fait échouer le
+// prochain rendu ; `hold` retient le prochain rendu jusqu'à `release()`.
+export function fakeRenderPdf() {
+  const calls: { doc: TDocumentDefinitions; at: Date }[] = [];
+  const failures: string[] = [];
+  const state = { hold: false };
+  const releases: (() => void)[] = [];
+  const bytes = () => new TextEncoder().encode("%PDF-1.7 exemple");
+  return {
+    calls,
+    failNext(message: string) {
+      failures.push(message);
+    },
+    hold() {
+      state.hold = true;
+    },
+    release() {
+      const next = releases.shift();
+      if (next === undefined) throw new Error("aucun rendu retenu");
+      next();
+    },
+    renderPdf: (doc: TDocumentDefinitions, at: Date): Promise<Uint8Array> => {
+      calls.push({ doc, at });
+      const failure = failures.shift();
+      if (failure !== undefined) return Promise.reject(new Error(failure));
+      if (!state.hold) return Promise.resolve(bytes());
+      state.hold = false;
+      return new Promise<Uint8Array>((resolve) => {
+        releases.push(() => {
+          resolve(bytes());
+        });
+      });
+    },
+  };
+}
+
+// Jetons distincts, comme `crypto.randomUUID()`.
+export function fakeNewToken(): () => string {
+  let count = 0;
+  return () => {
+    count += 1;
+    return `token-${String(count)}`;
   };
 }
 

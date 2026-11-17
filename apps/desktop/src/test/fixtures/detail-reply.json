@@ -1,0 +1,156 @@
+{
+  "steps": [
+    {
+      "id": "s1",
+      "phase": "Cuissons longues",
+      "dishes": ["c"],
+      "text": "Préchauffer le four",
+      "minutes": 15,
+      "appliance": "oven",
+      "attended": false,
+      "after": []
+    },
+    {
+      "id": "s2",
+      "phase": "Cuissons longues",
+      "dishes": ["c"],
+      "text": "Couper {c.1} et {c.2}",
+      "minutes": 15,
+      "appliance": "none",
+      "attended": true,
+      "after": []
+    },
+    {
+      "id": "s3",
+      "phase": "Cuissons longues",
+      "dishes": ["c"],
+      "text": "Braiser au four",
+      "minutes": 120,
+      "appliance": "oven",
+      "attended": false,
+      "after": ["s1", "s2"]
+    },
+    {
+      "id": "s4",
+      "phase": "Découpes",
+      "dishes": ["d", "e"],
+      "text": "Éplucher et couper {d.2/e.1}",
+      "minutes": 20,
+      "appliance": "none",
+      "attended": true,
+      "after": []
+    },
+    {
+      "id": "s5",
+      "phase": "Cuissons",
+      "dishes": ["d"],
+      "text": "Cuire le dal avec {d.1}",
+      "minutes": 25,
+      "appliance": "thermomix",
+      "attended": false,
+      "after": ["s4"]
+    },
+    {
+      "id": "s6",
+      "phase": "Découpes",
+      "dishes": ["e"],
+      "text": "Couper {e.2}",
+      "minutes": 10,
+      "appliance": "none",
+      "attended": true,
+      "after": []
+    },
+    {
+      "id": "s7",
+      "phase": "Cuissons",
+      "dishes": ["e"],
+      "text": "Cuire la soupe",
+      "minutes": 30,
+      "appliance": "kenwood",
+      "attended": false,
+      "after": ["s4", "s6"]
+    },
+    {
+      "id": "s8",
+      "phase": "Cuissons",
+      "dishes": ["e"],
+      "text": "Mixer la soupe",
+      "minutes": 5,
+      "appliance": "none",
+      "attended": true,
+      "after": ["s7"]
+    },
+    {
+      "id": "s9",
+      "phase": "Découpes",
+      "dishes": ["b"],
+      "text": "Éplucher et couper {b.2} et {b.3}",
+      "minutes": 20,
+      "appliance": "none",
+      "attended": true,
+      "after": []
+    },
+    {
+      "id": "s10",
+      "phase": "Cuissons",
+      "dishes": ["b"],
+      "text": "Saisir {b.1}",
+      "minutes": 10,
+      "appliance": "induction",
+      "attended": true,
+      "after": ["s9"]
+    },
+    {
+      "id": "s11",
+      "phase": "Cuissons",
+      "dishes": ["b"],
+      "text": "Mijoter le poulet et les carottes",
+      "minutes": 40,
+      "appliance": "induction",
+      "attended": false,
+      "after": ["s10"]
+    },
+    {
+      "id": "s12",
+      "phase": "Découpes",
+      "dishes": ["a"],
+      "text": "Laver et émincer {a.1}",
+      "minutes": 15,
+      "appliance": "none",
+      "attended": true,
+      "after": []
+    },
+    {
+      "id": "s13",
+      "phase": "Cuissons",
+      "dishes": ["a"],
+      "text": "Cuire la fondue de poireaux",
+      "minutes": 25,
+      "appliance": "induction",
+      "attended": false,
+      "after": ["s12"]
+    }
+  ],
+  "evenings": [
+    {
+      "dish": "a",
+      "text": "Cuire le riz et poêler le cabillaud encore surgelé, puis réchauffer la fondue de poireaux."
+    },
+    {
+      "dish": "b",
+      "text": "Réchauffer à feu doux, avec un peu d'eau si la sauce a trop réduit."
+    },
+    {
+      "dish": "c",
+      "text": "Réchauffer au four ou à la casserole, à couvert."
+    },
+    {
+      "dish": "d",
+      "text": "Réchauffer le dal et servir avec un filet de citron."
+    },
+    {
+      "dish": "e",
+      "text": "Réchauffer la soupe en remuant, et la mixer à nouveau si elle a épaissi."
+    }
+  ]
+}

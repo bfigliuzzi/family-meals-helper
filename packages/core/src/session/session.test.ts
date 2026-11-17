@@ -55,6 +55,12 @@ function listOnly(list: () => Promise<HistoryRow[]>): HistoryStore {
   };
 }
 
+// Ces tests ne valident pas : le rendu et le jeton ne servent pas (voir validate.test.ts).
+const unusedValidation = {
+  renderPdf: () => Promise.reject(new Error("jamais appelé")),
+  newToken: () => "jamais-appele",
+};
+
 const emptyHistory = listOnly(() => Promise.resolve([]));
 
 function pastRow(id: number, date: string, dishName: string): HistoryRow {
@@ -119,6 +125,7 @@ async function harness(replies: string[], options: Options = {}) {
     settings: keeper,
     clock: options.clock ?? clockAt(new Date(2026, 10, 16)),
     history: options.history ?? emptyHistory,
+    ...unusedValidation,
     createModel:
       options.createModel ??
       ((settings) => {
@@ -190,6 +197,7 @@ describe("verrou", () => {
       settings: createSettingsKeeper(store),
       clock: clockAt(new Date(2026, 10, 16)),
       history: emptyHistory,
+      ...unusedValidation,
       createModel: () => {
         created += 1;
         return Promise.reject(new Error("jamais appelé"));
@@ -390,6 +398,7 @@ describe("publications", () => {
       settings: createSettingsKeeper(store),
       clock: clockAt(new Date(2026, 10, 16)),
       history: emptyHistory,
+      ...unusedValidation,
       createModel: () => Promise.reject(new Error("inutile")),
       onListenerError: (error) => {
         errors.push(error);

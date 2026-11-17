@@ -8,6 +8,7 @@ import {
   Title,
   VisuallyHidden,
 } from "@mantine/core";
+import { isSessionBusy } from "core";
 import { useState } from "react";
 import type { Services } from "./platform/services.ts";
 import { SaveFailure, SaveSuccess } from "./SaveStatus.tsx";
@@ -48,7 +49,7 @@ export function App({
 
   // Appel en cours : un chargement. Résultat arrivé pendant qu'un autre écran était affiché : « Nouveau ».
   function sessionIndicator() {
-    if (session.pending !== null) {
+    if (isSessionBusy(session)) {
       return (
         <Group gap={4}>
           <Loader size="xs" />
@@ -72,6 +73,11 @@ export function App({
         <AppShell.Header>
           <Group h="100%" px="md">
             <Title order={4}>Family Meals Helper</Title>
+            {__FMH_FIXTURE_MODEL__ && (
+              <Badge color="orange" variant="light">
+                Version d'essai : réponses d'exemple, sans Claude
+              </Badge>
+            )}
           </Group>
         </AppShell.Header>
         <AppShell.Navbar p="sm">
@@ -99,6 +105,7 @@ export function App({
               <NewSessionScreen
                 session={services.session}
                 settings={services.settings}
+                history={services.history}
                 onOpenSettings={() => {
                   go("settings");
                 }}

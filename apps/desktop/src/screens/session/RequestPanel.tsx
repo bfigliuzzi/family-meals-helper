@@ -10,6 +10,7 @@ import {
   Textarea,
   Title,
 } from "@mantine/core";
+import { isSessionBusy } from "core";
 import type { Session, SessionSnapshot, SettingsSnapshot } from "core";
 import { useRef, useState } from "react";
 import type { RefObject, SyntheticEvent } from "react";
@@ -104,7 +105,7 @@ export function RequestPanel({
             minRows={3}
             maxRows={8}
             maxLength={2000}
-            readOnly={pending !== null}
+            readOnly={isSessionBusy(snapshot)}
             value={snapshot.draft}
             error={error}
             onChange={(event) => {

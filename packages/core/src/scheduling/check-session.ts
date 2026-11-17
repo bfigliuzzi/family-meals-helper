@@ -193,8 +193,11 @@ function phasesInCycles(entries: readonly SessionPhase[]): string[] {
 }
 
 // Plat de la phase qui finit le plus tard ; à égalité de fin, la première du planning.
-export function lastDish(plan: SessionPlan, menu: Menu): { name: string; end: number } {
+export function lastDish(
+  plan: SessionPlan,
+  menu: Menu,
+): { name: string; end: number; index: number } {
   let last = plan.phases[0]!;
   for (const entry of plan.phases) if (entry.end > last.end) last = entry;
-  return { name: menu.dishes[last.dish]!.name, end: last.end };
+  return { name: menu.dishes[last.dish]!.name, end: last.end, index: last.dish };
 }

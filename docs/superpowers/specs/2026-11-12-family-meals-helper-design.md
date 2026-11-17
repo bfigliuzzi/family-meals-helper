@@ -109,6 +109,8 @@ Une demande explicite l'emporte sur une règle souple. Un bourguignon demandé c
 
 > **Note du 14/11/2026 (lot 4).** En ligne de commande (`batch`) : l'IA rédige un détail court (étapes avec repères d'ingrédients, une ligne par soir). Le code recalcule le planning et contrôle le détail : repères, exclusions, appareils, 3 h. Plus de 3 h après 3 essais : PDF avec avertissement, code 1. Détail faux ou illisible : fiche de repli avec les grandes phases de la composition, code 1. Pas de PDF seulement sans menu utilisable (code 2). L'historique est pour le lot 6. *Le retour au menu proposé à l'étape 2 n'existe pas en ligne de commande : il viendra avec l'app (lot 6).*
 
+> **Note du 16/11/2026 (lot 6.5b).** Dans l'app : au clic « Valider ce menu », le menu est contrôlé de nouveau avec les réglages, le jour et le nombre de dîners affichés (un `error` bloque, sans appel). Puis l'IA rédige le détail (1 à 3 appels, nombre réel affiché). Plus de 3 h, ou détail inutilisable : l'app demande, avec deux boutons égaux, « Revenir au menu » (le détail payé est abandonné) ou « Garder la fiche » (avertissement ou grandes phases). La fiche est rendue dans la vue web, enregistrée dans l'historique, puis ouverte dans Aperçu ; elle peut être exportée dans Téléchargements, sans jamais écraser un fichier.
+
 ## 6. Règles et vérifications
 
 Chaque règle existe sous deux formes :
@@ -261,7 +263,7 @@ Il n'existe pas d'API publique de prix pour les enseignes françaises, et les CG
 - **Nouvelle session** : la conversation avec l'IA, et le menu courant affiché à côté, mis à jour à chaque modification.
 - **Ingrédients** : la liste de courses par rayon, avec des cases à cocher, les coûts estimés et le total. *Note du 14/11/2026 (lot 4) : les rayons sont retirés ; reste à trancher avant le lot 6 si cet écran reste par rayon (`docs/roadmap.md`, « Questions ouvertes »).*
 - **Réglages** : les ingrédients à éviter, l'équipement, la clé d'API, le modèle, la table de prix. *Note du 15/11/2026 (lot 5) : livrés, trois sections. « Connexion à Claude » (clé d'API et modèle), « Aliments à éviter » et « Équipement ». L'enregistrement est immédiat. La table de prix arrive avec le lot 7. L'interface utilise Mantine.*
-- **Historique** : les 5 derniers menus, avec leur PDF.
+- **Historique** : les 5 derniers menus, avec leur PDF. *Note du 16/11/2026 (lot 6.5) : livré. Chaque entrée montre la date, la demande, les plats et un badge d'avertissement ; « Ouvrir la fiche » (Aperçu) et « Exporter dans Téléchargements ». Les plats des 5 derniers menus sont donnés à l'IA pour qu'elle ne les reprenne pas.*
 - L'utilisateur veut une app soignée : une interface propre et sobre.
 
 **Le PDF**, sur le modèle des fiches cuisine-addict :

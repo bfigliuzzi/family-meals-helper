@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Checkbox,
+  Divider,
   Group,
   List,
   Paper,
@@ -22,6 +23,7 @@ import {
   dishKey,
   dishLetter,
   durationText,
+  isSessionBusy,
   monthName,
   printable,
 } from "core";
@@ -35,9 +37,10 @@ import type {
   SessionSnapshot,
   SettingsKeeper,
 } from "core";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import type { RefObject } from "react";
 import { AvoidIngredient } from "./AvoidIngredient.tsx";
-import { plural, TEXTS } from "./texts.ts";
+import { plural, TEXTS, VALIDATE_TEXTS } from "./texts.ts";
 
 function capitalized(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
@@ -211,17 +214,120 @@ function sessionLine(current: CurrentMenu): string {
   return `Durée calculée : ${durationText(session.minutes)} (objectif 2 h à 2 h 30, ${durationText(MAX_SESSION_MINUTES)} au plus) · appareil d'appoint : ${extras}`;
 }
 
+// Bloc de validation, au pied du menu. Le contrôle est local et gratuit ; un blocage se corrige souvent sans appel.
+function ValidateBlock({
+  snapshot,
+  current,
+  session,
+  field,
+  onOpenSettings,
+}: {
+  snapshot: SessionSnapshot;
+  current: CurrentMenu;
+  session: Session;
+  field: RefObject<HTMLTextAreaElement | null>;
+  onOpenSettings: () => void;
+}) {
+  // Ferme la fenêtre entre un clic et le rendu qui désactive le bouton ; rouverte quand `validate` répond.
+  const validating = useRef(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const busy = isSessionBusy(snapshot);
+  const { blocked } = snapshot;
+
+  async function validate() {
+    if (validating.current) return;
+    validating.current = true;
+    setNotice(null);
+    try {
+      const outcome = await session.validate();
+      if (!outcome.ok && outcome.reason === "settings") setNotice(VALIDATE_TEXTS.settingsNotReady);
+    } finally {
+      validating.current = false;
+    }
+  }
+
+  return (
+    <Stack gap="xs">
+      <Divider />
+      {blocked !== null && (
+        <Alert color="red" variant="light" title={VALIDATE_TEXTS.blockedTitle}>
+          <Stack gap="xs">
+            <Text size="sm">{VALIDATE_TEXTS.blockedIntro}</Text>
+            <List size="sm">
+              {blocked.map((finding, position) => {
+                const dish = finding.dish === null ? undefined : current.menu.dishes[finding.dish];
+                const where =
+                  finding.dish === null || dish === undefined
+                    ? ""
+                    : ` · plat ${dishLetter(finding.dish)} « ${printable(dish.name)} »`;
+                return (
+                  <List.Item key={position}>
+                    <span style={{ overflowWrap: "anywhere" }}>
+                      {RULE_LABELS[finding.rule]}
+                      {where} : {printable(finding.message)}
+                    </span>
+                  </List.Item>
+                );
+              })}
+            </List>
+            <Text size="sm">{VALIDATE_TEXTS.blockedFix}</Text>
+            <Group gap="xs">
+              <Button
+                variant="light"
+                size="xs"
+                onClick={() => {
+                  field.current?.focus();
+                }}
+              >
+                {VALIDATE_TEXTS.writeChange}
+              </Button>
+              <Button variant="subtle" size="xs" onClick={onOpenSettings}>
+                {TEXTS.openSettings}
+              </Button>
+            </Group>
+          </Stack>
+        </Alert>
+      )}
+      {notice !== null && (
+        <Alert color="yellow" variant="light">
+          {notice}
+        </Alert>
+      )}
+      <Box>
+        <Button
+          variant="filled"
+          disabled={busy}
+          onClick={(event) => {
+            // Le second clic d'un double clic ne relance pas la validation.
+            if (event.detail > 1) return;
+            void validate();
+          }}
+        >
+          {VALIDATE_TEXTS.button}
+        </Button>
+      </Box>
+      <Text size="xs" c="dimmed">
+        {VALIDATE_TEXTS.help}
+      </Text>
+    </Stack>
+  );
+}
+
 // Monté seulement quand un menu existe : la confirmation « éviter » disparaît avec lui.
 function CurrentMenuView({
   snapshot,
   current,
   session,
   settings,
+  field,
+  onOpenSettings,
 }: {
   snapshot: SessionSnapshot;
   current: CurrentMenu;
   session: Session;
   settings: SettingsKeeper;
+  field: RefObject<HTMLTextAreaElement | null>;
+  onOpenSettings: () => void;
 }) {
   const [avoided, setAvoided] = useState<string | null>(null);
   const { check } = current;
@@ -274,7 +380,7 @@ function CurrentMenuView({
               index={index}
               keeping={check.keeping[index]}
               pinned={snapshot.pinned.some((pin) => dishKey(pin) === dishKey(dish.name))}
-              locked={snapshot.pending !== null}
+              locked={isSessionBusy(snapshot)}
               session={session}
               settings={settings}
               onAvoided={setAvoided}
@@ -297,9 +403,13 @@ function CurrentMenuView({
           .
         </Text>
       )}
-      <Text size="xs" c="dimmed">
-        {TEXTS.footer}
-      </Text>
+      <ValidateBlock
+        snapshot={snapshot}
+        current={current}
+        session={session}
+        field={field}
+        onOpenSettings={onOpenSettings}
+      />
     </>
   );
 }
@@ -308,11 +418,14 @@ export function MenuPanel({
   snapshot,
   session,
   settings,
+  field,
   onOpenSettings,
 }: {
   snapshot: SessionSnapshot;
   session: Session;
   settings: SettingsKeeper;
+  // Le champ de la demande, pour « Écrire une modification ».
+  field: RefObject<HTMLTextAreaElement | null>;
   onOpenSettings: () => void;
 }) {
   const { current } = snapshot;
@@ -341,6 +454,8 @@ export function MenuPanel({
             current={current}
             session={session}
             settings={settings}
+            field={field}
+            onOpenSettings={onOpenSettings}
           />
         )}
       </Stack>

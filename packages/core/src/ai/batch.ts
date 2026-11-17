@@ -40,12 +40,15 @@ const CAUSE_LABELS: Partial<Record<RuleId, string>> = {
   "session-length": "plus de 3 h",
 };
 
+// La raison quand le service d'IA n'a rien rendu : la session l'emploie aussi pour une erreur imprévue.
+export const NO_ANSWER_REASON = "le service d'IA n'a pas répondu (erreur technique)";
+
 function fallbackReason(detail: DetailResult): string {
   const chosen = detail.best;
   if (chosen === null) {
     switch (detail.stop) {
       case "technical-error":
-        return "le service d'IA n'a pas répondu (erreur technique)";
+        return NO_ANSWER_REASON;
       case "refusal":
         return "l'IA a refusé de rédiger le détail";
       case "truncated":
