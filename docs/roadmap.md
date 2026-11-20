@@ -12,10 +12,10 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 | 1 | Tracer : composition IA en ligne de commande | 0 | `livré` (2026-11-13, `7dc9b43` et `ebe6cd1`) |
 | 2 | Conservation, équilibre et quantités | 1 | `livré` (2026-11-13, `908c016` et `52960c8`) |
 | 3 | Équipement et planning de session | 1 | `livré` (2026-11-13, `5b98d7b`) |
-| 4 | Détail, liste de courses et PDF | 2, 3 | `livré` (2026-11-14, `ca72cc6`) ; démonstration réelle non faite |
+| 4 | Détail, liste de courses et PDF | 2, 3 | `livré` (2026-11-14, `ca72cc6`) ; démonstration réelle faite par l'app au lot 6 (2026-11-20), pas par la CLI |
 | 5 | App desktop : coquille, réglages, persistance | 4 | `livré` (2026-11-15, `63f2bc7`) |
 | 5 bis | Signature stable de l'app | 5 | `livré` (2026-11-16, `8bcf097`) |
-| 6 | App desktop : session, ingrédients, historique | 5 bis | à faire |
+| 6 | App desktop : session, ingrédients, historique | 5 bis | `livré` (2026-11-17, `2319dc9`) ; démonstration payée faite le 2026-11-20, correctifs `e1c7e9e` et `6ac1331` |
 | 7 | Prix | 4 (affichage dans l'app : 6) | à faire |
 
 ---
@@ -163,7 +163,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
   - Cycle de correction avec un faux client IA : un `warning` n'est renvoyé qu'une fois par règle, `bestOf` compare les erreurs puis les `warning`, un plafond dépassé par un plat de la demande est renvoyé avec la phrase de §5.1 (`compose.test.ts`).
   - `compose --dry-run` affiche les prompts avec le jour de session, sans réseau ni clé.
   - Le rendu de `compose` (« À congeler » avec la consigne de décongélation, durée au frigo de chaque plat, constats triés `error` puis `warning`, forme du poisson toujours affichée) est vérifié par test sans réseau (`render.test.ts`).
-- **Aucune démonstration réelle avec l'IA dans ce lot**, par décision. On ne sait donc pas encore si le modèle respecte les nouvelles consignes du prompt (grammes obligatoires pour la viande, le poisson et la charcuterie ; poisson surgelé ; `sameDay`) ni combien d'essais il faut. Le prompt système est plus long (il reste en cache). La première démonstration réelle viendra avec un lot suivant.
+- **Aucune démonstration réelle avec l'IA dans ce lot**, par décision. On ne sait donc pas encore si le modèle respecte les nouvelles consignes du prompt (grammes obligatoires pour la viande, le poisson et la charcuterie ; poisson surgelé ; `sameDay`) ni combien d'essais il faut. Le prompt système est plus long (il reste en cache). La première démonstration réelle viendra avec un lot suivant. Couverte par la démonstration payée de l'app au lot 6 (2026-11-20, voir « Démonstration payée (F.10) » au lot 6) : Mammouth accepte les schémas, 1 essai pour la composition et le détail. La commande CLI `compose` elle-même n'a pas été lancée.
 
 **Ce que ça ne fera PAS (visible)**
 - Pas de planning ni de durée de session (lot 3). **Livré au lot 3 (2026-11-13)** : ne vaut plus.
@@ -193,7 +193,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
   - « mais » écrit pour « maïs » dans la demande n'exempte plus le maïs du contrôle de saison (sens prudent) ;
   - la clé du mot « mais » reste celle de « maïs » : `--exclude mais` exclut toujours le maïs.
 - **Plat demandé non épinglé** : les règles `meat`, `cured-meat` et `same-protein` ne savent pas quel plat la demande nomme ; l'épinglage est au lot 6 (voir « Ce qui a changé en cours de lot »). *Note du 2026-11-16 (lot 6.2) : réglé par l'épinglage.*
-- **Aucune démonstration réelle** : voir le bilan. À faire avec la clé Mammouth (appels rares), à la première occasion. **Toujours à faire au 2026-11-14** : le lot 4 ne l'a pas faite non plus (pas de clé dans l'environnement de construction) ; une seule démonstration de `batch`, lancée par l'utilisateur, couvre les lots 2, 3 et 4 (voir « Reliquats du lot 4 »).
+- **Aucune démonstration réelle** : voir le bilan. À faire avec la clé Mammouth (appels rares), à la première occasion. **Toujours à faire au 2026-11-14** : le lot 4 ne l'a pas faite non plus (pas de clé dans l'environnement de construction) ; une seule démonstration de `batch`, lancée par l'utilisateur, couvre les lots 2, 3 et 4 (voir « Reliquats du lot 4 »). Couverte par la démonstration payée de l'app au lot 6 (2026-11-20, voir « Démonstration payée (F.10) » au lot 6) : Mammouth accepte les schémas, 1 essai pour la composition et le détail. La commande CLI `compose` elle-même n'a pas été lancée. Mise à jour du 2026-11-20 : la démonstration est faite côté app.
 
 ## Lot 3 : équipement et planning de session
 
@@ -223,7 +223,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
   - Les quatre cas du livrable sont testés : four saturé, deux appareils d'appoint, plus de 3 h, et 2 h 15, qui est le `balancedMenu()` des fixtures.
   - Quatre nouveaux constats `error` : `phases` (forme des phases), `equipment` (appareil absent), `extra-appliance` (plus d'un appareil d'appoint), `session-length` (le message nomme le plat qui finit le plus tard).
   - `compose` affiche la durée de session, l'appareil d'appoint et le planning ; `compose --dry-run` a été vérifié.
-- **Aucune démonstration réelle avec l'IA dans ce lot.** On ne sait pas si Mammouth accepte le nouveau schéma (le champ `phases`), ni combien d'essais il faut. À faire à la première occasion. **Toujours à faire au 2026-11-14** (voir « Reliquats du lot 4 »).
+- **Aucune démonstration réelle avec l'IA dans ce lot.** On ne sait pas si Mammouth accepte le nouveau schéma (le champ `phases`), ni combien d'essais il faut. À faire à la première occasion. **Toujours à faire au 2026-11-14** (voir « Reliquats du lot 4 »). Couverte par la démonstration payée de l'app au lot 6 (2026-11-20, voir « Démonstration payée (F.10) » au lot 6) : Mammouth accepte les schémas, 1 essai pour la composition et le détail. La commande CLI `batch` elle-même n'a pas été lancée.
 
 **Ce que ça ne fera PAS (visible)**
 - Pas d'étapes détaillées, seulement les grandes phases. **Livré au lot 4 (2026-11-14)** : `batch` rédige un détail par étapes, et `compose` reste aux grandes phases.
@@ -238,11 +238,11 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 
 **Reliquats du lot 3** (dettes connues, chacune reprise dans le lot qui doit la traiter) :
 - **Validation d'un équipement modifiable** (capacités entières ≥ 1, `id` uniques) : reportée au lot 5, qui rend l'équipement modifiable (ajoutée à son contenu). **Traitée au lot 5 (2026-11-15, `63f2bc7`)** : `settings/settings.ts` valide la capacité (entier de 1 à 10) ; la table du code garde ses `id` uniques, puisqu'on ne peut ni ajouter ni retirer d'appareil.
-- **Démonstration réelle** : à faire avec la clé Mammouth (appels rares), à la première occasion. **Toujours à faire au 2026-11-14** : couverte par la démonstration de `batch` du lot 4 (voir « Reliquats du lot 4 »).
+- **Démonstration réelle** : à faire avec la clé Mammouth (appels rares), à la première occasion. **Toujours à faire au 2026-11-14** : couverte par la démonstration de `batch` du lot 4 (voir « Reliquats du lot 4 »). Couverte par la démonstration payée de l'app au lot 6 (2026-11-20, voir « Démonstration payée (F.10) » au lot 6) : Mammouth accepte les schémas, 1 essai pour la composition et le détail. La commande CLI `batch` elle-même n'a pas été lancée.
 
 ## Lot 4 : détail, liste de courses et PDF
 
-**Statut** : `livré` le 2026-11-14, commit `ca72cc6` (branche `lot-4-detail-courses-pdf`), CI GitHub verte (run 43534798699, terminé le 2026-11-14). **Démonstration réelle non faite** (pas de clé dans l'environnement de construction) : à lancer par l'utilisateur, voir « Reliquats du lot 4 ».
+**Statut** : `livré` le 2026-11-14, commit `ca72cc6` (branche `lot-4-detail-courses-pdf`), CI GitHub verte (run 43534798699, terminé le 2026-11-14). **Démonstration réelle non faite** (pas de clé dans l'environnement de construction) : à lancer par l'utilisateur, voir « Reliquats du lot 4 ». Couverte par la démonstration payée de l'app au lot 6 (2026-11-20, voir « Démonstration payée (F.10) » au lot 6) : Mammouth accepte les schémas, 1 essai pour la composition et le détail. La commande CLI `batch` elle-même n'a pas été lancée.
 
 **Objectif** : fermer le tracer. Un menu validé donne une fiche PDF utilisable en cuisine.
 
@@ -254,7 +254,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 
 Contenu prévu à l'origine : recettes, conversion en unités d'achat, rayons, PDF en six parties (voir `60c6d39`).
 
-**Livrable vérifiable** : tests de la liste de courses (somme, unités mélangées, répartition, placard) ; un PDF généré depuis un menu-fixture sans appel réseau (`pnpm --filter core pdf:fixture --out <fichier.pdf>`), contrôlé à l'œil par l'utilisateur ; une démonstration réelle de `batch` (**non faite**, voir « Reliquats du lot 4 »).
+**Livrable vérifiable** : tests de la liste de courses (somme, unités mélangées, répartition, placard) ; un PDF généré depuis un menu-fixture sans appel réseau (`pnpm --filter core pdf:fixture --out <fichier.pdf>`), contrôlé à l'œil par l'utilisateur ; une démonstration réelle de `batch` (**non faite** par la CLI, voir « Reliquats du lot 4 » ; faite par l'app au lot 6 le 2026-11-20).
 
 **Ce qui a changé en cours de lot**
 
@@ -296,7 +296,7 @@ Contenu prévu à l'origine : recettes, conversion en unités d'achat, rayons, P
 - Fiche lourde : rien de perdu à la pagination.
 - `batch` testé de bout en bout avec de faux modèles, écriture du fichier comprise.
 - 13 cycles de relecture croisée. La règle de bascule vers un exécutant Opus a été appliquée ; les régressions des cycles 7 à 11 venaient des spécifications du décideur.
-- **Démonstration réelle : non faite.** Elle vaut aussi pour les démonstrations des lots 2 et 3, qui gardent leur mention « à faire » tant qu'elle n'a pas eu lieu.
+- **Démonstration réelle : non faite.** Elle vaut aussi pour les démonstrations des lots 2 et 3, qui gardent leur mention « à faire » tant qu'elle n'a pas eu lieu. Couverte par la démonstration payée de l'app au lot 6 (2026-11-20, voir « Démonstration payée (F.10) » au lot 6) : Mammouth accepte les schémas, 1 essai pour la composition et le détail. La commande CLI `batch` elle-même n'a pas été lancée. Les mentions « à faire » des lots 2 et 3 sont donc couvertes côté app, pas côté CLI.
 
 **Ce que ça ne fera PAS (visible)**
 - Pas de conversation. Un menu qui garde une `error` arrête `batch` sans PDF.
@@ -318,7 +318,7 @@ Contenu prévu à l'origine : recettes, conversion en unités d'achat, rayons, P
 - Un émoji s'affiche comme un carré vide. La note de sécurité peut être coupée entre deux pages.
 
 **Reliquats du lot 4** (dettes connues, chacune reprise dans le lot qui doit la traiter)
-- **Démonstration réelle** de `batch` avec la clé Mammouth, à lancer par l'utilisateur. Elle couvre aussi les lots 2 et 3. Vérifier que Mammouth accepte le schéma du détail ; sinon `FMH_DISABLE=format`. Noter les jetons affichés, pour le budget de 2 $/mois. L'utilisateur n'a pas vu les fiches finales : regarder les deux fiches de fixture (`pdf:fixture` et `pdf:fixture --fallback`) avant la démonstration.
+- **Démonstration réelle** de `batch` avec la clé Mammouth, à lancer par l'utilisateur. Elle couvre aussi les lots 2 et 3. Vérifier que Mammouth accepte le schéma du détail ; sinon `FMH_DISABLE=format`. Noter les jetons affichés, pour le budget de 2 $/mois. Mise à jour du 2026-11-20 : couverte par la démonstration payée de l'app au lot 6 (2026-11-20, voir « Démonstration payée (F.10) » au lot 6) : Mammouth accepte les schémas, 1 essai pour la composition et le détail. La commande CLI `batch` elle-même n'a pas été lancée. L'utilisateur n'a pas vu les fiches finales : regarder les deux fiches de fixture (`pdf:fixture` et `pdf:fixture --fallback`) avant la démonstration.
 - **Groupes d'allergènes** absents du référentiel (voir « Questions ouvertes »). **Abandonné le 2026-11-14** : décision de l'utilisateur, personne n'est allergique ; on exclut chaque ingrédient par son nom.
 - **Homoglyphes** non détectés par les exclusions (il faudrait la table des confusables d'Unicode, UTS #39).
 - **Préparation réservée sans dépendance déclarée** par l'IA : pas de consigne de conservation propre (le code ne sait pas quelle étape utilise vraiment une préparation ; la note générale s'applique).
@@ -449,7 +449,7 @@ Contenu prévu à l'origine : recettes, conversion en unités d'achat, rayons, P
 
 ## Lot 6 : app desktop, session, ingrédients et historique
 
-**Statut** : `livré (code et preuves hors ligne, 2026-11-17, 2319dc9) ; démonstration payée à faire`. Les preuves dans le `.app` signé, sans appel payé, sont faites : 6.4 par l'utilisateur, 6.5 (F.9) et 6.6 (G.9) par un agent qui pilotait l'interface, à la demande de l'utilisateur. Reste la démonstration payée F.10 (vrais appels à Claude), qui dépend de l'utilisateur.
+**Statut** : `livré` (code et preuves hors ligne le 2026-11-17, commit `2319dc9` ; démonstration payée F.10 le 2026-11-20, correctifs au commit `6ac1331`). Les preuves dans le `.app` signé, sans appel payé, sont faites : 6.4 par l'utilisateur, 6.5 (F.9) et 6.6 (G.9) par un agent qui pilotait l'interface, à la demande de l'utilisateur. La démonstration payée F.10 (vrais appels à Claude) est faite, voir plus bas.
 
 **Objectif** : le parcours complet dans l'app.
 
@@ -472,15 +472,23 @@ Contenu prévu à l'origine : recettes, conversion en unités d'achat, rayons, P
 - **Brancher les réglages** : `applyEquipmentSettings`, les exclusions enregistrées et le modèle choisi (reliquat du lot 5).
 - Toute nouvelle commande est ajoutée à `AppManifest::commands` (`build.rs`), à `capabilities/default.json` et à `generate_handler!` (`src/main.rs`), et son fichier `permissions/autogenerated/*.toml` est committé ; le `.toml` d'une commande retirée se supprime à la main.
 
-**Notes de livraison, sous-lot 6.5b** (2026-11-16 ; preuve hors ligne dans le `.app` signé faite en F.9 ; la démonstration payée F.10 reste à faire par l'utilisateur)
+**Notes de livraison, sous-lot 6.5b** (2026-11-16 ; preuve hors ligne dans le `.app` signé faite en F.9 ; la démonstration payée F.10 a eu lieu le 2026-11-20)
 - 6.5a (déjà commité) : historique en base (table `history`, fiche PDF en BLOB), écran Historique, rendu PDF dans la vue web.
 - 6.5b : « Valider ce menu » contrôle le menu avec les réglages, le jour et le nombre de dîners du moment, puis fait rédiger le détail (1 à 3 appels), rend la fiche, l'enregistre dans l'historique et l'ouvre dans Aperçu. Plus de 3 h, ou détail inutilisable : l'app demande (« Revenir au menu » ou « Garder la fiche »). Une seule fonction de la session (`operate`) publie la fin d'une opération ; un échec local se reprend sans nouvel appel à Claude (mêmes octets, même jeton).
 - Version d'essai (`pnpm --filter desktop build:essai`, mode Vite `essai`) : réponses d'exemple, sans Claude ; absente du build normal (prouvé par recherche du texte dans `dist`).
 
-**Notes de livraison, sous-lot 6.6** (2026-11-17 ; preuve hors ligne dans le `.app` signé faite en G.9 ; la démonstration payée F.10 reste à faire)
+**Notes de livraison, sous-lot 6.6** (2026-11-17 ; preuve hors ligne dans le `.app` signé faite en G.9 ; la démonstration payée F.10 a eu lieu le 2026-11-20)
 - Écran Ingrédients : la liste de courses du dernier menu validé (la ligne la plus récente de l'historique, même illisible), par ordre alphabétique, avec une case par ligne et une pour le placard. Les cases cochées sont gardées dans `history.checked`, écrites par la commande Rust `history_set_checked` (état complet, sans migration).
 - Les cases passent par un propriétaire unique (`createCheckKeeper`, créé dans `services.ts`) : une écriture à la fois par entrée, le dernier état voulu part en dernier. Quitter l'écran pendant une écriture puis revenir ne réaffiche pas l'ancien état.
 - La lecture de l'historique (compteur de tentatives, lecture plus ancienne ignorée) est partagée par Historique et Ingrédients dans le hook `useLatestRead`.
+
+**Démonstration payée (F.10)** (2026-11-20)
+- Conditions : `.app` signé construit depuis `6ac1331`, clé Mammouth, modèle `claude-sonnet-5-5`. Le passage a été piloté par un agent, à la demande de l'utilisateur. Demande : « un bœuf bourguignon et deux plats de saison », dimanche, 3 dîners.
+- 4 appels payés pour ce passage : composition 1 (essai 1, environ 50 s, `end_turn`, 7036 jetons de sortie) ; modification 2 (essai 1 `end_turn`, 4001 jetons, rejeté par l'app puis relancé, raison non affichée ; essai 2 `end_turn`, 3987 jetons, environ 49 s au total) ; validation 1 (environ 48 s, `end_turn`, 6333 jetons). Aucune réponse coupée.
+- « remplace le plat c par un plat végétarien » a bien remplacé le plat c, le plat a épinglé et le plat b restant inchangés : le correctif `e1c7e9e` (la lettre de chaque plat dans le prompt de modification) est confirmé.
+- Fiche PDF de 2 pages, accents et « œ » corrects, ouverte dans Aperçu. Historique, réouverture et export vers Téléchargements fonctionnent (macOS n'a posé aucune demande d'autorisation, l'app étant lancée par `open`). Une case d'ingrédient cochée au premier plan devient verte tout de suite. Les lignes console `IA : stop_reason=… output_tokens=…` s'affichent bien.
+- Deux passages payés précédents, le même jour, avaient trouvé les deux bugs corrigés par `e1c7e9e` (mauvais plat modifié) et `6ac1331` (« Réponse coupée », plafond porté à 16 000 jetons). Total payé sur la journée : 3 appels avant + 4 = 7 appels.
+- Reliquats observés, non traités : (1) quand l'app rejette une réponse et relance, l'utilisateur ne voit pas pourquoi ; (2) dans la fiche, des titres de section se répètent (« Lancer le bœuf bourguignon » en 1 et 3, « Lasagnes pendant la pression » en 2 et 4) : c'est le contenu du modèle, à surveiller.
 
 **Livrable vérifiable** : tests de la modification du menu courant avec un faux client IA, dont un test où l'IA tente de retirer un plat épinglé ; dans l'app, l'utilisateur compose, modifie un plat, valide et obtient le PDF ; le menu apparaît dans l'historique.
 
