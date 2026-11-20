@@ -126,6 +126,8 @@ export function buildUserPrompt(input: {
       : [
           `Demande d'origine : ${revision.initialRequest}`,
           `Menu courant : ${JSON.stringify(revision.current)}`,
+          `Plats du menu courant, avec la lettre que voit l'utilisateur : ${revision.current.dishes.map((dish, index) => `${dishLetter(index)}. ${printable(dish.name)} (${DAY_LABELS[dish.day]})`).join(" ; ")}.`,
+          "Une lettre dans le nouveau message désigne le plat qui porte cette lettre dans cette liste. Une lettre dans un message plus ancien visait le menu affiché à ce moment-là, qui a pu changer depuis.",
           ...(revision.conversation.length === 0
             ? []
             : [

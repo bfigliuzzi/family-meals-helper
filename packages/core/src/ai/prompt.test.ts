@@ -322,6 +322,77 @@ describe("buildUserPrompt : épingles, historique, révision", () => {
     expect(user).not.toContain("passe de");
   });
 
+  describe("lettres des plats en révision", () => {
+    const named = (names: string[]): Menu => {
+      const current = balancedMenu();
+      current.dishes = current.dishes.slice(0, 3).map((dish, i) => ({
+        ...dish,
+        name: names[i] ?? dish.name,
+        day: (["mon", "tue", "wed"] as const)[i] ?? dish.day,
+      }));
+      return { dishes: current.dishes };
+    };
+    const names = [
+      "Gratin de chou-fleur aux pâtes complètes",
+      "Bœuf bourguignon",
+      "Lentilles vertes aux carottes et aux épinards",
+    ];
+    const revise = (current: Menu) =>
+      buildUserPrompt({
+        ...base,
+        request: "remplace le plat c par un plat végétarien",
+        revision: { initialRequest: "x", current, conversation: [] },
+      });
+
+    it("liste les plats avec leur lettre et dit à quoi elle renvoie", () => {
+      const user = revise(named(names));
+      expect(user).toContain(
+        "Plats du menu courant, avec la lettre que voit l'utilisateur : a. Gratin de chou-fleur aux pâtes complètes (lundi) ; b. Bœuf bourguignon (mardi) ; c. Lentilles vertes aux carottes et aux épinards (mercredi).",
+      );
+      expect(user).toContain(
+        "Une lettre dans le nouveau message désigne le plat qui porte cette lettre dans cette liste. Une lettre dans un message plus ancien visait le menu affiché à ce moment-là, qui a pu changer depuis.",
+      );
+      expect(user).toContain(`Menu courant : ${JSON.stringify(named(names))}`);
+    });
+
+    it("garde l'ordre de la liste, malgré les jours, les identifiants de phases et les épingles", () => {
+      const current = named(names);
+      const [first, second, third] = current.dishes;
+      if (first === undefined || second === undefined || third === undefined)
+        throw new Error("menu");
+      first.day = "wed";
+      first.phases = first.phases.map((phase) => ({ ...phase, id: "c1" }));
+      second.day = "mon";
+      const user = buildUserPrompt({
+        ...base,
+        request: "remplace le plat c par un plat végétarien",
+        pinned: ["Bœuf bourguignon"],
+        revision: {
+          initialRequest: "x",
+          current,
+          conversation: ["remplace le plat b"],
+        },
+      });
+      expect(user).toContain(
+        "a. Gratin de chou-fleur aux pâtes complètes (mercredi) ; b. Bœuf bourguignon (lundi) ; c. Lentilles vertes aux carottes et aux épinards (mercredi).",
+      );
+    });
+
+    it("nettoie les caractères de contrôle et de direction du nom", () => {
+      const user = revise(named(["Gratin\u202E\u0007 x", names[1] ?? "", names[2] ?? ""]));
+      expect(user).toContain("a. Gratin  x (lundi)");
+      const line = user.split("\n").find((l) => l.startsWith("Plats du menu courant")) ?? "";
+      expect(line).not.toContain("\u202E");
+      expect(line).not.toContain("\u0007");
+    });
+
+    it("le prompt de composition n'a pas cette ligne", () => {
+      const user = buildUserPrompt(base);
+      expect(user).not.toContain("Plats du menu courant");
+      expect(user).not.toContain("Une lettre dans un message");
+    });
+  });
+
   it("en révision, dit de combien de plats le menu passe quand le nombre de dîners change", () => {
     const current = balancedMenu();
     current.dishes.pop();
