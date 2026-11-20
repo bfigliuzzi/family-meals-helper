@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-price-table-list"
+description = "Enables the price_table_list command without any pre-configured scope."
+commands.allow = ["price_table_list"]
+
+[[permission]]
+identifier = "deny-price-table-list"
+description = "Denies the price_table_list command without any pre-configured scope."
+commands.deny = ["price_table_list"]

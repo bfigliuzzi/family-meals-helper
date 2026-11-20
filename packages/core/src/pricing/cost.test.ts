@@ -6,6 +6,7 @@ import { normalizeName } from "../ingredients/normalize.ts";
 import { REFERENTIAL } from "../ingredients/referential.ts";
 import { estimateCost, menuCost } from "./cost.ts";
 import { lineCostText } from "./cost-text.ts";
+import { manualLookup } from "./manual.ts";
 import { buildInseeTable, inseeLookup, parseInseeData, parseInseeLabels } from "./insee.ts";
 import type { PriceLookup, PriceSource, PriceUnit, UnitPrice } from "./price.ts";
 import { buildShoppingList } from "../shopping/shopping-list.ts";
@@ -211,5 +212,23 @@ describe("estimateCost : ingrédient absent du référentiel", () => {
     expect(sure.lines[0]?.euros).toBeCloseTo(2, 10);
     const mixed = menuCost(menuOf([eggs("egg")], [eggs("dairy")]), index, [egg]);
     expect(mixed.lines[0]?.euros).toBeNull();
+  });
+});
+
+describe("estimateCost : table de l'utilisateur avant l'INSEE", () => {
+  const manual = (unit: PriceUnit, cents: number) =>
+    manualLookup([{ key: "fresh|carotte", unit, cents, date: "2026-11-20" }]);
+
+  it("un prix manuel au kilo passe avant l'INSEE", () => {
+    const cost = menuCost(menuOf([item("carotte", 600)]), index, [manual("kg", 300), insee]);
+    expect(cost.lines[0]?.euros).toBeCloseTo(1.8, 10);
+    expect(cost.sources).toEqual(["manual"]);
+    expect(lineCostText(cost.lines[0]!)).toBe("≈ 1,80 € · 3,00 €/kg · votre prix du 20/11/2026");
+  });
+  it("un prix manuel à la pièce n'empêche pas l'INSEE au kilo de servir une ligne en grammes", () => {
+    const cost = menuCost(menuOf([item("carotte", 600)]), index, [manual("piece", 59), insee]);
+    expect(cost.lines[0]?.parts[0]?.price?.source.kind).toBe("insee");
+    expect(cost.lines[0]?.euros).toBeCloseTo(1.308, 10);
+    expect(cost.sources).toEqual(["insee"]);
   });
 });

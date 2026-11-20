@@ -12,7 +12,8 @@ const LOCK_FILE: &str = "family-meals-helper.lock";
 const MAX_DOCUMENT_BYTES: usize = 256 * 1024;
 const MIGRATION_1: &str = include_str!("../migrations/0001_settings.sql");
 const MIGRATION_2: &str = include_str!("../migrations/0002_history.sql");
-const MIGRATIONS: [&str; 2] = [MIGRATION_1, MIGRATION_2];
+const MIGRATION_3: &str = include_str!("../migrations/0003_prices.sql");
+const MIGRATIONS: [&str; 3] = [MIGRATION_1, MIGRATION_2, MIGRATION_3];
 
 const ALREADY_OPEN: &str = "Family Meals Helper est déjà ouverte dans une autre fenêtre : fermez celle-ci et utilisez l'autre.";
 
@@ -35,10 +36,11 @@ pub struct SettingsDb {
 }
 
 // Contrat de migration, dans une seule transaction (la version voulue est le nombre de scripts) :
-//   user_version 0 : exécute 0001_settings.sql puis 0002_history.sql, puis user_version = 2 ;
-//   user_version 1 : exécute 0002_history.sql, puis user_version = 2 ;
-//   user_version 2 : ne change rien ;
-//   user_version > 2 : refus, sans rien écrire ;
+//   user_version 0 : exécute 0001_settings.sql, 0002_history.sql puis 0003_prices.sql, puis user_version = 3 ;
+//   user_version 1 : exécute 0002_history.sql puis 0003_prices.sql, puis user_version = 3 ;
+//   user_version 2 : exécute 0003_prices.sql, puis user_version = 3 ;
+//   user_version 3 : ne change rien ;
+//   user_version > 3 : refus, sans rien écrire ;
 //   user_version négatif : refus, sans rien écrire (base inconnue).
 // Un script en échec annule tout : ni table créée, ni version écrite.
 pub fn migrate(connection: &mut Connection) -> Result<(), String> {
@@ -288,15 +290,17 @@ mod tests {
     fn migrating_twice_is_harmless_and_sets_the_current_version() {
         let mut connection = memory();
         migrate(&mut connection).expect("seconde migration");
-        assert_eq!(user_version(&connection), 2);
+        assert_eq!(user_version(&connection), 3);
     }
 
     #[test]
-    fn migrate_0_to_2_creates_both_tables() {
+    fn migrate_from_empty_creates_every_table() {
         let connection = memory();
-        assert_eq!(user_version(&connection), 2);
+        assert_eq!(user_version(&connection), 3);
         assert!(has_table(&connection, "settings"));
         assert!(has_table(&connection, "history"));
+        assert!(has_table(&connection, "price_table"));
+        assert!(has_table(&connection, "open_prices"));
     }
 
     #[test]
@@ -310,10 +314,10 @@ mod tests {
     }
 
     #[test]
-    fn migrate_1_to_2_keeps_settings() {
+    fn migrate_1_to_3_keeps_settings() {
         let mut connection = version_one();
         migrate(&mut connection).expect("migration");
-        assert_eq!(user_version(&connection), 2);
+        assert_eq!(user_version(&connection), 3);
         assert_eq!(
             read(&connection).expect("lecture").as_deref(),
             Some("{\"version\":1}")
@@ -322,6 +326,111 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM history", [], |row| row.get(0))
             .expect("compte");
         assert_eq!(rows, 0);
+    }
+
+    // Base de version 2 construite à la main : les tables de 0001 et 0002, un réglage et une entrée d'historique.
+    fn version_two() -> Connection {
+        let connection = version_one();
+        connection.execute_batch(MIGRATION_2).expect("0002");
+        connection
+            .execute(
+                "INSERT INTO history (token, created_at, entry, pdf, checked) \
+                 VALUES ('jeton', '2026-11-16', '{\"version\":1}', x'255044462d', '[\"a\"]')",
+                [],
+            )
+            .expect("entrée d'historique");
+        connection
+            .pragma_update(None, "user_version", 2)
+            .expect("user_version");
+        connection
+    }
+
+    #[test]
+    fn migrate_2_to_3_adds_the_price_tables_and_keeps_the_rest() {
+        let mut connection = version_two();
+        migrate(&mut connection).expect("migration");
+        assert_eq!(user_version(&connection), 3);
+        assert!(has_table(&connection, "price_table"));
+        assert!(has_table(&connection, "open_prices"));
+        assert_eq!(
+            read(&connection).expect("lecture").as_deref(),
+            Some("{\"version\":1}")
+        );
+        let (entry, checked): (String, String) = connection
+            .query_row("SELECT entry, checked FROM history", [], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .expect("historique");
+        assert_eq!(entry, "{\"version\":1}");
+        assert_eq!(checked, "[\"a\"]");
+    }
+
+    #[test]
+    fn failed_2_to_3_creates_nothing_and_keeps_version_2() {
+        let mut connection = version_two();
+        // `price_table` existe déjà : le script 0003 échoue dès sa première instruction ; `open_prices`, créée
+        // ensuite par le même script, ne doit pas exister non plus.
+        connection
+            .execute_batch("CREATE TABLE price_table (x)")
+            .expect("table déjà là");
+        let error = migrate(&mut connection).expect_err("échec attendu");
+        assert!(error.contains("Migration"), "{error}");
+        assert_eq!(user_version(&connection), 2);
+        assert!(!has_table(&connection, "open_prices"));
+        assert_eq!(
+            read(&connection).expect("lecture").as_deref(),
+            Some("{\"version\":1}")
+        );
+    }
+
+    #[test]
+    fn failed_script_after_a_first_table_rolls_the_first_table_back() {
+        let mut connection = version_two();
+        let error = migrate_with(
+            &mut connection,
+            &[
+                MIGRATION_1,
+                MIGRATION_2,
+                "CREATE TABLE price_table (x); CREATE TABLE history (x)",
+            ],
+        )
+        .expect_err("échec attendu");
+        assert!(error.contains("Migration"), "{error}");
+        assert!(!has_table(&connection, "price_table"));
+        assert_eq!(user_version(&connection), 2);
+    }
+
+    #[test]
+    fn version_4_is_refused_without_writing() {
+        let mut connection = version_two();
+        connection
+            .pragma_update(None, "user_version", 4)
+            .expect("user_version");
+        let error = migrate(&mut connection).expect_err("refus attendu");
+        assert_eq!(error, "Base créée par une version plus récente de l'app.");
+        assert!(!has_table(&connection, "price_table"));
+        assert!(!has_table(&connection, "open_prices"));
+        assert_eq!(user_version(&connection), 4);
+    }
+
+    #[test]
+    fn price_tables_enforce_their_checks() {
+        let connection = memory();
+        let bad_unit = connection.execute(
+            "INSERT INTO price_table (key, unit, cents, date) VALUES ('fresh|carotte', 'g', 100, '2026-11-16')",
+            [],
+        );
+        assert!(bad_unit.is_err());
+        let bad_cents = connection.execute(
+            "INSERT INTO price_table (key, unit, cents, date) VALUES ('fresh|carotte', 'kg', 100001, '2026-11-16')",
+            [],
+        );
+        assert!(bad_cents.is_err());
+        let other_id = connection.execute(
+            "INSERT INTO open_prices (id, attempted_at, summary) VALUES (2, '2026-11-16', NULL)",
+            [],
+        );
+        assert!(other_id.is_err());
     }
 
     #[test]

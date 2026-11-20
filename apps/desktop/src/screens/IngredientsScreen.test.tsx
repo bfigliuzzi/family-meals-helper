@@ -2,13 +2,23 @@ import { MantineProvider } from "@mantine/core";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
+  INSEE_TABLE,
   MenuSchema,
   createCheckKeeper,
+  createPriceKeeper,
   createSession,
   createSettingsKeeper,
+  euroText,
+  menuCost,
   serializeHistoryEntry,
+  sourceText,
+  totalText,
+  unitPriceText,
+  buildIngredientIndex,
+  REFERENTIAL,
+  inseeLookup,
 } from "core";
-import type { HistoryEntry, HistoryRow } from "core";
+import type { HistoryEntry, HistoryRow, ManualPriceRow } from "core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App.tsx";
 import { createKeychainSecretAdmin } from "../platform/keychain-secret-admin.ts";
@@ -18,6 +28,7 @@ import {
   fakeHistoryStore,
   fakeMenuModel,
   fakeNewToken,
+  fakePriceStore,
   fakeRenderPdf,
   fakeSettingsStore,
   fixedClock,
@@ -79,15 +90,21 @@ const broken = (id: number): HistoryRow => ({ id, entry: "{pas du json", checked
 function setup(
   rows: HistoryRow[] = [],
   prepare: (history: ReturnType<typeof fakeHistoryStore>) => void = () => undefined,
+  manualPrices: ManualPriceRow[] = [],
+  preparePrices: (prices: ReturnType<typeof fakePriceStore>) => void = () => undefined,
 ) {
   const history = fakeHistoryStore(rows);
   prepare(history);
   const checks = createCheckKeeper(history.store);
+  const priceStore = fakePriceStore(manualPrices);
+  preparePrices(priceStore);
+  const prices = createPriceKeeper(priceStore.store, { clock: fixedClock });
   const onNewSession = vi.fn();
   const view = (refresh: number) => (
     <IngredientsScreen
       history={history.store}
       checks={checks}
+      prices={prices}
       refresh={refresh}
       onNewSession={onNewSession}
     />
@@ -96,6 +113,8 @@ function setup(
   return {
     history,
     checks,
+    priceStore,
+    prices,
     onNewSession,
     unmount,
     user: userEvent.setup(),
@@ -310,8 +329,17 @@ describe("IngredientsScreen : noms accessibles et zone de clic", () => {
   it("le nom accessible commence par le nom, puis la quantité", async () => {
     setup([rowOf(1)]);
     await screen.findByRole("heading", { name: "Liste de courses" });
-    expect(box("Carotte 1,1 kg (b : 500 g, c : 600 g)")).toBeTruthy();
+    expect(box(/^Carotte 1,1 kg \(b : 500 g, c : 600 g\) ≈ /)).toBeTruthy();
     expect(box(/^Placard \(à vérifier\).*Cumin : 3 g \(d\)/)).toBeTruthy();
+  });
+
+  it("la ligne carotte porte exactement le texte de coût calculé depuis l'INSEE", async () => {
+    setup([rowOf(1)]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    expect(screen.getByText(CARROT_INSEE_LINE).textContent).toBe(CARROT_INSEE_LINE);
+    expect(CARROT_INSEE_LINE).toMatch(
+      /^≈ \d+,\d{2} € · \d+,\d{2} €\/kg · INSEE, moyenne nationale d/,
+    );
   });
 
   it("un clic sur le texte de la quantité coche la case", async () => {
@@ -559,6 +587,322 @@ describe("IngredientsScreen : relecture", () => {
   );
 });
 
+const carrotInsee = INSEE_TABLE["fresh|carotte"]!;
+const CARROT_INSEE_LINE = `≈ ${euroText((1100 / 1000) * carrotInsee.euros)} · ${unitPriceText("kg", carrotInsee.euros)} · ${sourceText({ kind: "insee", month: carrotInsee.month })}`;
+const myPrice = (name: string) =>
+  screen.getByRole("button", { name: `Modifier le prix : ${name}` });
+const dialog = () => screen.getByRole("dialog");
+const priceField = () => within(dialog()).getByLabelText<HTMLInputElement>("Prix (€)");
+const saveButton = () => within(dialog()).getByRole("button", { name: "Enregistrer" });
+const FIELD_ERROR = "Entrez un prix entre 0,01 € et 1 000 €.";
+const totalLine = () => screen.getByText(/^Coût estimé : /).textContent;
+const carrotRow: ManualPriceRow = {
+  key: "fresh|carotte",
+  unit: "kg",
+  cents: 250,
+  date: "2026-11-10",
+};
+
+// Le menu d'exemple avec, en plus, 2 carottes en pièces : la ligne carotte a alors deux unités (g et pièce).
+const MENU_WITH_PIECES = MenuSchema.parse({
+  ...menuReply,
+  dishes: withPantry().map((dish, at) =>
+    at === 0
+      ? { ...dish, ingredients: [...dish.ingredients, ing("carotte", 2, { unit: "piece" })] }
+      : dish,
+  ),
+});
+
+describe("IngredientsScreen : coût", () => {
+  it("affiche le total, la mention, la source de chaque ligne connue et « prix inconnu »", async () => {
+    setup([rowOf(1)]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    const index = buildIngredientIndex(REFERENTIAL);
+    const expected = totalText(menuCost(MENU, index, [inseeLookup(INSEE_TABLE)]));
+    expect(totalLine()).toBe(expected);
+    expect(totalLine()).toMatch(/^Coût estimé : au moins \d+,\d{2} € · \d+ prix inconnus?$/);
+    expect(
+      screen.getByText(
+        "Placard non compris. Ordre de grandeur : moyennes de relevés en magasin, pas le prix de votre drive.",
+      ),
+    ).toBeTruthy();
+    expect(labelText(carrot())).toContain(CARROT_INSEE_LINE);
+    expect(box(/^Cuisse de poulet /).labels?.[0]?.textContent).toContain("prix inconnu");
+    expect(
+      screen.getByText("Sources : INSEE, prix moyens de vente au détail, Licence Ouverte 2.0."),
+    ).toBeTruthy();
+  });
+
+  it("le placard n'a ni coût ni bouton « Mon prix »", async () => {
+    setup([rowOf(1)]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    expect(labelText(box(/^Placard/))).not.toMatch(/≈|prix inconnu/);
+    expect(screen.getAllByRole("button", { name: /^Modifier le prix : / })).toHaveLength(10);
+    expect(screen.getAllByText("Mon prix")).toHaveLength(10);
+    expect(screen.queryByRole("button", { name: /Modifier le prix : Placard/ })).toBeNull();
+  });
+
+  it("un clic sur « Mon prix » ne coche pas la case", async () => {
+    const { user } = setup([rowOf(1)]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    await user.click(myPrice("Carotte"));
+    expect(dialog()).toBeTruthy();
+    expect(carrot().checked).toBe(false);
+    expect(counter()).toBe("0 cochée sur 11");
+  });
+
+  it("au clavier, Tab atteint la case puis « Mon prix » de la même ligne", async () => {
+    const { user } = setup([rowOf(1)]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    const first = boxes()[0]!;
+    first.focus();
+    await user.tab();
+    expect(document.activeElement).toBe(
+      screen.getAllByRole("button", { name: /^Modifier le prix : / })[0],
+    );
+  });
+});
+
+describe("IngredientsScreen : fenêtre de saisie pendant une écriture", () => {
+  async function startHeldWrite() {
+    const view = setup([rowOf(1)], undefined, [], (prices) => {
+      prices.state.holdSet = true;
+    });
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    await view.user.click(myPrice("Carotte"));
+    await view.user.type(priceField(), "2,5");
+    await view.user.click(saveButton());
+    await waitFor(() => {
+      expect(view.priceStore.held).toHaveLength(1);
+    });
+    return view;
+  }
+
+  it("ne se ferme par aucun moyen, puis montre l'échec quand l'écriture rejette", async () => {
+    const { user, priceStore } = await startHeldWrite();
+    expect(dialog().querySelector(".mantine-Modal-close")).toBeNull();
+    expect(
+      within(dialog()).getByRole<HTMLButtonElement>("button", { name: "Annuler" }).disabled,
+    ).toBe(true);
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    await user.click(document.querySelector(".mantine-Modal-inner")!);
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    priceStore.held[0]!.reject("Enregistrement du prix impossible.");
+    const alert = await within(dialog()).findByRole("alert");
+    expect(within(alert).getByText("Prix non enregistré")).toBeTruthy();
+    expect(alert.textContent).toContain("Enregistrement du prix impossible.");
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(dialog().querySelector(".mantine-Modal-close")).not.toBeNull();
+  });
+
+  it("une écriture qui réussit ferme la fenêtre à la fin, et elle reste fermée", async () => {
+    const { priceStore } = await startHeldWrite();
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    priceStore.held[0]!.resolve();
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    await flush();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(priceStore.sets).toHaveLength(1);
+    expect(labelText(carrot())).toContain("votre prix du 16/11/2026");
+  });
+});
+
+describe("IngredientsScreen : produit sans prix personnel possible", () => {
+  it("un ingrédient inconnu de plus de 200 octets : le texte à la place du bouton, les autres lignes gardent le leur", async () => {
+    const longName = "z".repeat(200);
+    const dishes = withPantry().map((dish, at) =>
+      at === 0
+        ? {
+            ...dish,
+            ingredients: [...dish.ingredients, ing(longName, 400, { category: "poultry" })],
+          }
+        : dish,
+    );
+    setup([rowOf(1, { menu: MenuSchema.parse({ ...menuReply, dishes }) })]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    expect(
+      screen.getAllByText("Prix personnel indisponible pour ce produit (nom trop long)."),
+    ).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: /^Modifier le prix : / })).toHaveLength(10);
+    expect(screen.queryByRole("button", { name: /Modifier le prix : Z{5}/ })).toBeNull();
+    expect(boxes()).toHaveLength(12);
+  });
+});
+
+describe("IngredientsScreen : saisie d'un prix", () => {
+  it("2,50 puis Enregistrer : le prix part au magasin, la fenêtre se ferme, la ligne et le total changent", async () => {
+    const { priceStore, user } = setup([rowOf(1)]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    const before = totalLine();
+    await user.click(myPrice("Carotte"));
+    expect(screen.getByRole("dialog", { name: "Prix de « Carotte »" })).toBeTruthy();
+    expect(screen.getByText("Prix pour le kilo")).toBeTruthy();
+    await user.type(priceField(), "2,50");
+    await user.click(saveButton());
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    expect(priceStore.sets).toEqual([
+      { key: "fresh|carotte", unit: "kg", cents: 250, date: "2026-11-16" },
+    ]);
+    expect(labelText(carrot())).toContain("≈ 2,75 € · 2,50 €/kg · votre prix du 16/11/2026");
+    expect(totalLine()).not.toBe(before);
+    expect(screen.getByText(/^Sources : votre table de prix · INSEE, prix moyens/)).toBeTruthy();
+  });
+
+  it.each([
+    ["0", "0"],
+    ["1500", "1500"],
+  ])(
+    "%s, Tab, clic sur Enregistrer : message exact, aucun appel, le champ garde la saisie",
+    async (typed, shown) => {
+      const { priceStore, user } = setup([rowOf(1)]);
+      await screen.findByRole("heading", { name: "Liste de courses" });
+      await user.click(myPrice("Carotte"));
+      await user.type(priceField(), typed);
+      expect(screen.queryByText(FIELD_ERROR)).toBeNull();
+      await user.tab();
+      await user.click(saveButton());
+      expect(screen.getByText(FIELD_ERROR)).toBeTruthy();
+      expect(priceStore.sets).toEqual([]);
+      expect(priceField().value).toBe(shown);
+      expect(screen.getByRole("dialog")).toBeTruthy();
+    },
+  );
+
+  it("un champ vide : l'erreur apparaît au clic sur Enregistrer, sans appel", async () => {
+    const { priceStore, user } = setup([rowOf(1)]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    await user.click(myPrice("Carotte"));
+    await user.click(saveButton());
+    expect(screen.getByText(FIELD_ERROR)).toBeTruthy();
+    expect(priceStore.sets).toEqual([]);
+  });
+
+  it("2,5 : 250 centimes", async () => {
+    const { priceStore, user } = setup([rowOf(1)]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    await user.click(myPrice("Carotte"));
+    await user.type(priceField(), "2,5");
+    await user.click(saveButton());
+    await waitFor(() => {
+      expect(priceStore.sets.map((row) => row.cents)).toEqual([250]);
+    });
+  });
+
+  it("prix existant à la pièce et ligne en grammes : texte explicatif, champ vide, unité kilo", async () => {
+    const { priceStore, user } = setup([rowOf(1)], undefined, [
+      { key: "fresh|carotte", unit: "piece", cents: 59, date: "2026-11-10" },
+    ]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    await waitFor(() => {
+      expect(myPrice("Carotte").hasAttribute("disabled")).toBe(false);
+    });
+    await user.click(myPrice("Carotte"));
+    expect(
+      screen.getByText(
+        "Votre prix actuel : 0,59 €/pièce. Cette liste compte en kilos : en enregistrer un ici remplace l'ancien.",
+      ),
+    ).toBeTruthy();
+    expect(priceField().value).toBe("");
+    expect(screen.getByText("Prix pour le kilo")).toBeTruthy();
+    await user.type(priceField(), "3");
+    await user.click(saveButton());
+    await waitFor(() => {
+      expect(priceStore.sets).toEqual([
+        { key: "fresh|carotte", unit: "kg", cents: 300, date: "2026-11-16" },
+      ]);
+    });
+  });
+
+  it("ligne en grammes et en pièces : unité de départ, préremplissage, changement d'unité", async () => {
+    const { user } = setup([rowOf(1, { menu: MENU_WITH_PIECES })], undefined, [carrotRow]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    await waitFor(() => {
+      expect(myPrice("Carotte").hasAttribute("disabled")).toBe(false);
+    });
+    await user.click(myPrice("Carotte"));
+    const kilo = within(dialog()).getByRole("radio", { name: "le kilo" });
+    const piece = within(dialog()).getByRole("radio", { name: "la pièce" });
+    expect(within(dialog()).queryByRole("radio", { name: "le litre" })).toBeNull();
+    expect((kilo as HTMLInputElement).checked).toBe(true);
+    expect(priceField().value).toBe("2,5");
+    await user.click(piece);
+    expect(priceField().value).toBe("");
+    await user.click(kilo);
+    expect(priceField().value).toBe("2,5");
+  });
+
+  it("écriture refusée : « Prix non enregistré » et le message, la fenêtre reste ouverte, rien ne change", async () => {
+    const { priceStore, user } = setup([rowOf(1)], undefined, [], (prices) => {
+      prices.state.setError = "Enregistrement du prix impossible.\u202E";
+    });
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    await user.click(myPrice("Carotte"));
+    await user.type(priceField(), "2,5");
+    await user.click(saveButton());
+    const alert = await screen.findByRole("alert");
+    expect(within(alert).getByText("Prix non enregistré")).toBeTruthy();
+    expect(alert.textContent).toContain("Enregistrement du prix impossible.");
+    expect(alert.textContent).not.toMatch(INVISIBLE);
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(priceStore.rows()).toEqual([]);
+    expect(labelText(carrot())).toContain(CARROT_INSEE_LINE);
+  });
+
+  it("« Retirer mon prix » supprime la clé et la ligne revient à l'INSEE", async () => {
+    const { priceStore, user } = setup([rowOf(1)], undefined, [carrotRow]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    await waitFor(() => {
+      expect(labelText(carrot())).toContain("votre prix du 10/11/2026");
+    });
+    await user.click(myPrice("Carotte"));
+    await user.click(within(dialog()).getByRole("button", { name: "Retirer mon prix" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    expect(priceStore.deletes).toEqual(["fresh|carotte"]);
+    expect(labelText(carrot())).toContain(CARROT_INSEE_LINE);
+  });
+
+  it("sans prix saisi, « Retirer mon prix » n'est pas proposé ; « Annuler » ferme sans rien écrire", async () => {
+    const { priceStore, user } = setup([rowOf(1)]);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    await user.click(myPrice("Carotte"));
+    expect(within(dialog()).queryByRole("button", { name: "Retirer mon prix" })).toBeNull();
+    await user.click(within(dialog()).getByRole("button", { name: "Annuler" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(priceStore.sets).toEqual([]);
+    expect(priceStore.deletes).toEqual([]);
+  });
+
+  it("table de prix illisible : alerte jaune, coûts de l'INSEE gardés, « Mon prix » désactivé, « Réessayer » relit", async () => {
+    const { priceStore, user } = setup([rowOf(1)], undefined, [], (prices) => {
+      prices.state.listError = "Lecture de la table de prix impossible.";
+    });
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain(
+      "Votre table de prix ne peut pas être lue : les coûts utilisent seulement les autres sources.",
+    );
+    expect(alert.textContent).toContain("Lecture de la table de prix impossible.");
+    expect(labelText(carrot())).toContain(CARROT_INSEE_LINE);
+    for (const button of screen.getAllByRole("button", { name: /^Modifier le prix/ })) {
+      expect(button.hasAttribute("disabled")).toBe(true);
+    }
+    priceStore.state.listError = null;
+    await user.click(within(alert).getByRole("button", { name: "Réessayer" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
+    expect(priceStore.state.lists).toBe(2);
+    expect(myPrice("Carotte").hasAttribute("disabled")).toBe(false);
+  });
+});
+
 function appSetup(rows: HistoryRow[]) {
   const settings = fakeSettingsStore();
   const keeper = createSettingsKeeper(settings.store);
@@ -578,6 +922,7 @@ function appSetup(rows: HistoryRow[]) {
     session,
     history: history.store,
     checks: createCheckKeeper(history.store),
+    prices: createPriceKeeper(fakePriceStore().store, { clock: fixedClock }),
   };
   renderWithMantine(<App services={services} />);
   return { history, user: userEvent.setup() };

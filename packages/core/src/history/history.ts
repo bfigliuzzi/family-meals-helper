@@ -6,7 +6,7 @@ import type { HistoryRow } from "../ports/history-store.ts";
 const DATE_ERROR = "La date de l'entrée est illisible.";
 
 // Une vraie date `AAAA-MM-JJ` : le 30 février et le 13e mois sont refusés (le Rust fait le même contrôle).
-function isRealDate(text: string): boolean {
+export function isRealDate(text: string): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
   if (match === null) return false;
   const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];

@@ -30,7 +30,10 @@ const SCREENS: readonly { id: ScreenId; label: string }[] = [
 export function App({
   services,
 }: {
-  services: Pick<Services, "settings" | "secretAdmin" | "session" | "history" | "checks">;
+  services: Pick<
+    Services,
+    "settings" | "secretAdmin" | "session" | "history" | "checks" | "prices"
+  >;
 }) {
   // Pas de routeur : pas d'URL, pas de lien profond, pas de retour arrière. Seul l'écran actif est monté.
   const [screen, setScreen] = useState<ScreenId>("new-session");
@@ -113,6 +116,7 @@ export function App({
               <IngredientsScreen
                 history={services.history}
                 checks={services.checks}
+                prices={services.prices}
                 refresh={session.outcomes}
                 onNewSession={() => {
                   go("new-session");

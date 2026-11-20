@@ -5,7 +5,16 @@ import { buildIngredientIndex } from "../ingredients/index-lookup.ts";
 import { REFERENTIAL } from "../ingredients/referential.ts";
 import { autumnMenu } from "../rules/fixtures/menus.ts";
 import { buildShoppingList } from "../shopping/shopping-list.ts";
-import { PANTRY_KEY, readChecked, shoppingChecklist, shoppingKey } from "./checks.ts";
+import { inseeLookup } from "../pricing/insee.ts";
+import { INSEE_TABLE } from "../pricing/insee-table.ts";
+import { manualLookup } from "../pricing/manual.ts";
+import {
+  checklistCost,
+  PANTRY_KEY,
+  readChecked,
+  shoppingChecklist,
+  shoppingKey,
+} from "./checks.ts";
 
 const index = buildIngredientIndex(REFERENTIAL);
 const INVISIBLE = /[\u202E\u200B]/;
@@ -169,5 +178,52 @@ describe("readChecked", () => {
     for (const text of ["{}", "[1]", "pas du json", "null", '["a",2]', '"a"', ""]) {
       expect(readChecked(text)).toBeNull();
     }
+  });
+});
+
+describe("shoppingChecklist : units", () => {
+  it("donne l'unité de prix de chaque somme, dans l'ordre g, ml, pièce", () => {
+    const menu = menuOf([
+      item("carotte", 600),
+      item("carotte", 2, { unit: "piece" }),
+      item("lait", 500, { unit: "ml" }),
+      item("lait", 250, { unit: "ml" }),
+    ]);
+    const lines = shoppingChecklist(menu, index).lines;
+    expect(lines.find((line) => line.key === "fresh|carotte")?.units).toEqual(["kg", "piece"]);
+    expect(lines.find((line) => line.key === "fresh|lait")?.units).toEqual(["l"]);
+  });
+});
+
+describe("checklistCost", () => {
+  const menu = menuOf([item("carotte", 600), item("lait", 500, { unit: "ml" })]);
+  const insee = inseeLookup(INSEE_TABLE);
+
+  it("compose les textes de chaque ligne, le total et la mention des sources", () => {
+    const cost = checklistCost(menu, index, [insee]);
+    expect(cost.lines.get("fresh|carotte")).toMatch(
+      /^≈ \d+,\d{2} € · \d+,\d{2} €\/kg · INSEE, moyenne nationale d/,
+    );
+    expect(cost.lines.get("fresh|lait")).toBe("prix inconnu");
+    expect(cost.unknown).toBe(1);
+    expect(cost.total).toMatch(/^Coût estimé : au moins \d+,\d{2} € · 1 prix inconnu$/);
+    expect(cost.notice).toBe(
+      "Sources : INSEE, prix moyens de vente au détail, Licence Ouverte 2.0.",
+    );
+    expect([...cost.lines.keys()]).toEqual(["fresh|carotte", "fresh|lait"]);
+  });
+  it("un prix manuel change le texte de la ligne, le total et les sources", () => {
+    const manual = manualLookup([
+      { key: "fresh|carotte", unit: "kg", cents: 300, date: "2026-11-16" },
+    ]);
+    const cost = checklistCost(menu, index, [manual, insee]);
+    expect(cost.lines.get("fresh|carotte")).toBe("≈ 1,80 € · 3,00 €/kg · votre prix du 16/11/2026");
+    expect(cost.total).toBe("Coût estimé : au moins 1,80 € · 1 prix inconnu");
+    expect(cost.notice).toBe("Sources : votre table de prix.");
+  });
+  it("sans aucune source employée, la mention est vide", () => {
+    const cost = checklistCost(menuOf([item("lait", 500, { unit: "ml" })]), index, [insee]);
+    expect(cost.notice).toBe("");
+    expect(cost.total).toBe("Coût estimé : inconnu (1 prix inconnu)");
   });
 });

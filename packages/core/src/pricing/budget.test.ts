@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkBudget, isValidBudget, parseBudget } from "./budget.ts";
+import { checkBudget, isValidBudget, parseBudget, readEuroInput } from "./budget.ts";
 import { totalText } from "./cost-text.ts";
 import type { MenuCost } from "./cost.ts";
 
@@ -82,6 +82,34 @@ describe("parseBudget", () => {
   it("refuse le reste", () => {
     for (const text of ["0", "0,00", "-3", "10000,01", "abc", "1,234", "100000", "1e3", "4 5"]) {
       expect(parseBudget(text)).toBe("invalid");
+    }
+  });
+});
+
+describe("readEuroInput", () => {
+  it("lit un nombre dans les bornes", () => {
+    expect(readEuroInput(45.5, 1000)).toBe(45.5);
+    expect(readEuroInput(0.01, 1000)).toBe(0.01);
+    expect(readEuroInput(1000, 1000)).toBe(1000);
+  });
+  it("lit un texte en cours de frappe : séparateur final, zéros en tête, virgule ou point", () => {
+    expect(readEuroInput("45,", 1000)).toBe(45);
+    expect(readEuroInput("45.", 1000)).toBe(45);
+    expect(readEuroInput("0045,50", 1000)).toBe(45.5);
+    expect(readEuroInput(" 2,5 ", 1000)).toBe(2.5);
+  });
+  it("rend null pour un champ vide", () => {
+    expect(readEuroInput("", 1000)).toBeNull();
+    expect(readEuroInput("   ", 1000)).toBeNull();
+  });
+  it("refuse zéro, au-delà du maximum, un nombre non fini et un texte mal formé", () => {
+    expect(readEuroInput(0, 1000)).toBe("invalid");
+    expect(readEuroInput(1000.01, 1000)).toBe("invalid");
+    expect(readEuroInput(Number.NaN, 1000)).toBe("invalid");
+    expect(readEuroInput(Number.POSITIVE_INFINITY, 1000)).toBe("invalid");
+    expect(readEuroInput(-3, 1000)).toBe("invalid");
+    for (const text of ["0", "0,00", "1500", "1,234", "abc", "-3", "1e3", "4 5", "1234567"]) {
+      expect(readEuroInput(text, 1000)).toBe("invalid");
     }
   });
 });

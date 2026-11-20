@@ -1,8 +1,16 @@
 import { invoke } from "@tauri-apps/api/core";
-import { createCheckKeeper, createSession, createSettingsKeeper } from "core";
-import type { CheckKeeper, HistoryStore, SecretAdmin, Session, SettingsKeeper } from "core";
+import { createCheckKeeper, createPriceKeeper, createSession, createSettingsKeeper } from "core";
+import type {
+  CheckKeeper,
+  HistoryStore,
+  PriceKeeper,
+  SecretAdmin,
+  Session,
+  SettingsKeeper,
+} from "core";
 import { createKeychainSecretAdmin } from "./keychain-secret-admin.ts";
 import { createTauriHistoryStore } from "./tauri-history-store.ts";
+import { createTauriPriceStore } from "./tauri-price-store.ts";
 import { createTauriSettingsStore } from "./tauri-settings-store.ts";
 
 export interface Services {
@@ -11,6 +19,7 @@ export interface Services {
   session: Session;
   history: HistoryStore;
   checks: CheckKeeper;
+  prices: PriceKeeper;
 }
 
 // À appeler une seule fois, hors de tout composant : le propriétaire du document et la file du trousseau vivent
@@ -22,6 +31,7 @@ export function createServices(): Services {
     },
   });
   const history = createTauriHistoryStore(invoke);
+  const clock = { now: () => new Date() };
   return {
     settings,
     secretAdmin: createKeychainSecretAdmin(invoke),
@@ -31,9 +41,15 @@ export function createServices(): Services {
         console.error("Abonné des cases en erreur", error);
       },
     }),
+    prices: createPriceKeeper(createTauriPriceStore(invoke), {
+      clock,
+      onListenerError: (error) => {
+        console.error("Abonné des prix en erreur", error);
+      },
+    }),
     session: createSession({
       settings,
-      clock: { now: () => new Date() },
+      clock,
       history,
       // Chargé au premier appel : le SDK n'est pas dans le paquet principal.
       // Dans le build normal, `__FMH_FIXTURE_MODEL__` vaut `false` à la compilation : Vite retire la branche et

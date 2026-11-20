@@ -1,6 +1,10 @@
 import type { Menu } from "../domain/menu.ts";
 import { printable } from "../ai/printable.ts";
 import type { IngredientIndex } from "../ingredients/index-lookup.ts";
+import { lineCostText, sourcesNotice, totalText } from "../pricing/cost-text.ts";
+import { menuCost } from "../pricing/cost.ts";
+import { unitOf } from "../pricing/price.ts";
+import type { PriceLookup, PriceUnit } from "../pricing/price.ts";
 import {
   buildShoppingList,
   formSuffix,
@@ -36,6 +40,9 @@ export interface ChecklistLine {
   readonly name: string;
   // « 1,1 kg (b : 500 g, c : 600 g) ».
   readonly detail: string;
+  // L'unité de prix de chaque somme de la ligne, dans l'ordre de ses totaux (g, ml, pièce) : celles où l'on peut
+  // saisir un prix.
+  readonly units: readonly PriceUnit[];
 }
 
 export interface Checklist {
@@ -71,6 +78,7 @@ export function shoppingChecklist(menu: Menu, index: IngredientIndex): Checklist
       key: shoppingKey(line, index),
       name: nameWithForm(line),
       detail: printable(shoppingLineDetail(line)),
+      units: Object.freeze(line.totals.map((total) => unitOf(total.unit))),
     }),
   );
   const pantry =
@@ -94,5 +102,31 @@ export function shoppingChecklist(menu: Menu, index: IngredientIndex): Checklist
     ]),
     evening: all.some((line) => line.evening),
     toConfirm: all.some((line) => line.toConfirm),
+  });
+}
+
+export interface ChecklistCost {
+  // Le texte du coût de chaque ligne, par clé de case (`shoppingKey`).
+  readonly lines: ReadonlyMap<string, string>;
+  // « Coût estimé : au moins 41,20 € · 3 prix inconnus ».
+  readonly total: string;
+  // « Sources : … », vide si aucune source n'est employée.
+  readonly notice: string;
+  // Nombre de lignes sans prix.
+  readonly unknown: number;
+}
+
+// Les textes de coût de l'écran Ingrédients, composés ici : l'écran n'en écrit aucun.
+export function checklistCost(
+  menu: Menu,
+  index: IngredientIndex,
+  lookups: readonly PriceLookup[],
+): ChecklistCost {
+  const cost = menuCost(menu, index, lookups);
+  return Object.freeze({
+    lines: new Map(cost.lines.map((line) => [line.key, lineCostText(line)])),
+    total: totalText(cost),
+    notice: sourcesNotice(cost),
+    unknown: cost.unknown,
   });
 }

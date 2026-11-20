@@ -12,6 +12,9 @@ fn main() {
             "history_open_pdf",
             "history_export_pdf",
             "history_set_checked",
+            "price_table_list",
+            "price_table_set",
+            "price_table_delete",
         ]),
     ))
     .expect("échec de tauri-build");

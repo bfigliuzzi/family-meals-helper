@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissions de la fenêtre principale : réglages (base de l'app), clé d'API (trousseau), appel à Claude par Mammouth (ai_send), historique des menus validés, de leurs fiches et de leurs cases cochées (base de l'app)",
+  "description": "Permissions de la fenêtre principale : réglages (base de l'app), clé d'API (trousseau), appel à Claude par Mammouth (ai_send), historique des menus validés, de leurs fiches et de leurs cases cochées (base de l'app), table de prix de l'utilisateur (base de l'app)",
   "windows": ["main"],
   "permissions": [
     "allow-settings-read",
@@ -14,6 +14,9 @@
     "allow-history-list",
     "allow-history-open-pdf",
     "allow-history-export-pdf",
-    "allow-history-set-checked"
+    "allow-history-set-checked",
+    "allow-price-table-list",
+    "allow-price-table-set",
+    "allow-price-table-delete"
   ]
 }

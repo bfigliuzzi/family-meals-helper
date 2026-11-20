@@ -3,6 +3,7 @@
 mod ai_transport;
 mod history;
 mod navigation;
+mod price_table;
 mod secrets;
 mod settings_db;
 
@@ -29,7 +30,10 @@ fn main() {
             history::history_list,
             history::history_open_pdf,
             history::history_export_pdf,
-            history::history_set_checked
+            history::history_set_checked,
+            price_table::price_table_list,
+            price_table::price_table_set,
+            price_table::price_table_delete
         ])
         .run(tauri::generate_context!())
         .expect("échec du lancement de l'application Tauri");

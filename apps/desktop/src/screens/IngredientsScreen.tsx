@@ -16,18 +16,30 @@ import {
   REFERENTIAL,
   SESSION_DAY_LABELS,
   buildIngredientIndex,
+  checklistCost,
   dishLetter,
+  isValidManualKey,
   printable,
   readChecked,
   readHistory,
   shoppingChecklist,
 } from "core";
-import type { CheckKeeper, HistoryItem, HistoryStore, IngredientIndex } from "core";
+import type {
+  CheckKeeper,
+  ChecklistLine,
+  HistoryItem,
+  HistoryStore,
+  IngredientIndex,
+  PriceKeeper,
+} from "core";
+import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useCheckSnapshot } from "../useCheckSnapshot.ts";
 import { useLatestRead } from "../useLatestRead.ts";
+import { usePriceSnapshot } from "../usePriceSnapshot.ts";
 import { dinnersText, fullDate } from "./history/texts.ts";
-import { INGREDIENTS_TEXTS as TEXTS, checkedCountText } from "./ingredients/texts.ts";
+import { PriceModal } from "./ingredients/PriceModal.tsx";
+import { INGREDIENTS_TEXTS as TEXTS, checkedCountText, myPriceLabel } from "./ingredients/texts.ts";
 
 type Latest = { kind: "empty" } | { kind: "unreadable" } | { kind: "ready"; item: HistoryItem };
 
@@ -76,21 +88,32 @@ function CheckLabel({
 }
 
 const CHECKBOX_STYLES = { body: { width: "100%" }, labelWrapper: { flex: 1 } };
+const GROWING: CSSProperties = { flex: 1 };
 
 function ChecklistView({
   item,
   checks,
+  prices,
   reading,
   onReload,
 }: {
   item: HistoryItem;
   checks: CheckKeeper;
+  prices: PriceKeeper;
   reading: boolean;
   onReload: () => void;
 }) {
   const { entry } = item;
   const request = printable(entry.request);
   const checklist = shoppingChecklist(entry.menu, indexOf());
+  const priceSnapshot = usePriceSnapshot(prices);
+  const { manual } = priceSnapshot;
+  // Le coût se recalcule quand le menu ou les sources de prix changent, pas à chaque coche.
+  const cost = useMemo(
+    () => checklistCost(entry.menu, indexOf(), priceSnapshot.lookups),
+    [entry.menu, priceSnapshot.lookups],
+  );
+  const [editing, setEditing] = useState<ChecklistLine | null>(null);
   const owned = useCheckSnapshot(checks)[item.id];
   const writeError = owned?.error ?? null;
   const stored = readChecked(item.checked);
@@ -108,18 +131,34 @@ function ChecklistView({
     );
   }
 
-  const box = (key: string, lines: readonly { text: string; size: "sm" | "xs" }[]) => (
-    <Checkbox
-      key={key}
-      size="sm"
-      styles={CHECKBOX_STYLES}
-      checked={checkedKeys.has(key)}
-      onChange={() => {
-        toggle(key);
-      }}
-      label={<CheckLabel lines={lines} checked={checkedKeys.has(key)} />}
-    />
-  );
+  const box = (
+    key: string,
+    lines: readonly { text: string; size: "sm" | "xs" }[],
+    action?: ReactNode,
+  ) => {
+    const checkbox = (
+      <Checkbox
+        key={key}
+        size="sm"
+        styles={CHECKBOX_STYLES}
+        style={action === undefined ? undefined : GROWING}
+        checked={checkedKeys.has(key)}
+        onChange={() => {
+          toggle(key);
+        }}
+        label={<CheckLabel lines={lines} checked={checkedKeys.has(key)} />}
+      />
+    );
+    // Le bouton est hors du `<label>` : un clic dessus ne coche pas la case.
+    return action === undefined ? (
+      checkbox
+    ) : (
+      <Group key={key} wrap="nowrap" align="flex-start" justify="space-between" gap="xs">
+        {checkbox}
+        {action}
+      </Group>
+    );
+  };
 
   return (
     <Stack gap="md">
@@ -162,6 +201,33 @@ function ChecklistView({
               {owned?.saving === true && <Loader size="xs" aria-hidden="true" />}
             </Group>
           </Group>
+          <Stack gap={2}>
+            <Text size="sm" fw={600}>
+              {cost.total}
+            </Text>
+            <Text size="xs" c="dimmed">
+              {TEXTS.costDisclaimer}
+            </Text>
+          </Stack>
+          {manual.status === "error" && (
+            <Alert color="yellow" variant="light">
+              <Stack gap="xs" align="flex-start">
+                <Text size="sm">
+                  {TEXTS.manualUnreadable}
+                  {manual.error === null ? "" : ` ${printable(manual.error)}`}
+                </Text>
+                <Button
+                  variant="light"
+                  size="xs"
+                  onClick={() => {
+                    void prices.load();
+                  }}
+                >
+                  {TEXTS.retry}
+                </Button>
+              </Stack>
+            </Alert>
+          )}
           {checklist.evening && (
             <Text size="xs" c="dimmed">
               {TEXTS.eveningLegend}
@@ -197,10 +263,31 @@ function ChecklistView({
             </Alert>
           )}
           {checklist.lines.map((line) =>
-            box(line.key, [
-              { text: line.name, size: "sm" },
-              { text: line.detail, size: "xs" },
-            ]),
+            box(
+              line.key,
+              [
+                { text: line.name, size: "sm" },
+                { text: line.detail, size: "xs" },
+                { text: cost.lines.get(line.key) ?? "", size: "xs" },
+              ],
+              isValidManualKey(line.key) ? (
+                <Button
+                  variant="subtle"
+                  size="compact-xs"
+                  aria-label={myPriceLabel(line.name)}
+                  disabled={manual.status !== "ready"}
+                  onClick={() => {
+                    setEditing(line);
+                  }}
+                >
+                  {TEXTS.myPrice}
+                </Button>
+              ) : (
+                <Text size="xs" c="dimmed" ta="right">
+                  {TEXTS.myPriceUnavailable}
+                </Text>
+              ),
+            ),
           )}
           <Divider />
           {checklist.pantry === null ? (
@@ -214,8 +301,24 @@ function ChecklistView({
               ...checklist.pantry.items.map((text) => ({ text, size: "xs" as const })),
             ])
           )}
+          {cost.notice !== "" && (
+            <Text size="xs" c="dimmed">
+              {cost.notice}
+            </Text>
+          )}
         </Stack>
       </Paper>
+      {editing !== null && (
+        <PriceModal
+          key={editing.key}
+          line={editing}
+          existing={manual.rows.find((row) => row.key === editing.key)}
+          prices={prices}
+          onClose={() => {
+            setEditing(null);
+          }}
+        />
+      )}
     </Stack>
   );
 }
@@ -226,15 +329,21 @@ function ChecklistView({
 export function IngredientsScreen({
   history,
   checks,
+  prices,
   refresh,
   onNewSession,
 }: {
   history: HistoryStore;
   checks: CheckKeeper;
+  prices: PriceKeeper;
   refresh: number;
   onNewSession: () => void;
 }) {
   const { state, reading, retry } = useLatestRead(history, refresh, readLatest);
+  // Une relecture à chaque affichage de l'écran est voulue : elle est bon marché.
+  useEffect(() => {
+    void prices.load();
+  }, [prices]);
   return (
     <Stack gap="lg">
       <Stack gap="xs">
@@ -279,6 +388,7 @@ export function IngredientsScreen({
           key={state.value.item.id}
           item={state.value.item}
           checks={checks}
+          prices={prices}
           reading={reading}
           onReload={retry}
         />

@@ -43,3 +43,19 @@ export function parseBudget(text: string): number | null | "invalid" {
   const value = Number(trimmed.replace(",", "."));
   return isValidBudget(value) ? value : "invalid";
 }
+
+// Un montant saisi dans un champ en euros : un nombre, ou le texte en cours de frappe. Vide : `null`. Un montant de
+// 0,01 € à `max`, à deux décimales au plus (`.` ou `,`, séparateur final toléré : « 45, » vaut 45) : le nombre. Tout
+// le reste, y compris un nombre non fini : `"invalid"`.
+export function readEuroInput(value: number | string, max: number): number | null | "invalid" {
+  let euros: number;
+  if (typeof value === "number") {
+    euros = value;
+  } else {
+    const trimmed = value.trim();
+    if (trimmed === "") return null;
+    if (!/^\d{1,6}([.,]\d{0,2})?$/.test(trimmed)) return "invalid";
+    euros = Number(trimmed.replace(",", "."));
+  }
+  return Number.isFinite(euros) && euros >= 0.01 && euros <= max ? euros : "invalid";
+}

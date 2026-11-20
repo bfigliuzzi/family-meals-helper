@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createCheckKeeper, createSession, createSettingsKeeper } from "core";
+import { createCheckKeeper, createPriceKeeper, createSession, createSettingsKeeper } from "core";
 import { describe, expect, it } from "vitest";
 import { App } from "./App.tsx";
 import { createKeychainSecretAdmin } from "./platform/keychain-secret-admin.ts";
@@ -9,6 +9,7 @@ import {
   fakeHistoryStore,
   fakeMenuModel,
   fakeNewToken,
+  fakePriceStore,
   fakeRenderPdf,
   fakeSecretAdmin,
   fakeSettingsStore,
@@ -40,6 +41,7 @@ function setup(replies: string[] = [], detailReplies: string[] = []) {
     session,
     history: history.store,
     checks: createCheckKeeper(history.store),
+    prices: createPriceKeeper(fakePriceStore().store, { clock: fixedClock }),
   };
   const { unmount } = renderWithMantine(<App services={services} />);
   return {
@@ -297,6 +299,7 @@ describe("aller-retour d'écran pendant une écriture", () => {
           session,
           history,
           checks: createCheckKeeper(history),
+          prices: createPriceKeeper(fakePriceStore().store, { clock: fixedClock }),
         }}
       />,
     );

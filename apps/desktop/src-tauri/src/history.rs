@@ -46,7 +46,7 @@ pub struct HistoryRow {
 
 // `AAAA-MM-JJ` en chiffres ASCII, mois de 1 à 12, jour de 1 au dernier jour du mois (février : 29 les années
 // bissextiles).
-fn check_date(text: &str) -> bool {
+pub(crate) fn check_date(text: &str) -> bool {
     let bytes = text.as_bytes();
     if bytes.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {
         return false;

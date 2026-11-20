@@ -2,7 +2,9 @@ import { DetailSchema, MAX_CHECKED_BYTES } from "core";
 import type {
   HistoryRow,
   HistoryStore,
+  ManualPriceRow,
   Model,
+  PriceStore,
   SecretAdmin,
   SessionDeps,
   Settings,
@@ -58,6 +60,56 @@ export function fakeSettingsStore(initial: string | null = null) {
     },
   };
   return { store, state, written, held };
+}
+
+// Fausse table de prix en mémoire. Chaque opération peut échouer à la demande (`state.listError`, `setError`,
+// `deleteError` : le message du rejet, `null` pour réussir) ; `sets` et `deletes` gardent les appels reçus. Avec
+// `state.holdSet`, chaque `setManual` attend que le test le règle par `held[n].resolve()` ou `held[n].reject(message)`.
+export function fakePriceStore(initial: ManualPriceRow[] = []) {
+  const rows = new Map(initial.map((row) => [row.key, row]));
+  const state = {
+    listError: null as string | null,
+    setError: null as string | null,
+    deleteError: null as string | null,
+    holdSet: false,
+    lists: 0,
+  };
+  const sets: ManualPriceRow[] = [];
+  const held: { resolve(): void; reject(message: string): void }[] = [];
+  const deletes: string[] = [];
+  const store: PriceStore = {
+    listManual() {
+      state.lists += 1;
+      if (state.listError !== null) return Promise.reject(new Error(state.listError));
+      return Promise.resolve([...rows.values()].sort((a, b) => a.key.localeCompare(b.key)));
+    },
+    setManual(row) {
+      sets.push({ ...row });
+      if (state.setError !== null) return Promise.reject(new Error(state.setError));
+      if (state.holdSet) {
+        return new Promise<void>((resolve, reject) => {
+          held.push({
+            resolve() {
+              rows.set(row.key, { ...row });
+              resolve();
+            },
+            reject(message) {
+              reject(new Error(message));
+            },
+          });
+        });
+      }
+      rows.set(row.key, { ...row });
+      return Promise.resolve();
+    },
+    deleteManual(key) {
+      deletes.push(key);
+      if (state.deleteError !== null) return Promise.reject(new Error(state.deleteError));
+      rows.delete(key);
+      return Promise.resolve();
+    },
+  };
+  return { store, state, sets, deletes, held, rows: () => [...rows.values()] };
 }
 
 // Faux trousseau en mémoire ; chaque opération peut échouer à la demande. Comme le vrai, il n'expose aucune
