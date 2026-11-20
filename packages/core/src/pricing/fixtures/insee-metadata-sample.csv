@@ -1,0 +1,14 @@
+"COD_VAR";"LIB_VAR";"COD_MOD";"LIB_MOD";"GEO_OBJECT"
+"FREQ";"Fréquence";"A";"Annuel";
+"FREQ";"Fréquence";"M";"Mensuel";
+"IND_TYPE";"Type d'indicateur";"AV_P";"Prix moyen";
+"OBS_STATUS";"Statut de l'observation";"A";"Normale";
+"OBS_STATUS";"Statut de l'observation";"O";"Valeur manquante (vm)";
+"PRODUCT_ITEM";"Variété";"1264";"Viandes : Porc : rôti dans le filet (kg)";
+"PRODUCT_ITEM";"Variété";"3838";"Légumes : Chou-fleur (pièce)";
+"PRODUCT_ITEM";"Variété";"3117";"Services : Nuitée et petit-déjeuner dans un hôtel 2 étoiles";
+"PRODUCT_ITEM";"Variété";"1272";"Viandes : Jambon supérieur";
+"PRODUCT_ITEM";"Variété";"8948";"Légumes : Carottes (kg)";
+"PRODUCT_ITEM";"Variété";"4037";"Fioul";
+"PRODUCT_ITEM";"Variété";"8955";"Légumes : Tomates (kg)";
+"UNIT_MEASURE";"Unité de mesure";"EUR";"Euros";
