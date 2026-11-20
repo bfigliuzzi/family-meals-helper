@@ -1,6 +1,7 @@
 import { MenuSchema } from "core";
-import { createAnthropicModel, MAMMOUTH_BASE_URL } from "core/ai";
-import { describe, expect, it } from "vitest";
+import { createAnthropicModel, MAMMOUTH_BASE_URL, SDK_TIMEOUT_MS } from "core/ai";
+import { describe, expect, it, vi } from "vitest";
+import transportSource from "../../src-tauri/src/ai_transport.rs?raw";
 import { createAppModel, RUST_INJECTED_KEY } from "./ai-model.ts";
 import mammouthReply from "./fixtures/mammouth-reply.json";
 import { BODY_UNUSABLE_MESSAGE, createTauriHttpClient, LEAK_MESSAGE } from "./tauri-http-client.ts";
@@ -52,6 +53,8 @@ describe("createAppModel", () => {
     const byName = Object.fromEntries(headers);
     expect(byName["authorization"]).toBe(`Bearer ${RUST_INJECTED_KEY}`);
     expect(byName["anthropic-dangerous-direct-browser-access"]).toBe("true");
+    // Le délai réellement passé au SDK, en secondes.
+    expect(byName["x-stainless-timeout"]).toBe(String(SDK_TIMEOUT_MS / 1000));
     expect(headers.length).toBeLessThan(32);
     // Ce que le Rust doit filtrer : la liste casse si une montée du SDK ajoute un en-tête.
     expect(headers.map(([name]) => name).sort()).toEqual([
@@ -70,6 +73,51 @@ describe("createAppModel", () => {
       "x-stainless-runtime-version",
       "x-stainless-timeout",
     ]);
+  });
+
+  it("le délai du Rust (240 s) reste plus court que celui du SDK", () => {
+    const seconds = /DEADLINE: Duration = Duration::from_secs\((\d+)\)/.exec(transportSource)?.[1];
+    expect(Number(seconds)).toBe(240);
+    expect(Number(seconds) * 1000).toBeLessThan(SDK_TIMEOUT_MS);
+  });
+
+  it("écrit une ligne de console avec output_tokens et la cause de fin, sans texte de la réponse", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    try {
+      const secret = "TEXTE-SECRET-DE-LA-REPONSE";
+      const body = JSON.stringify({
+        content: [{ type: "text", text: secret }],
+        stop_reason: "max_tokens",
+        usage: { input_tokens: 5, output_tokens: 777 },
+      });
+      const { invoke } = recordingInvoke(() => Promise.resolve({ ...mammouthReply, body }));
+      await createAppModel(invoke, { model: "m" }, MenuSchema).complete(prompt);
+      expect(info).toHaveBeenCalledTimes(1);
+      expect(info.mock.calls[0]).toHaveLength(1);
+      const line = String(info.mock.calls[0]?.[0]);
+      expect(line).toContain("output_tokens=777");
+      expect(line).toContain("stop_reason=max_tokens");
+      expect(line).not.toContain(secret);
+      expect(line).not.toContain(RUST_INJECTED_KEY);
+    } finally {
+      info.mockRestore();
+    }
+  });
+
+  it("une stop_reason inconnue, avec texte et retour à la ligne, est écrite « autre »", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    try {
+      const body = JSON.stringify({
+        content: [{ type: "text", text: "ok" }],
+        stop_reason: "texte libre\nsecond ligne",
+        usage: { input_tokens: 5, output_tokens: 12 },
+      });
+      const { invoke } = recordingInvoke(() => Promise.resolve({ ...mammouthReply, body }));
+      await createAppModel(invoke, { model: "m" }, MenuSchema).complete(prompt);
+      expect(info.mock.calls).toEqual([["IA : stop_reason=autre output_tokens=12"]]);
+    } finally {
+      info.mockRestore();
+    }
   });
 
   it("lit une réponse de Mammouth passée par ai_send", async () => {

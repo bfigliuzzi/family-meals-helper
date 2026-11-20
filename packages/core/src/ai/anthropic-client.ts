@@ -7,6 +7,13 @@ import { toFetch } from "./fetch-adapter.ts";
 import type { Feature, Model, ModelReply } from "./model.ts";
 import { TransportError } from "./transport-error.ts";
 
+// Plafond de jetons de sortie par requête. Sur ce modèle la réflexion adaptative compte dans `max_tokens` sans être
+// renvoyée : 8000 a coupé une réponse de 1500 jetons visibles (démonstration payée du lot 6).
+export const DEFAULT_MAX_TOKENS = 16_000;
+// Délai du SDK. Le délai du Rust (`DEADLINE` dans ai_transport.rs) doit rester plus court : le Rust répond avant que
+// la vue web n'abandonne. La CLI utilise le même client, donc le même délai.
+export const SDK_TIMEOUT_MS = 250_000;
+
 export interface AnthropicOptions {
   apiKey: string;
   baseURL: string;
@@ -34,7 +41,7 @@ export function createAnthropicModel(opts: AnthropicOptions): Model {
     logger: opts.logger,
     openTelemetry: false,
     maxRetries: 0,
-    timeout: 120_000,
+    timeout: SDK_TIMEOUT_MS,
     dangerouslyAllowBrowser: opts.browser,
   });
 
@@ -47,7 +54,7 @@ export function createAnthropicModel(opts: AnthropicOptions): Model {
       try {
         const message: unknown = await client.messages.create({
           model: opts.model,
-          max_tokens: opts.maxTokens ?? 8000,
+          max_tokens: opts.maxTokens ?? DEFAULT_MAX_TOKENS,
           system: [
             {
               type: "text",

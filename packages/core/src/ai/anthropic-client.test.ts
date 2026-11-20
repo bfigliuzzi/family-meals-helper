@@ -99,7 +99,7 @@ describe("createAnthropicModel", () => {
     await createAnthropicModel(options(http)).complete(prompt);
     const body = await bodyOf(requests[0]);
     expect(body["model"]).toBe("claude-sonnet-5-5");
-    expect(body["max_tokens"]).toBe(8000);
+    expect(body["max_tokens"]).toBe(16_000);
     const system = body["system"] as { text: string; cache_control?: { type: string } }[];
     expect(system[0]?.text).toBe("Système");
     expect(system[0]?.cache_control).toEqual({ type: "ephemeral" });

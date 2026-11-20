@@ -18,8 +18,9 @@ use tauri::{AppHandle, State};
 use crate::secrets;
 
 pub const MAMMOUTH_MESSAGES_URL: &str = "https://api.mammouth.ai/v1/messages";
-// Plus court que les 120 s du SDK (anthropic-client.ts) : le Rust répond avant que la vue web n'abandonne.
-pub const DEADLINE: Duration = Duration::from_secs(110);
+// Plus court que les 250 s du SDK (`SDK_TIMEOUT_MS`, anthropic-client.ts) : le Rust répond avant que la vue web
+// n'abandonne.
+pub const DEADLINE: Duration = Duration::from_secs(240);
 const MAX_BODY_BYTES: usize = 1024 * 1024; // requête et réponse
 const MAX_HEADERS: usize = 32;
 const MAX_HEADER_NAME_BYTES: usize = 64;
@@ -1342,6 +1343,14 @@ mod tests {
     }
 
     #[test]
+    fn deadline_is_240_seconds_and_shorter_than_the_sdk_timeout() {
+        // 250 000 ms : `SDK_TIMEOUT_MS` dans anthropic-client.ts (ai-model.test.ts vérifie aussi cet ordre).
+        const SDK_TIMEOUT: Duration = Duration::from_millis(250_000);
+        assert_eq!(DEADLINE, Duration::from_secs(240));
+        assert!(DEADLINE < SDK_TIMEOUT);
+    }
+
+    #[test]
     fn deadline_passed_during_key_read_sends_nothing() {
         let server = TestServer::start(Vec::new(), Duration::from_millis(600));
         // Même enchaînement qu'`ai_send` : l'échéance est fixée avant la lecture de la clé.
@@ -1578,7 +1587,7 @@ mod tests {
     #[ignore = "appel réel payant : lancé à la main avec --ignored"]
     fn real_call_to_mammouth() {
         // L'échéance est fixée avant la lecture du trousseau, comme dans `ai_send` : la réponse de l'utilisateur à
-        // macOS compte dans les 110 s.
+        // macOS compte dans les 240 s.
         let deadline = Instant::now() + DEADLINE;
         // Seule lecture du trousseau du test, avant tout appel réseau : c'est ici que macOS demande l'accès.
         let key = match run(secrets::read_api_key(APP_SERVICE.to_string())) {
@@ -1600,7 +1609,7 @@ mod tests {
             ("x-stainless-retry-count", "0"),
             ("x-stainless-runtime", "browser:other"),
             ("x-stainless-runtime-version", "unknown"),
-            ("x-stainless-timeout", "120"),
+            ("x-stainless-timeout", "250"),
         ]);
         let body = r#"{"model":"claude-sonnet-5-5","max_tokens":16,"messages":[{"role":"user","content":"Réponds seulement : ok"}]}"#;
         let text = run(transport(

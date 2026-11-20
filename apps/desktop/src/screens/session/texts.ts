@@ -92,7 +92,7 @@ export const TEXTS = {
   compose: "Composer le menu",
   send: "Envoyer la modification",
   duration:
-    "Un cycle peut durer plusieurs minutes : jusqu'à 3 essais d'environ 2 minutes chacun, sans annulation possible.",
+    "Un cycle peut durer plusieurs minutes : jusqu'à 3 essais d'environ 4 minutes chacun, sans annulation possible.",
   checking: "Vérification en cours",
   patience:
     "Cela peut prendre plusieurs minutes. Vous pouvez changer d'écran : le résultat s'affichera ici.",
