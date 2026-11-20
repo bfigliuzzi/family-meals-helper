@@ -1,11 +1,11 @@
 import type { Menu } from "../domain/menu.ts";
 import { printable } from "../ai/printable.ts";
 import type { IngredientIndex } from "../ingredients/index-lookup.ts";
-import { normalizeName } from "../ingredients/normalize.ts";
 import {
   buildShoppingList,
   formSuffix,
   pantryLineDetail,
+  shoppingKey,
   shoppingLineDetail,
 } from "../shopping/shopping-list.ts";
 import type { ShoppingLine } from "../shopping/shopping-list.ts";
@@ -13,11 +13,8 @@ import type { ShoppingLine } from "../shopping/shopping-list.ts";
 // La clé de l'unique case du placard. Une clé d'ingrédient contient toujours « | » : elles ne se rencontrent pas.
 export const PANTRY_KEY = "placard";
 
-// Clé d'une case : l'identifiant de regroupement de `buildShoppingList` (« forme|nom canonique »). Elle est lue sur le
-// nom brut de la ligne, avant `printable` et la capitale : ceux-ci ne servent qu'à l'affichage.
-export function shoppingKey(line: ShoppingLine, index: IngredientIndex): string {
-  return `${line.form}|${index.find(line.name)?.name ?? normalizeName(line.name)}`;
-}
+// La clé d'une case est celle de regroupement de `buildShoppingList` (« forme|nom canonique »), définie avec la liste.
+export { shoppingKey };
 
 // Les cases lues dans `history.checked` : un tableau JSON de chaînes, sinon `null`. Ne lève jamais.
 export function readChecked(text: string): string[] | null {

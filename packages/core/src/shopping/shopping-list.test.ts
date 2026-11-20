@@ -7,6 +7,7 @@ import { cookingQuantityText, quantityPhrase, quantityText } from "./quantity-te
 import {
   buildShoppingList,
   ingredientKey,
+  shoppingKey,
   pantryLineDetail,
   pantryLineText,
   shoppingLineDetail,
@@ -301,5 +302,48 @@ describe("shoppingLineDetail et pantryLineDetail", () => {
   it("placard : la quantité et les plats, sans répartition des quantités", () => {
     const list = buildShoppingList(autumnMenu(), index);
     expect(list.pantry.map(pantryLineDetail)).toEqual(["3 g (d)", "100 ml (a, b, c, d)"]);
+  });
+});
+
+describe("ShoppingLine.category", () => {
+  it("prend la catégorie du référentiel, même si l'IA en déclare une autre", () => {
+    const menu = menuOf([item("carotte", 300, { category: "dairy" })]);
+    expect(lineOf(menu, "carotte").category).toBe("vegetable");
+  });
+  it("garde la catégorie déclarée quand toutes les occurrences d'un inconnu la déclarent", () => {
+    const menu = menuOf(
+      [item("œufs de ferme", 2, { unit: "piece", category: "egg" })],
+      [item("œufs de ferme", 4, { unit: "piece", category: "egg" })],
+    );
+    expect(index.find("œufs de ferme")).toBeUndefined();
+    expect(lineOf(menu, "œufs de ferme").category).toBe("egg");
+  });
+  it("met null quand les occurrences d'un inconnu se contredisent ou que l'une n'en déclare pas", () => {
+    const contradictory = menuOf(
+      [item("œufs de ferme", 2, { unit: "piece", category: "egg" })],
+      [item("œufs de ferme", 4, { unit: "piece", category: "dairy" })],
+      [item("œufs de ferme", 4, { unit: "piece", category: "egg" })],
+    );
+    expect(lineOf(contradictory, "œufs de ferme").category).toBeNull();
+    const missing = menuOf(
+      [item("œufs de ferme", 2, { unit: "piece", category: "egg" })],
+      [item("œufs de ferme", 4, { unit: "piece" })],
+    );
+    expect(lineOf(missing, "œufs de ferme").category).toBeNull();
+    const firstMissing = menuOf(
+      [item("œufs de ferme", 2, { unit: "piece" })],
+      [item("œufs de ferme", 4, { unit: "piece", category: "egg" })],
+    );
+    expect(lineOf(firstMissing, "œufs de ferme").category).toBeNull();
+  });
+});
+
+describe("shoppingKey", () => {
+  it("écrit « forme|nom canonique »", () => {
+    const menu = menuOf([item("carottes", 300)], [item("Pintades", 400, { form: "frozen" })]);
+    expect(buildShoppingList(menu, index).lines.map((line) => shoppingKey(line, index))).toEqual([
+      "fresh|carotte",
+      "frozen|pintade",
+    ]);
   });
 });

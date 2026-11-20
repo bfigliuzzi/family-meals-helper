@@ -16,6 +16,7 @@ export function composeDryRunLines(input: ComposeInput): string[] {
     sessionDay: input.sessionDay,
     dinners: expectedDinners(input.request),
     inSeason: inSeasonNames(input.month, REFERENTIAL, SEASON_TABLE),
+    ...(input.budget === undefined ? {} : { budget: input.budget }),
   });
   return [
     "=== Prompt système ===",

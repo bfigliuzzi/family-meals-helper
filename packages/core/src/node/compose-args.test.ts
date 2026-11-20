@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseBatchArgs, parseComposeArgs } from "./compose-args.ts";
+import { describeParseError, parseBatchArgs, parseComposeArgs } from "./compose-args.ts";
 
 describe("parseComposeArgs", () => {
   it("lit la demande et les valeurs par défaut", () => {
@@ -11,6 +11,7 @@ describe("parseComposeArgs", () => {
       sessionDay: "sun",
       maxAttempts: 3,
       dryRun: false,
+      budget: null,
     });
   });
   it("lit --exclude répétable, --month, --max-attempts et --dry-run", () => {
@@ -35,6 +36,7 @@ describe("parseComposeArgs", () => {
       sessionDay: "sun",
       maxAttempts: 2,
       dryRun: true,
+      budget: null,
     });
   });
   it("découpe --exclude sur la virgule", () => {
@@ -80,6 +82,67 @@ describe("parseComposeArgs", () => {
   });
 });
 
+const BUDGET_ERROR =
+  "--budget attend un montant en euros supérieur à 0 et au plus 10000, par exemple 60 ou 45,50";
+
+describe("--budget (compose et batch)", () => {
+  const parsers = { compose: parseComposeArgs, batch: parseBatchArgs };
+  for (const [command, parse] of Object.entries(parsers)) {
+    it(`${command} : lit 60 et 45,50, absent vaut null`, () => {
+      expect(parse(["x", "--budget", "60"])).toMatchObject({ ok: true, budget: 60 });
+      expect(parse(["x", "--budget", "45,50"])).toMatchObject({ ok: true, budget: 45.5 });
+      expect(parse(["x", "--budget", "45.5"])).toMatchObject({ ok: true, budget: 45.5 });
+      expect(parse(["x"])).toMatchObject({ ok: true, budget: null });
+    });
+    it(`${command} : refuse 0, x, une valeur vide et un montant hors bornes, avec le message exact`, () => {
+      for (const value of ["0", "x", "", "10000,01", "-3", "1,234"]) {
+        expect(parse(["x", `--budget=${value}`])).toEqual({ ok: false, error: BUDGET_ERROR });
+      }
+    });
+  }
+});
+
+describe("erreurs d'arguments en français", () => {
+  const parsers = { compose: parseComposeArgs, batch: parseBatchArgs };
+  for (const [command, parse] of Object.entries(parsers)) {
+    it(`${command} : une option sans valeur et une option inconnue`, () => {
+      expect(parse(["x", "--budget"])).toEqual({
+        ok: false,
+        error: "Une option attend une valeur : --budget",
+      });
+      expect(parse(["x", "--inconnue"])).toEqual({
+        ok: false,
+        error: "Option inconnue : --inconnue",
+      });
+    });
+    it(`${command} : un drapeau avec une valeur, une valeur qui commence par un tiret`, () => {
+      expect(parse(["x", "--dry-run=yes"])).toEqual({
+        ok: false,
+        error: "L'option --dry-run ne prend pas de valeur.",
+      });
+      expect(parse(["x", "--budget", "-3"])).toEqual({
+        ok: false,
+        error: "Valeur de --budget ambiguë : écrire --budget=<valeur>.",
+      });
+    });
+  }
+  it("--budget=-3 donne le message du montant refusé", () => {
+    expect(parseComposeArgs(["x", "--budget=-3"])).toEqual({ ok: false, error: BUDGET_ERROR });
+  });
+  it("describeParseError : phrase d'un argument sans option, au choix de l'appelant", () => {
+    const error = Object.assign(new Error("Unexpected argument 'x'"), {
+      code: "ERR_PARSE_ARGS_UNEXPECTED_POSITIONAL",
+    });
+    expect(describeParseError(error, "Ce script ne prend aucun argument sans option.")).toBe(
+      "Ce script ne prend aucun argument sans option.",
+    );
+    expect(describeParseError(error)).toBe(
+      "Une seule demande attendue : la mettre entre guillemets.",
+    );
+    expect(describeParseError(new Error("autre"))).toBe("Arguments illisibles.");
+  });
+});
+
 describe("parseComposeArgs : --out", () => {
   it("refuse --out, réservé à batch", () => {
     const result = parseComposeArgs(["x", "--out", "menu.pdf"]);
@@ -97,6 +160,7 @@ describe("parseBatchArgs", () => {
       sessionDay: "sun",
       maxAttempts: 3,
       dryRun: false,
+      budget: null,
       out: "menu.pdf",
     });
   });
@@ -142,7 +206,8 @@ describe("parseBatchArgs", () => {
   it("garde les erreurs de compose : demande absente, --max-attempts hors bornes", () => {
     expect(parseBatchArgs(["--out", "a.pdf"])).toEqual({
       ok: false,
-      error: 'La demande est obligatoire : batch "<demande>" [--exclude x] [--out <fichier.pdf>]',
+      error:
+        'La demande est obligatoire : batch "<demande>" [--exclude x] [--budget 60] [--out <fichier.pdf>]',
     });
     expect(parseBatchArgs(["x", "--out", "a.pdf", "--max-attempts", "4"])).toEqual({
       ok: false,

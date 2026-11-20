@@ -10,6 +10,12 @@ import { THAW_INSTRUCTION_FR } from "../rules/check-conservation.ts";
 import type { DishKeeping } from "../rules/check-conservation.ts";
 import { FRESH_FISH_CATEGORIES } from "../rules/conservation-table.ts";
 import { categoryOf } from "../rules/dish-profile.ts";
+import { checkBudget } from "../pricing/budget.ts";
+import { menuCost } from "../pricing/cost.ts";
+import { sourcesNotice, totalText } from "../pricing/cost-text.ts";
+import { inseeLookup } from "../pricing/insee.ts";
+import { INSEE_TABLE } from "../pricing/insee-table.ts";
+import { buildShoppingList, formSuffix } from "../shopping/shopping-list.ts";
 import { MAX_SESSION_MINUTES, clockText, durationText } from "../scheduling/plan-session.ts";
 import type { SessionPlan } from "../scheduling/plan-session.ts";
 import { monthName } from "../season/months.ts";
@@ -43,6 +49,7 @@ export const RULE_LABELS: Record<RuleId, string> = {
   "session-length": "durée de session",
   detail: "détail",
   pinned: "plat épinglé",
+  budget: "budget",
 };
 
 const STOP_MESSAGES: Partial<Record<StopCause, string>> = {
@@ -150,7 +157,28 @@ function describeSession(session: SessionPlan | null): string[] {
   ];
 }
 
-export function renderComposeResult(result: ComposeResult, input: ComposeInput): string {
+// Le coût de la liste de courses avec les prix de l'INSEE (la CLI ne lit pas d'autre source), puis les prix inconnus,
+// les sources, et le constat `budget` s'il y a dépassement : quatre lignes au plus.
+export function renderCostLines(menu: Menu, budget: number | null): string[] {
+  const cost = menuCost(menu, index, [inseeLookup(INSEE_TABLE)]);
+  const lines = [`${totalText(cost)} · placard non compris.`];
+  if (cost.unknown > 0) {
+    const names = buildShoppingList(menu, index)
+      .lines.filter((_line, position) => cost.lines[position]?.euros === null)
+      .map((line) => {
+        const form = formSuffix(line.form, line.showForm);
+        return form === "" ? line.name : `${line.name} (${form})`;
+      });
+    lines.push(`Prix inconnus : ${names.join(", ")}.`);
+  }
+  const notice = sourcesNotice(cost);
+  if (notice !== "") lines.push(notice);
+  const finding = checkBudget(cost, budget);
+  if (finding !== null) lines.push(describeFinding(finding, menu));
+  return lines.map(printable);
+}
+
+function renderComposeBody(result: ComposeResult, input: ComposeInput): string {
   const lines: string[] = [];
   const { best } = result;
   const menu = best?.menu ?? null;
@@ -193,6 +221,12 @@ export function renderComposeResult(result: ComposeResult, input: ComposeInput):
   if (result.technicalError !== null) lines.push(`Erreur technique : ${result.technicalError}`);
   lines.push(describeTokens("Appels à l'IA", [result]));
   return lines.map(printable).join("\n");
+}
+
+export function renderComposeResult(result: ComposeResult, input: ComposeInput): string {
+  const menu = result.best?.menu ?? null;
+  const body = renderComposeBody(result, input);
+  return menu === null ? body : [body, ...renderCostLines(menu, input.budget ?? null)].join("\n");
 }
 
 const DETAIL_STOP_MESSAGES: Partial<Record<StopCause, string>> = {
@@ -248,7 +282,7 @@ function describeOutcome(result: BatchResult): string | null {
 
 export function renderBatchResult(result: BatchResult, input: ComposeInput): string {
   const lines = [
-    renderComposeResult(result.compose, input),
+    renderComposeBody(result.compose, input),
     "",
     ...describeDetail(result, input).map(printable),
   ];
@@ -257,5 +291,7 @@ export function renderBatchResult(result: BatchResult, input: ComposeInput): str
   const spent: Spent[] =
     result.detail === null ? [result.compose] : [result.compose, result.detail];
   lines.push(describeTokens("Total des appels", spent));
+  const menu = result.compose.best?.menu ?? null;
+  if (menu !== null) lines.push(...renderCostLines(menu, input.budget ?? null));
   return lines.join("\n");
 }

@@ -2,6 +2,7 @@ import { parseArgs } from "node:util";
 import type { SessionDay } from "../domain/menu.ts";
 import { SESSION_DAYS, SESSION_DAY_LABELS } from "../domain/menu.ts";
 import { lightNormalize } from "../ingredients/normalize.ts";
+import { parseBudget } from "../pricing/budget.ts";
 import type { Month } from "../season/months.ts";
 
 export interface ComposeArgs {
@@ -11,9 +12,44 @@ export interface ComposeArgs {
   sessionDay: SessionDay;
   maxAttempts: 1 | 2 | 3;
   dryRun: boolean;
+  // Plafond en euros pour toute la liste de courses ; null : pas de plafond.
+  budget: number | null;
 }
 
 export type BatchArgs = ComposeArgs & { out: string | null };
+
+// `parseArgs` écrit ses erreurs en anglais : on les dit en français, d'après leur code (et, pour une valeur, d'après le
+// message de Node : le même code couvre trois erreurs), avec le nom de l'option quand le message de Node le donne.
+export function describeParseError(
+  error: unknown,
+  positionalMessage = "Une seule demande attendue : la mettre entre guillemets.",
+): string {
+  const code = error instanceof Error && "code" in error ? error.code : undefined;
+  const message = error instanceof Error ? error.message : "";
+  const name = /'(--[a-z-]+)/.exec(message)?.[1];
+  switch (code) {
+    case "ERR_PARSE_ARGS_INVALID_OPTION_VALUE":
+      if (message.includes("does not take an argument")) {
+        return name === undefined
+          ? "Une option ne prend pas de valeur."
+          : `L'option ${name} ne prend pas de valeur.`;
+      }
+      if (message.includes("ambiguous")) {
+        return name === undefined
+          ? "Valeur d'une option ambiguë : écrire --option=<valeur>."
+          : `Valeur de ${name} ambiguë : écrire ${name}=<valeur>.`;
+      }
+      return name === undefined
+        ? "Une option attend une valeur."
+        : `Une option attend une valeur : ${name}`;
+    case "ERR_PARSE_ARGS_UNKNOWN_OPTION":
+      return name === undefined ? "Option inconnue." : `Option inconnue : ${name}`;
+    case "ERR_PARSE_ARGS_UNEXPECTED_POSITIONAL":
+      return positionalMessage;
+    default:
+      return "Arguments illisibles.";
+  }
+}
 
 // Corps commun à `compose` et à `batch` ; `--out` n'est connu que de `batch`.
 function parseCommonArgs(
@@ -31,11 +67,12 @@ function parseCommonArgs(
         "session-day": { type: "string" },
         "max-attempts": { type: "string" },
         "dry-run": { type: "boolean" },
+        budget: { type: "string" },
         ...(command === "batch" ? { out: { type: "string" } } : {}),
       },
     });
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    return { ok: false, error: describeParseError(error) };
   }
   const { values, positionals } = parsed;
 
@@ -43,7 +80,7 @@ function parseCommonArgs(
   if (request === "") {
     return {
       ok: false,
-      error: `La demande est obligatoire : ${command} "<demande>" [--exclude x]${command === "batch" ? " [--out <fichier.pdf>]" : ""}`,
+      error: `La demande est obligatoire : ${command} "<demande>" [--exclude x] [--budget 60]${command === "batch" ? " [--out <fichier.pdf>]" : ""}`,
     };
   }
   if (positionals.length > 1) {
@@ -78,6 +115,19 @@ function parseCommonArgs(
     maxAttempts = value as 1 | 2 | 3;
   }
 
+  let budget: number | null = null;
+  if (values.budget !== undefined) {
+    const parsedBudget = parseBudget(values.budget);
+    if (parsedBudget === "invalid" || parsedBudget === null) {
+      return {
+        ok: false,
+        error:
+          "--budget attend un montant en euros supérieur à 0 et au plus 10000, par exemple 60 ou 45,50",
+      };
+    }
+    budget = parsedBudget;
+  }
+
   return {
     ok: true,
     args: {
@@ -90,6 +140,7 @@ function parseCommonArgs(
       sessionDay,
       maxAttempts,
       dryRun: values["dry-run"] === true,
+      budget,
     },
     out: "out" in values && typeof values.out === "string" ? values.out : null,
   };

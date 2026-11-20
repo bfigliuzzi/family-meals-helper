@@ -21,7 +21,8 @@ export type RuleId =
   | "extra-appliance"
   | "session-length"
   | "detail"
-  | "pinned";
+  | "pinned"
+  | "budget";
 
 export interface Finding {
   level: FindingLevel;

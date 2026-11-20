@@ -17,7 +17,7 @@ export interface DishProfile {
 
 // Poids d'un œuf en grammes : « 100 g de volaille, poisson ou viande ou 2 œufs » (guide 4-11 ans p. 35 de
 // https://www.mangerbouger.fr/content/show/2132/file/DT05-414-24B%20148-5fx210_GUIDE_40P_MANGER_BOUGER_4-11_ANS_bd_v2.pdf).
-const EGG_GRAMS = 50;
+export const EGG_GRAMS = 50;
 
 const PROTEIN_OF: Readonly<Partial<Record<Category, Protein>>> = {
   "red-meat": "red-meat",

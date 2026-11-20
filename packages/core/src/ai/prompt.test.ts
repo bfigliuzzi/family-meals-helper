@@ -118,6 +118,11 @@ describe("buildSystemPrompt : conservation, équilibre et poisson", () => {
       "Seule exception : des pâtes se préparent pendant la session quand le nom du plat ou de l'ingrédient contient gratin, lasagne ou cannelloni.",
     );
   });
+  it("demande d'éviter les produits chers, juste après les produits courants", () => {
+    const line =
+      "Évite les produits chers (morceaux de bœuf à griller, veau, agneau, fruits de mer, fromages d'appellation) quand un produit courant fait l'affaire.";
+    expect(system).toContain(`Utilise des produits courants de supermarché.\n${line}\n`);
+  });
   it("fait passer la demande explicite avant les règles souples", () => {
     expect(system).toContain(
       "Une demande explicite l'emporte sur les règles souples : un plat que la demande nomme reste au menu, sous son nom, même s'il dépasse un plafond ; ajuste les autres plats. Les règles bloquantes s'appliquent toujours.",
@@ -285,6 +290,24 @@ describe("buildUserPrompt : épingles, historique, révision", () => {
     ].join("\n");
     expect(buildUserPrompt(base)).toBe(expected);
     expect(buildUserPrompt({ ...base, pinned: [], history: [] })).toBe(expected);
+  });
+
+  it("donne le budget juste après le nombre de dîners, seulement s'il est donné", () => {
+    const line =
+      "Budget maximum : 60,00 € pour toute la liste de courses (placard non compris). Reste en dessous en choisissant des produits bon marché.";
+    const lines = buildUserPrompt({ ...base, budget: 60 }).split("\n");
+    expect(lines[lines.indexOf("Nombre de dîners : 5") + 1]).toBe(line);
+    expect(buildUserPrompt({ ...base, budget: 45.5 })).toContain("Budget maximum : 45,50 €");
+    expect(buildUserPrompt(base)).not.toContain("Budget maximum");
+  });
+
+  it("donne aussi le budget en révision", () => {
+    const user = buildUserPrompt({
+      ...base,
+      budget: 60,
+      revision: { initialRequest: "x", current: balancedMenu(), conversation: [] },
+    });
+    expect(user).toContain("Budget maximum : 60,00 € pour toute la liste de courses");
   });
 
   it("donne les plats épinglés et les derniers menus, au plus 5", () => {

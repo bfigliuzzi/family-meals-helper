@@ -126,6 +126,7 @@ export async function runBatchCommand(argv: readonly string[], io: BatchIo): Pro
     maxAttempts: args.maxAttempts,
     pinned: [],
     history: [],
+    ...(args.budget === null ? {} : { budget: args.budget }),
   };
 
   for (const term of unknownExclusionTerms(input.exclusions, buildIngredientIndex(REFERENTIAL))) {

@@ -15,7 +15,8 @@
     "batch": "node src/node/batch.ts",
     "pdf:fixture": "node src/node/pdf-fixture.ts",
     "smoke": "node src/node/smoke.ts",
-    "season:import": "node src/node/season-import.ts"
+    "season:import": "node src/node/season-import.ts",
+    "insee:import": "node src/node/insee-import.ts"
   },
   "devDependencies": {
     "@types/node": "24.19.2",

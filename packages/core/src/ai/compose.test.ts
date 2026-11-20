@@ -87,6 +87,28 @@ describe("composeMenu", () => {
     expect(prompts[1]?.system).toBe(prompts[0]?.system);
   });
 
+  it("donne le budget à l'IA dans le prompt utilisateur, sans constat budget ni changement du prompt système", async () => {
+    const { model, prompts } = fakeModel([reply(menuOf())]);
+    const result = await composeMenu({ ...input, budget: 1 }, deps(model));
+    expect(prompts[0]?.user).toContain("Budget maximum : 1,00 € pour toute la liste de courses");
+    expect(result.best?.check.findings.some((finding) => finding.rule === "budget")).toBe(false);
+    expect(result.stop).toBe("valid");
+    const without = fakeModel([reply(menuOf())]);
+    await composeMenu(input, deps(without.model));
+    expect(without.prompts[0]?.user).not.toContain("Budget maximum");
+    expect(without.prompts[0]?.system).toBe(prompts[0]?.system);
+  });
+
+  it("rejette un budget invalide avant tout appel au modèle", async () => {
+    for (const budget of [Number.NaN, 0.001, Infinity, 0, -5, 10000.01]) {
+      const { model, prompts } = fakeModel([reply(menuOf())]);
+      await expect(composeMenu({ ...input, budget }, deps(model))).rejects.toThrow(
+        "Le budget doit être un montant de 0,01 à 10000 €.",
+      );
+      expect(prompts).toHaveLength(0);
+    }
+  });
+
   it("s'arrête après 3 essais fautifs et garde le plus récent à égalité", async () => {
     const exclusion = { ...input, exclusions: ["dinde"] };
     const { model, prompts } = fakeModel([
@@ -459,6 +481,22 @@ describe("épinglage et révision", () => {
   };
 
   describe("reviseMenu", () => {
+    it("rejette un budget invalide en modification, avant tout appel au modèle", async () => {
+      for (const budget of [Number.NaN, 0.001, Infinity]) {
+        const { model, prompts } = fakeModel([replyOf(() => {})]);
+        await expect(reviseMenu({ ...revise, budget }, deps(model))).rejects.toThrow(
+          "Le budget doit être un montant de 0,01 à 10000 €.",
+        );
+        expect(prompts).toHaveLength(0);
+      }
+    });
+
+    it("donne aussi le budget en modification", async () => {
+      const { model, prompts } = fakeModel([replyOf(() => {})]);
+      await reviseMenu({ ...revise, budget: 45.5 }, deps(model));
+      expect(prompts[0]?.user).toContain("Budget maximum : 45,50 €");
+    });
+
     it("l'IA retire un plat épinglé au premier essai : arrêt, menu courant conservé, un seul appel", async () => {
       const input: ReviseInput = { ...revise, pinned: [B], current: balancedMenu() };
       const before = structuredClone(input);

@@ -1,5 +1,5 @@
 import { FORM_LABELS } from "../domain/ingredient.ts";
-import type { Form } from "../domain/ingredient.ts";
+import type { Category, Form } from "../domain/ingredient.ts";
 import { UNITS, dishLetter } from "../domain/menu.ts";
 import type { Menu, MenuIngredient, Unit } from "../domain/menu.ts";
 import type { IngredientIndex } from "../ingredients/index-lookup.ts";
@@ -14,6 +14,9 @@ export interface ShoppingLine {
   totals: { unit: Unit; qty: number }[];
   // Dans l'ordre des plats.
   split: { dish: number; qty: number; unit: Unit }[];
+  // Catégorie du référentiel ; sinon celle que l'IA déclare, si toutes les occurrences de la ligne s'accordent ;
+  // sinon `null`.
+  category: Category | null;
   // Absent du référentiel : à confirmer.
   toConfirm: boolean;
   // Le même nom figure en plusieurs formes dans la liste : chaque ligne dit alors sa forme, « frais » et « sec » compris.
@@ -39,6 +42,12 @@ export function ingredientKey(
     name: index.find(ingredient.name)?.name ?? normalizeName(ingredient.name),
     form: ingredient.form,
   };
+}
+
+// Clé d'une ligne : l'identifiant de regroupement de `buildShoppingList` (« forme|nom canonique »). Elle sert aux cases
+// cochées et aux prix. Elle est lue sur le nom brut de la ligne, avant `printable` et la capitale.
+export function shoppingKey(line: ShoppingLine, index: IngredientIndex): string {
+  return `${line.form}|${index.find(line.name)?.name ?? normalizeName(line.name)}`;
 }
 
 // Les noms (clé de `ingredientKey`) qui figurent en deux formes ou plus dans le menu entier : leurs lignes ne se
@@ -82,6 +91,7 @@ export function buildShoppingList(menu: Menu, index: IngredientIndex): ShoppingL
             form: ingredient.form,
             totals: [],
             split: [],
+            category: ref?.category ?? ingredient.category,
             toConfirm: ref === undefined,
             showForm: false,
             evening: true,
@@ -91,6 +101,10 @@ export function buildShoppingList(menu: Menu, index: IngredientIndex): ShoppingL
           pantry: ref?.pantry === true,
         };
         entries.set(id, entry);
+      }
+      // Sans entrée de référentiel, la catégorie ne reste que si toutes les occurrences la déclarent identique.
+      if (entry.line.toConfirm && entry.line.category !== ingredient.category) {
+        entry.line.category = null;
       }
       if (!ingredient.sameDay) entry.line.evening = false;
       addQuantity(entry.line.totals, ingredient.unit, ingredient.qty);

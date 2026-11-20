@@ -13,7 +13,9 @@ import type { Attempt, ComposeInput, ComposeResult, StopCause } from "./compose.
 import { balancedDetail, balancedDetailLasting, cyclicDetail } from "../rules/fixtures/detail.ts";
 import { batchMenu } from "./batch.ts";
 import type { BatchResult } from "./batch.ts";
-import { RULE_LABELS, renderBatchResult, renderComposeResult } from "./render.ts";
+import { euroText } from "../pricing/cost-text.ts";
+import { INSEE_TABLE } from "../pricing/insee-table.ts";
+import { RULE_LABELS, renderBatchResult, renderComposeResult, renderCostLines } from "./render.ts";
 
 const input: ComposeInput = {
   request: "x",
@@ -402,6 +404,9 @@ describe("renderComposeResult : texte complet", () => {
         "[warning] légumes secs · Aucun plat de légumes secs : mets-en dans au moins 1 plat.",
         "[warning] même protéine · plat c « Poulet basquaise » : deux soirs de suite avec la même protéine principale (volaille) : « Poulet tandoori » (mardi) et « Poulet basquaise » (mercredi) ; change-en un. Si la demande nomme un de ces plats, garde-le et ajuste les autres.",
         "Appels à l'IA : 1 · jetons d'entrée : 3100 (hors cache 900, lus en cache 1100, écrits en cache 1100) · jetons de sortie : 1830",
+        "Coût estimé : au moins 4,61 € · 5 prix inconnus · placard non compris.",
+        "Prix inconnus : cabillaud, cuisse de poulet, navet, potiron, riz complet.",
+        "Sources : INSEE, prix moyens de vente au détail, Licence Ouverte 2.0.",
       ].join("\n"),
     );
   });
@@ -568,6 +573,16 @@ describe("renderBatchResult", () => {
     expect(text).not.toContain("Session de plus de 3 h");
   });
 
+  it("termine par le coût de la liste de courses et le constat de budget", async () => {
+    const withBudget: ComposeInput = { ...batchInput, budget: 1 };
+    const result = await batch([balancedDetail()]);
+    const text = renderBatchResult(result, withBudget);
+    const expected = renderCostLines(result.compose.best!.menu!, 1);
+    expect(expected.some((line) => line.startsWith("[warning] budget"))).toBe(true);
+    expect(text.split("\n").slice(-expected.length)).toEqual(expected);
+    expect(text.split("\n").filter((line) => line.startsWith("Coût estimé"))).toHaveLength(1);
+  });
+
   it("montre les avertissements du détail avec le libellé « détail »", async () => {
     const uncited = balancedDetail();
     uncited.steps = uncited.steps.map((step) =>
@@ -631,5 +646,99 @@ describe("renderBatchResult", () => {
     const text = renderBatchResult(result, batchInput);
     expect(text).toContain("Détail : non demandé, le menu garde des erreurs.");
     expect(text).toContain("Total des appels : 1");
+  });
+});
+
+describe("renderCostLines", () => {
+  const ingredient = (
+    name: string,
+    qty: number,
+    unit: "g" | "ml" | "piece",
+  ): Menu["dishes"][number]["ingredients"][number] => ({
+    name,
+    qty,
+    unit,
+    form: "fresh",
+    category: null,
+    sameDay: false,
+  });
+  const costMenu = (extra: Menu["dishes"][number]["ingredients"]): Menu => ({
+    dishes: [
+      {
+        name: "Plat",
+        day: "mon",
+        ingredients: [
+          ingredient("carotte", 600, "g"),
+          ingredient("tomate", 400, "g"),
+          ingredient("chou-fleur", 1, "piece"),
+          ingredient("huile d'olive", 30, "ml"),
+          ...extra,
+        ],
+        phases: [],
+      },
+    ],
+  });
+  const known =
+    0.6 * INSEE_TABLE["fresh|carotte"]!.euros +
+    0.4 * INSEE_TABLE["fresh|tomate"]!.euros +
+    INSEE_TABLE["fresh|chou-fleur"]!.euros;
+  const sources = "Sources : INSEE, prix moyens de vente au détail, Licence Ouverte 2.0.";
+
+  it("rend quatre lignes dans l'ordre avec un prix inconnu et un budget dépassé", () => {
+    const lines = renderCostLines(costMenu([ingredient("lait", 500, "ml")]), 1);
+    expect(lines).toEqual([
+      `Coût estimé : au moins ${euroText(known)} · 1 prix inconnu · placard non compris.`,
+      "Prix inconnus : lait.",
+      sources,
+      `[warning] budget · Coût estimé au moins ${euroText(known)} pour un budget de 1,00 € : ${euroText(Math.round(known * 100) / 100 - 1)} de trop (1 prix inconnu, non compté).`,
+    ]);
+  });
+  it("rend deux lignes sans inconnu et sans budget, ou sous le budget", () => {
+    const expected = [`Coût estimé : ${euroText(known)} · placard non compris.`, sources];
+    expect(renderCostLines(costMenu([]), null)).toEqual(expected);
+    expect(renderCostLines(costMenu([]), 100)).toEqual(expected);
+  });
+  it("ne donne pas de ligne de sources quand aucun prix n'est connu", () => {
+    const menu: Menu = {
+      dishes: [{ ...costMenu([]).dishes[0]!, ingredients: [ingredient("lait", 500, "ml")] }],
+    };
+    expect(renderCostLines(menu, null)).toEqual([
+      "Coût estimé : inconnu (1 prix inconnu) · placard non compris.",
+      "Prix inconnus : lait.",
+    ]);
+  });
+  it("écrit la première ligne avec « · placard non compris. », sans double parenthèse", () => {
+    const first = (extra: Menu["dishes"][number]["ingredients"], budget: number | null) =>
+      renderCostLines(costMenu(extra), budget)[0];
+    expect(first([], null)).toBe(`Coût estimé : ${euroText(known)} · placard non compris.`);
+    expect(first([ingredient("lait", 500, "ml"), ingredient("riz", 100, "g")], null)).toBe(
+      `Coût estimé : au moins ${euroText(known)} · 2 prix inconnus · placard non compris.`,
+    );
+  });
+  it("donne la forme des prix inconnus quand elle se dit : maïs (conserve), maïs (frais)", () => {
+    const menu: Menu = {
+      dishes: [
+        {
+          name: "Plat",
+          day: "mon",
+          ingredients: [
+            { ...ingredient("maïs", 200, "g"), form: "canned" },
+            { ...ingredient("maïs", 300, "g"), form: "fresh" },
+          ],
+          phases: [],
+        },
+      ],
+    };
+    expect(renderCostLines(menu, null)[1]).toBe("Prix inconnus : maïs (conserve), maïs (frais).");
+  });
+  it("renderComposeResult se termine par ces lignes", () => {
+    const best = attempt({ menu: costMenu([ingredient("lait", 500, "ml")]) });
+    const text = renderComposeResult(result({ attempts: [best], best }), { ...input, budget: 1 });
+    const expected = renderCostLines(best.menu!, 1);
+    expect(text.split("\n").slice(-expected.length)).toEqual(expected);
+  });
+  it("n'ajoute rien quand il n'y a pas de menu", () => {
+    const text = renderComposeResult(result({ attempts: [], best: null }), input);
+    expect(text).not.toContain("Coût estimé");
   });
 });

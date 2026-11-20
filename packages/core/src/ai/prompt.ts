@@ -20,6 +20,7 @@ import {
 import { monthName } from "../season/months.ts";
 import type { Month } from "../season/months.ts";
 import type { PastMenu } from "./compose.ts";
+import { budgetPromptLine } from "../pricing/cost-text.ts";
 import { printable } from "./printable.ts";
 
 // Règles tirées de docs/research/cuisine-addict-regles.md (§1.3 à §1.7, §2) et de la conception (§3.1, §6.1).
@@ -36,6 +37,7 @@ export const COMPOSITION_RULES_FR = [
   "Fromage râpé et crème s'ajoutent le jour même : ne les compte pas comme préparés d'avance.",
   "Place les plats les plus fragiles en début de semaine et les plats de légumes seuls en fin de semaine.",
   "Utilise des produits courants de supermarché.",
+  "Évite les produits chers (morceaux de bœuf à griller, veau, agneau, fruits de mer, fromages d'appellation) quand un produit courant fait l'affaire.",
   "Pas de friture, sauf si la demande en parle.",
   "Respecte les exclusions à la lettre, y compris dans les accompagnements.",
   "Reste dans la liste des fruits et légumes de saison donnée dans la demande, sauf si la demande nomme l'ingrédient.",
@@ -114,6 +116,8 @@ export function buildUserPrompt(input: {
   // Le nombre vient d'un champ de l'utilisateur : un autre nombre écrit dans la demande ne compte pas.
   dinnersFixed?: boolean;
   inSeason: readonly string[];
+  // Plafond en euros pour toute la liste de courses ; absent : pas de plafond.
+  budget?: number;
   previous?: { menu: Menu | null; rawText: string; findings: readonly Finding[] };
   pinned?: readonly string[];
   history?: readonly PastMenu[];
@@ -148,6 +152,7 @@ export function buildUserPrompt(input: {
       `Le menu passe de ${revision.current.dishes.length} à ${input.dinners} dîners : ajoute ou retire des plats en gardant les épinglés.`,
     );
   }
+  if (input.budget !== undefined) lines.push(budgetPromptLine(input.budget));
   lines.push(
     `Mois : ${monthName(input.month)}`,
     `Session de cuisine : ${SESSION_DAY_LABELS[input.sessionDay]}. Jours écoulés au dîner : ${DAYS.map((day) => `${DAY_LABELS[day]} ${daysAfterSession(input.sessionDay, day)}`).join(", ")}.`,

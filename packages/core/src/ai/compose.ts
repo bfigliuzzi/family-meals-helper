@@ -7,6 +7,7 @@ import { checkMenu } from "../rules/check-menu.ts";
 import type { MenuCheck } from "../rules/check-menu.ts";
 import { checkPinned, dishKey } from "../rules/check-pinned.ts";
 import type { CheckContext } from "../rules/context.ts";
+import { isValidBudget } from "../pricing/budget.ts";
 import { expectedDinners } from "../rules/menu-shape.ts";
 import { inSeasonNames } from "../season/check-season.ts";
 import type { Month, SeasonRow } from "../season/months.ts";
@@ -32,6 +33,9 @@ export interface ComposeInput {
   history: readonly PastMenu[];
   // Nombre de dîners voulu (entier de 1 à 5) ; absent : le nombre écrit dans la demande ; donné, il n'est jamais lu dans la demande.
   dinners?: number;
+  // Plafond en euros pour toute la liste de courses (placard non compris), donné à l'IA dans le prompt ; absent : pas de
+  // plafond. Il n'entre pas dans les contrôles : le constat `budget` se calcule à part, à l'affichage.
+  budget?: number;
 }
 
 // Même règle que `ComposeInput` : l'entrée n'est pas modifiée pendant l'appel, seules les épingles sont copiées.
@@ -51,6 +55,8 @@ export interface ReviseInput {
   history: readonly PastMenu[];
   // Nombre de dîners voulu (entier de 1 à 5) ; absent : le nombre de plats du menu courant. Jamais lu dans le message.
   dinners?: number;
+  // Même sens que dans `ComposeInput`.
+  budget?: number;
 }
 
 export interface Attempt {
@@ -200,6 +206,12 @@ function pinnedOf(
 function checkDinners(dinners: number): void {
   if (!Number.isInteger(dinners) || dinners < 1 || dinners > 5) {
     throw new Error("Le nombre de dîners doit être un entier de 1 à 5.");
+  }
+}
+
+function checkBudgetInput(budget: number | undefined): void {
+  if (budget !== undefined && !isValidBudget(budget)) {
+    throw new Error("Le budget doit être un montant de 0,01 à 10000 €.");
   }
 }
 
@@ -356,11 +368,13 @@ async function runCycle(cycle: Cycle, deps: ComposeDeps): Promise<ComposeResult>
   };
 }
 
-// Rejette (avant tout appel) un `dinners` hors des entiers de 1 à 5 : c'est une erreur de l'appelant, pas de l'IA.
+// Rejette (avant tout appel) un `dinners` hors des entiers de 1 à 5 ou un `budget` hors de 0,01 à 10000 : c'est une
+// erreur de l'appelant, pas de l'IA.
 // Pour le reste, ne rejette jamais, comme `runCycle`.
 export async function composeMenu(input: ComposeInput, deps: ComposeDeps): Promise<ComposeResult> {
   const dinners = input.dinners ?? expectedDinners(input.request);
   checkDinners(dinners);
+  checkBudgetInput(input.budget);
   const inSeason = inSeasonNames(input.month, deps.refs, deps.seasonTable);
   return runCycle(
     {
@@ -386,6 +400,7 @@ export async function composeMenu(input: ComposeInput, deps: ComposeDeps): Promi
           inSeason,
           pinned,
           history: input.history,
+          ...(input.budget === undefined ? {} : { budget: input.budget }),
           ...(previous === undefined ? {} : { previous }),
         }),
       // Copie avant le premier `await` : l'appelant peut modifier son tableau pendant l'appel.
@@ -397,14 +412,15 @@ export async function composeMenu(input: ComposeInput, deps: ComposeDeps): Promi
   );
 }
 
-// Modifie le menu courant selon le message. Rejette (avant tout appel) un `dinners` hors des entiers de 1 à 5 :
-// c'est une erreur de l'appelant, pas de l'IA. Seul l'arrêt `stop` "pinned-removed" oblige l'appelant à garder le menu
+// Modifie le menu courant selon le message. Rejette (avant tout appel) un `dinners` hors des entiers de 1 à 5 ou un
+// `budget` hors de 0,01 à 10000 : c'est une erreur de l'appelant, pas de l'IA. Seul l'arrêt `stop` "pinned-removed" oblige l'appelant à garder le menu
 // courant tel quel. Il survient dans deux cas : le premier essai retire un plat épinglé (arrêt immédiat), ou aucun essai
 // lisible ne garde toutes les épingles (par exemple un premier essai illisible, puis des essais qui en perdent une).
 // `pinnedRemoved` peut aussi être rempli avec "refusal", "truncated" ou "technical-error" (voir `ComposeResult`).
 export async function reviseMenu(input: ReviseInput, deps: ComposeDeps): Promise<ComposeResult> {
   const dinners = input.dinners ?? input.current.dishes.length;
   checkDinners(dinners);
+  checkBudgetInput(input.budget);
   const inSeason = inSeasonNames(input.month, deps.refs, deps.seasonTable);
   return runCycle(
     {
@@ -432,6 +448,7 @@ export async function reviseMenu(input: ReviseInput, deps: ComposeDeps): Promise
           inSeason,
           pinned,
           history: input.history,
+          ...(input.budget === undefined ? {} : { budget: input.budget }),
           revision: {
             initialRequest: input.initialRequest,
             current: input.current,

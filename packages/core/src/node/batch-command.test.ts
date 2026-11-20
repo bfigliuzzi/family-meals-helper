@@ -109,6 +109,30 @@ const request = "5 dîners de saison";
 const text = (lines: string[]): string => lines.join("");
 
 describe("runBatchCommand : succès", () => {
+  it("affiche le coût estimé et les sources INSEE ; un budget dépassé ajoute le constat sans changer le code", async () => {
+    const plain = harness();
+    expect(await runBatchCommand([request, "--out", join(folder, "a.pdf")], plain.io)).toBe(0);
+    const output = text(plain.out);
+    expect(output).toContain("Coût estimé : ");
+    expect(output).toContain(
+      "Sources : INSEE, prix moyens de vente au détail, Licence Ouverte 2.0.",
+    );
+    expect(output).not.toContain("[warning] budget");
+
+    const capped = harness();
+    expect(
+      await runBatchCommand([request, "--out", join(folder, "b.pdf"), "--budget", "1"], capped.io),
+    ).toBe(0);
+    expect(text(capped.out)).toMatch(
+      /\[warning\] budget · Coût estimé .* pour un budget de 1,00 € : /,
+    );
+  });
+  it("--dry-run montre la ligne de budget, sans modèle", async () => {
+    const h = harness();
+    expect(await runBatchCommand([request, "--budget", "45,50", "--dry-run"], h.io)).toBe(0);
+    expect(text(h.out)).toContain("Budget maximum : 45,50 € pour toute la liste de courses");
+    expect(h.modelsCreated()).toBe(0);
+  });
   it("écrit un PDF, rend le code 0 et dit où", async () => {
     const h = harness();
     const target = join(folder, "menu.pdf");
