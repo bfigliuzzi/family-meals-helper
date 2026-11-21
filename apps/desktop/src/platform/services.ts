@@ -9,6 +9,8 @@ import type {
   SettingsKeeper,
 } from "core";
 import { createKeychainSecretAdmin } from "./keychain-secret-admin.ts";
+import { buildFromStore, buildReport } from "./open-prices-build.ts";
+import { createTauriOpenPricesStore } from "./tauri-open-prices-store.ts";
 import { createTauriHistoryStore } from "./tauri-history-store.ts";
 import { createTauriPriceStore } from "./tauri-price-store.ts";
 import { createTauriSettingsStore } from "./tauri-settings-store.ts";
@@ -32,11 +34,31 @@ export function createServices(): Services {
   });
   const history = createTauriHistoryStore(invoke);
   const clock = { now: () => new Date() };
+  const openPricesStore = createTauriOpenPricesStore(invoke);
   const prices = createPriceKeeper(createTauriPriceStore(invoke), {
     clock,
     onListenerError: (error) => {
       console.error("Abonné des prix en erreur", error);
     },
+    // Pas de téléchargement dans la version d'essai (`__FMH_FIXTURE_MODEL__`, retiré du build normal par Vite).
+    ...(__FMH_FIXTURE_MODEL__
+      ? {}
+      : {
+          openPrices: {
+            store: openPricesStore,
+            build: async (today: string) => {
+              const started = performance.now();
+              const built = await buildFromStore(
+                openPricesStore,
+                today,
+                // `core` n'a pas de minuterie : il rend la main par cette pause entre deux paquets de lignes.
+                () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+              );
+              console.info(buildReport(performance.now() - started, built.summary));
+              return built;
+            },
+          },
+        }),
   });
   return {
     settings,
@@ -67,10 +89,11 @@ export function createServices(): Services {
       renderPdf: async (doc, at) => (await import("./pdf-renderer.ts")).renderSheetPdf(doc, at),
       newToken: () => crypto.randomUUID(),
       // Lu une seule fois, au clic « Valider ce menu » : le coût de la fiche vient de cet instant. `null` tant que la
-      // table de prix de l'utilisateur n'est pas lue (une table illisible n'empêche pas la validation).
+      // table de prix de l'utilisateur et le résumé Open Prices de la base ne sont pas lus (une table illisible ou un
+      // résumé absent n'empêchent pas la validation).
       priceLookups: () => {
         const snapshot = prices.snapshot();
-        return snapshot.manual.status === "loading" ? null : snapshot.lookups;
+        return snapshot.ready ? snapshot.lookups : null;
       },
       onListenerError: (error) => {
         console.error("Abonné de la session en erreur", error);

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-open-prices-download"
+description = "Enables the open_prices_download command without any pre-configured scope."
+commands.allow = ["open_prices_download"]
+
+[[permission]]
+identifier = "deny-open-prices-download"
+description = "Denies the open_prices_download command without any pre-configured scope."
+commands.deny = ["open_prices_download"]

@@ -3,6 +3,7 @@
 mod ai_transport;
 mod history;
 mod navigation;
+mod open_prices;
 mod price_table;
 mod secrets;
 mod settings_db;
@@ -19,6 +20,7 @@ fn main() {
             Ok(())
         })
         .manage(ai_transport::AiGate::default())
+        .manage(open_prices::OpenPricesGate::default())
         .invoke_handler(tauri::generate_handler![
             secrets::secret_status,
             secrets::secret_set,
@@ -33,7 +35,11 @@ fn main() {
             history::history_set_checked,
             price_table::price_table_list,
             price_table::price_table_set,
-            price_table::price_table_delete
+            price_table::price_table_delete,
+            open_prices::open_prices_load,
+            open_prices::open_prices_download,
+            open_prices::open_prices_read,
+            open_prices::open_prices_save
         ])
         .run(tauri::generate_context!())
         .expect("échec du lancement de l'application Tauri");

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-open-prices-save"
+description = "Enables the open_prices_save command without any pre-configured scope."
+commands.allow = ["open_prices_save"]
+
+[[permission]]
+identifier = "deny-open-prices-save"
+description = "Denies the open_prices_save command without any pre-configured scope."
+commands.deny = ["open_prices_save"]

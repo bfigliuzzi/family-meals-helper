@@ -23,6 +23,7 @@ const portableGlobals = Object.fromEntries(
   [
     "AbortController",
     "AbortSignal",
+    "DecompressionStream",
     "Headers",
     "Request",
     "Response",
@@ -31,6 +32,7 @@ const portableGlobals = Object.fromEntries(
     "URL",
     "URLSearchParams",
     "queueMicrotask",
+    "ReadableStream",
     "structuredClone",
   ].map((name) => [name, "readonly"]),
 );

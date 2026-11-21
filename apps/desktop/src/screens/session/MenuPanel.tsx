@@ -259,8 +259,9 @@ function ValidateBlock({
   const [notice, setNotice] = useState<string | null>(null);
   const busy = isSessionBusy(snapshot);
   const { blocked } = snapshot;
-  // La fiche garde le coût du clic : la validation attend la première lecture de la table de prix de l'utilisateur.
-  const pricesLoading = usePriceSnapshot(prices).manual.status === "loading";
+  // La fiche garde le coût du clic : la validation attend la première lecture de la table de prix de l'utilisateur et
+  // du résumé Open Prices de la base (une lecture locale ; le téléchargement hebdomadaire n'attend personne).
+  const pricesLoading = !usePriceSnapshot(prices).ready;
 
   async function validate() {
     if (validating.current) return;

@@ -12,15 +12,18 @@ import {
   inseeLookup,
   manualLookup,
   menuCost,
+  openPricesLookup,
   sheetCostText,
 } from "core";
-import type { ManualPriceRow } from "core";
+import type { ManualPriceRow, OpenPricesSummary } from "core";
+import { StrictMode } from "react";
 import { describe, expect, it } from "vitest";
 import { App } from "./App.tsx";
 import { createKeychainSecretAdmin } from "./platform/keychain-secret-admin.ts";
 import type { Invoke } from "./platform/tauri-error.ts";
 import {
   fakeHistoryStore,
+  fakeOpenPricesStore,
   fakeMenuModel,
   fakeNewToken,
   fakePriceStore,
@@ -39,6 +42,8 @@ function setup(
   detailReplies: string[] = [],
   manualPrices: ManualPriceRow[] = [],
   preparePrices: (prices: ReturnType<typeof fakePriceStore>) => void = () => undefined,
+  openPrices?: ReturnType<typeof fakeOpenPricesStore>,
+  strict = false,
 ) {
   const settings = fakeSettingsStore();
   const secrets = fakeSecretAdmin();
@@ -48,7 +53,17 @@ function setup(
   const render = fakeRenderPdf();
   const priceStore = fakePriceStore(manualPrices);
   preparePrices(priceStore);
-  const prices = createPriceKeeper(priceStore.store, { clock: fixedClock });
+  const prices = createPriceKeeper(priceStore.store, {
+    clock: fixedClock,
+    ...(openPrices === undefined
+      ? {}
+      : {
+          openPrices: {
+            store: openPrices.store,
+            build: () => Promise.reject(new Error("pas de calcul dans ce test")),
+          },
+        }),
+  });
   const session = createSession({
     settings: keeper,
     clock: fixedClock,
@@ -58,7 +73,7 @@ function setup(
     newToken: fakeNewToken(),
     priceLookups: () => {
       const snapshot = prices.snapshot();
-      return snapshot.manual.status === "loading" ? null : snapshot.lookups;
+      return snapshot.ready ? snapshot.lookups : null;
     },
   });
   const services = {
@@ -69,7 +84,16 @@ function setup(
     checks: createCheckKeeper(history.store),
     prices,
   };
-  const { unmount } = renderWithMantine(<App services={services} />);
+  // `strict` : comme `main.tsx`, l'app est montée sous `StrictMode`, qui rejoue les effets.
+  const { unmount } = renderWithMantine(
+    strict ? (
+      <StrictMode>
+        <App services={services} />
+      </StrictMode>
+    ) : (
+      <App services={services} />
+    ),
+  );
   return {
     priceStore,
     settings,
@@ -617,6 +641,96 @@ describe("coût de la fiche", () => {
     expect(text).toContain("Coût estimé");
     expect(text).toContain(expected);
     expect(text).toContain("Prix du 16/11/2026. Sources : votre table de prix · INSEE");
+  });
+});
+
+describe("coût de la fiche avec Open Prices", () => {
+  const stat = (median: number) => ({ median, count: 3, first: "2026-06-01", last: "2026-11-10" });
+  const summary: OpenPricesSummary = {
+    version: 1,
+    fetchedAt: "2026-11-14",
+    from: "2026-05-14",
+    to: "2026-11-14",
+    usable: { category: 14, product: 14 },
+    prices: { "fresh|carotte": { kg: stat(2.4) }, "dry|riz complet": { kg: stat(5.99) } },
+  };
+
+  it("la fiche cite Open Prices avec la licence ODbL, et le coût emploie le prix du résumé", async () => {
+    const openPrices = fakeOpenPricesStore({ attemptedAt: "2026-11-14", summary });
+    const { user, render, history } = setup(
+      [MENU],
+      [JSON.stringify(detailReply)],
+      [],
+      undefined,
+      openPrices,
+    );
+    await screen.findByRole("button", { name: "Composer le menu" });
+    await user.type(screen.getByRole("textbox", { name: "Demande" }), "un bœuf bourguignon");
+    await user.click(screen.getByRole("button", { name: "Composer le menu" }));
+    await user.click(await screen.findByRole("button", { name: "Valider ce menu" }));
+    expect(await screen.findByRole("heading", { name: "Menu validé" })).toBeTruthy();
+    expect(history.added).toHaveLength(1);
+    const text = JSON.stringify(render.calls[0]!.doc.content);
+    const expected = sheetCostText(
+      menuCost(MenuSchema.parse(menuReply), buildIngredientIndex(REFERENTIAL), [
+        openPricesLookup(summary),
+        inseeLookup(INSEE_TABLE),
+      ]),
+    );
+    expect(text).toContain("Coût estimé");
+    expect(text).toContain(expected);
+    expect(text).toContain("Open Prices (Open Food Facts), licence ODbL");
+  });
+
+  it("lecture du résumé différée : « Valider ce menu » reste désactivé, puis la fiche cite Open Prices", async () => {
+    const openPrices = fakeOpenPricesStore({ attemptedAt: "2026-11-14", summary });
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const read = openPrices.store.load.bind(openPrices.store);
+    openPrices.store.load = async () => {
+      await released;
+      return read();
+    };
+    const { user, render } = setup(
+      [MENU],
+      [JSON.stringify(detailReply)],
+      [],
+      undefined,
+      openPrices,
+    );
+    await screen.findByRole("button", { name: "Composer le menu" });
+    await user.type(screen.getByRole("textbox", { name: "Demande" }), "un bœuf bourguignon");
+    await user.click(screen.getByRole("button", { name: "Composer le menu" }));
+    const validate = await screen.findByRole<HTMLButtonElement>("button", {
+      name: "Valider ce menu",
+    });
+    expect(validate.disabled).toBe(true);
+    release();
+    await waitFor(() => {
+      expect(
+        screen.getByRole<HTMLButtonElement>("button", { name: "Valider ce menu" }).disabled,
+      ).toBe(false);
+    });
+    await user.click(screen.getByRole("button", { name: "Valider ce menu" }));
+    expect(await screen.findByRole("heading", { name: "Menu validé" })).toBeTruthy();
+    expect(JSON.stringify(render.calls[0]!.doc.content)).toContain("licence ODbL");
+  });
+
+  it("au lancement, un résumé dû est téléchargé une seule fois (double effet de StrictMode compris)", async () => {
+    const openPrices = fakeOpenPricesStore({ attemptedAt: null, summary: null });
+    // C'est l'effet de `App` qui lance le rafraîchissement : le test n'appelle rien lui-même.
+    const { services } = setup([], [], [], undefined, openPrices, true);
+    await waitFor(() => {
+      expect(openPrices.calls).toContain("download:2026-11-16");
+    });
+    await waitFor(() => {
+      expect(services.prices.snapshot().openPrices.error).not.toBeNull();
+    });
+    expect(openPrices.calls.filter((call) => call.startsWith("download:"))).toEqual([
+      "download:2026-11-16",
+    ]);
   });
 });
 

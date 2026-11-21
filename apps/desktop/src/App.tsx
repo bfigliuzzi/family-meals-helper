@@ -39,8 +39,11 @@ export function App({
   const [screen, setScreen] = useState<ScreenId>("new-session");
   const session = useSessionSnapshot(services.session);
   // Le menu courant a besoin de la table de prix de l'utilisateur ; l'écran Ingrédients la relit à chaque affichage.
+  // Le propriétaire des prix décide seul s'il faut télécharger Open Prices (au plus un essai par jour, un seul par
+  // lancement même avec le double effet de `StrictMode`).
   useEffect(() => {
     void services.prices.load();
+    void services.prices.refreshOpenPricesIfDue();
   }, [services.prices]);
   // Opérations terminées déjà vues : un clic de navigation qui quitte « Nouvelle session » ou y arrive les compte
   // toutes comme vues.

@@ -304,6 +304,39 @@ Ingrédients du référentiel sans aucune série INSEE : tous les produits laiti
 
 **Licence** : Licence Ouverte 2.0 (voir la section 2 ; non relue le 2026-11-20).
 
+### C. Open Prices dans l'app : mesures du lot 7.4 (2026-11-21)
+
+> **[TESTÉ]** le 2026-11-21 sur les trois fichiers téléchargés le 2026-11-20 (dernière modification le 2026-11-19 ; `pnpm --filter core open-prices:report --dir <dossier> --today 2026-11-20`, Node 24, macOS). La carte retenue est `packages/core/src/pricing/open-prices-map.ts` (fruits et légumes par `CATEGORY`, 14 ingrédients par produit à code-barres) ; la règle de sélection des produits (cinq contrôles) est écrite en tête de ce fichier. Le test `open-prices-real.test.ts` la vérifie sur les vrais fichiers.
+
+**Banc d'essai sous Node** : 1,5 s (seuil 30 s), mémoire maximale 144 Mio (seuil 1 Go), résumé de 3 284 octets (seuil 512 Kio). Lignes lues : 7 959 lieux, 346 610 relevés, 150 725 produits, avec 0 ligne illisible et 0 champ mal typé. 1 862 relevés retenus. **Clés utilisables (au moins 3 relevés) : 14 de catégorie, 14 produits à code-barres.** Minimums de la garde de format : la moitié arrondie au-dessous, soit `MIN_CATEGORY_KEYS = 7` et `MIN_PRODUCT_KEYS = 7`.
+
+**Mesure dans WebKit** : non faite au lot 7.4 (écran verrouillé pendant l'essai `tauri dev`) ; à faire à la démonstration, dans le `.app` signé (seuils : moins de 2 minutes, moins de 1,5 Go, interface utilisable).
+
+**Couverture retenue** (relevés, produits distincts, médiane) :
+
+| Clé | Unité | Relevés | Produits | Médiane |
+|---|---|---|---|---|
+| `fresh\|lait` | €/L | 487 | 241 | 1,65 |
+| `fresh\|beurre` | €/kg | 165 | 73 | 10,40 |
+| `dry\|pâtes` | €/kg | 399 | 216 | 2,58 |
+| `dry\|pâtes complètes` | €/kg | 76 | 41 | 2,88 |
+| `dry\|riz basmati` | €/kg | 33 | 24 | 4,22 |
+| `dry\|riz complet` | €/kg | 21 | 17 | 5,75 |
+| `dry\|lentilles vertes` | €/kg | 38 | 27 | 3,81 |
+| `dry\|lentilles corail` | €/kg | 13 | 12 | 5,30 |
+| `fresh\|emmental râpé` | €/kg | 71 | 27 | 8,25 |
+| `fresh\|crème fraîche` | €/kg · €/L | 18 · 41 | 13 · 22 | 4,76 · 5,77 |
+| `fresh\|crème liquide` | €/L | 19 | 17 | 6,87 |
+| `fresh\|bœuf haché` | €/kg | 20 | 14 | 23,08 |
+| `fresh\|œuf` | €/kg · pièce | 18 · 4 | 11 · (catégorie) | 4,59 · 0,51 |
+| `fresh\|blanc de poulet` | €/kg | 7 | 6 | 12,80 |
+| `fresh\|carotte` | €/kg | 37 | (catégorie) | 2,09 |
+| `fresh\|tomate` | €/kg | 61 | (catégorie) | 4,99 |
+| `fresh\|pomme` | €/kg | 86 | (catégorie) | 2,99 |
+| `fresh\|oignon`, `pomme de terre`, `courgette`, `poireau`, `citron`, `ail` | €/kg | 47, 30, 32, 20, 29, 14 | (catégorie) | 2,95, 2,30, 2,61, 2,99, 3,99, 15,09 |
+
+Peu de relevés (moins de 3, donc sans prix) : artichaut, chou-fleur et cuisse de poulet (kg), laitue au kilo. À la pièce : concombre 24 relevés (1,89), laitue 30 (1,29), citron 8 (0,79), chou-fleur 4 (4,14), artichaut 3 (1,79), œuf 4 (0,51). La liste complète des produits retenus (identifiant, nom, poids, nombre de relevés), relue le 2026-11-21, vient de `open-prices-real.test.ts` (fichier `/tmp/fmh-open-prices-audit.md`). Après la relecture du cycle 1, la carte écarte : les laits de chèvre, de brebis et de bufflonne ; les pâtes au quinoa, protéinées, aux épinards, tricolores ou aux chanterelles ; les riz basmati demi-complets (« demi », « 1/2 » ou « complet » dans le nom) et le riz noir ; le poulet « façon haché ». La crème fluide va en crème liquide. Les paquets de moins de 50 g ou 50 ml sont écartés, comme les relevés `PRODUCT` qui portent un `price_per`.
+
 ## Recommandation
 
 ### MVP : trois niveaux, dans cet ordre

@@ -18,7 +18,7 @@ import {
   REFERENTIAL,
   inseeLookup,
 } from "core";
-import type { HistoryEntry, HistoryRow, ManualPriceRow } from "core";
+import type { HistoryEntry, HistoryRow, ManualPriceRow, OpenPricesSummary } from "core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App.tsx";
 import { createKeychainSecretAdmin } from "../platform/keychain-secret-admin.ts";
@@ -26,6 +26,7 @@ import type { Invoke } from "../platform/tauri-error.ts";
 import {
   CHECKS_GONE,
   fakeHistoryStore,
+  fakeOpenPricesStore,
   fakeMenuModel,
   fakeNewToken,
   fakePriceStore,
@@ -40,6 +41,7 @@ import { IngredientsScreen } from "./IngredientsScreen.tsx";
 
 const INVISIBLE = /[\u202E\u200B]/;
 const PDF = new TextEncoder().encode("%PDF-1.7 exemple");
+const fixedDay = "2026-11-16";
 
 interface Ingredient {
   name: string;
@@ -92,13 +94,24 @@ function setup(
   prepare: (history: ReturnType<typeof fakeHistoryStore>) => void = () => undefined,
   manualPrices: ManualPriceRow[] = [],
   preparePrices: (prices: ReturnType<typeof fakePriceStore>) => void = () => undefined,
+  openPrices?: ReturnType<typeof fakeOpenPricesStore>,
 ) {
   const history = fakeHistoryStore(rows);
   prepare(history);
   const checks = createCheckKeeper(history.store);
   const priceStore = fakePriceStore(manualPrices);
   preparePrices(priceStore);
-  const prices = createPriceKeeper(priceStore.store, { clock: fixedClock });
+  const prices = createPriceKeeper(priceStore.store, {
+    clock: fixedClock,
+    ...(openPrices === undefined
+      ? {}
+      : {
+          openPrices: {
+            store: openPrices.store,
+            build: () => Promise.reject(new Error("Fichier Open Prices illisible : prices.")),
+          },
+        }),
+  });
   const onNewSession = vi.fn();
   const view = (refresh: number) => (
     <IngredientsScreen
@@ -902,6 +915,108 @@ describe("IngredientsScreen : saisie d'un prix", () => {
     });
     expect(priceStore.state.lists).toBe(2);
     expect(myPrice("Carotte").hasAttribute("disabled")).toBe(false);
+  });
+});
+
+const OP_STAT = { median: 2.4, count: 3, first: "2026-06-01", last: "2026-11-10" };
+const OP_SUMMARY: OpenPricesSummary = {
+  version: 1,
+  fetchedAt: "2026-11-14",
+  from: "2026-05-14",
+  to: "2026-11-14",
+  usable: { category: 14, product: 14 },
+  prices: { "fresh|carotte": { kg: OP_STAT } },
+};
+const OP_ERROR_LINE = (message: string) =>
+  `Dernière mise à jour Open Prices impossible : ${message}. Nouvel essai au prochain lancement, demain au plus tôt.`;
+
+describe("IngredientsScreen : état d'Open Prices", () => {
+  it("résumé en service : le jour, la licence ODbL, et la ligne carotte cite Open Prices", async () => {
+    const openPrices = fakeOpenPricesStore({ attemptedAt: "2026-11-14", summary: OP_SUMMARY });
+    setup([rowOf(1)], undefined, [], undefined, openPrices);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    expect(
+      await screen.findByText(
+        "Prix Open Prices du 14/11/2026 (Open Food Facts, licence ODbL), mis à jour chaque semaine.",
+      ),
+    ).toBeTruthy();
+    await waitFor(() => {
+      expect(labelText(carrot())).toContain(
+        "Open Prices, médiane de 3 relevés (01/06/2026 au 10/11/2026)",
+      );
+    });
+    expect(
+      screen.getByText(/^Sources : Open Prices \(Open Food Facts\), licence ODbL/),
+    ).toBeTruthy();
+  });
+
+  it("aucun résumé : « pas encore téléchargés », sans erreur ; les coûts INSEE restent", async () => {
+    const openPrices = fakeOpenPricesStore({ attemptedAt: fixedDay });
+    setup([rowOf(1)], undefined, [], undefined, openPrices);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    expect(
+      await screen.findByText(
+        "Prix Open Prices pas encore téléchargés : les coûts utilisent votre table et l'INSEE.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Dernière mise à jour Open Prices impossible/)).toBeNull();
+    expect(labelText(carrot())).toContain(CARROT_INSEE_LINE);
+  });
+
+  it("téléchargement en cours : le texte et un chargement", async () => {
+    const openPrices = fakeOpenPricesStore({});
+    openPrices.state.holdDownload = true;
+    const { prices } = setup([rowOf(1)], undefined, [], undefined, openPrices);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    void prices.refreshOpenPricesIfDue();
+    const line = await screen.findByText("Téléchargement des prix Open Prices en cours…");
+    expect(line.parentElement?.querySelector(".mantine-Loader-root")).not.toBeNull();
+  });
+
+  it("échec du calcul sans résumé : l'erreur en orange s'ajoute, les coûts INSEE et l'écran restent", async () => {
+    const openPrices = fakeOpenPricesStore({});
+    const { prices } = setup([rowOf(1)], undefined, [], undefined, openPrices);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    await prices.refreshOpenPricesIfDue();
+    expect(
+      await screen.findByText(OP_ERROR_LINE("Fichier Open Prices illisible : prices")),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Prix Open Prices pas encore téléchargés : les coûts utilisent votre table et l'INSEE.",
+      ),
+    ).toBeTruthy();
+    expect(labelText(carrot())).toContain(CARROT_INSEE_LINE);
+    expect(myPrice("Carotte").hasAttribute("disabled")).toBe(false);
+  });
+
+  it("échec avec un résumé en service : la ligne d'état dit le jour du résumé gardé, l'erreur s'ajoute", async () => {
+    const old = { ...OP_SUMMARY, fetchedAt: "2026-11-05" };
+    const openPrices = fakeOpenPricesStore({ attemptedAt: "2026-11-05", summary: old });
+    const { prices } = setup([rowOf(1)], undefined, [], undefined, openPrices);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    await prices.refreshOpenPricesIfDue();
+    expect(
+      await screen.findByText(OP_ERROR_LINE("Fichier Open Prices illisible : prices")),
+    ).toBeTruthy();
+    expect(screen.getByText(/^Prix Open Prices du 05\/11\/2026 /)).toBeTruthy();
+  });
+
+  it("lecture du résumé impossible : le texte propre à la lecture, aucun téléchargement", async () => {
+    const openPrices = fakeOpenPricesStore({});
+    openPrices.state.loadError = "Lecture des prix Open Prices impossible.";
+    const { prices } = setup([rowOf(1)], undefined, [], undefined, openPrices);
+    await screen.findByRole("heading", { name: "Liste de courses" });
+    expect(
+      await screen.findByText(
+        "Lecture des prix Open Prices impossible. Nouvel essai au prochain lancement.",
+      ),
+    ).toBeTruthy();
+    await prices.refreshOpenPricesIfDue();
+    expect(openPrices.calls.filter((call) => call.startsWith("download"))).toEqual([]);
+    expect(screen.queryByText(/demain au plus tôt/)).toBeNull();
+    expect(screen.queryByText(/pas encore téléchargés/)).toBeNull();
+    expect(screen.queryByText(/^Prix Open Prices du /)).toBeNull();
   });
 });
 

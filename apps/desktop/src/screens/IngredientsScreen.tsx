@@ -38,6 +38,7 @@ import { useCheckSnapshot } from "../useCheckSnapshot.ts";
 import { useLatestRead } from "../useLatestRead.ts";
 import { usePriceSnapshot } from "../usePriceSnapshot.ts";
 import { dinnersText, fullDate } from "./history/texts.ts";
+import { OpenPricesStatus } from "./ingredients/OpenPricesStatus.tsx";
 import { PriceModal } from "./ingredients/PriceModal.tsx";
 import { INGREDIENTS_TEXTS as TEXTS, checkedCountText, myPriceLabel } from "./ingredients/texts.ts";
 
@@ -306,6 +307,7 @@ function ChecklistView({
               {cost.notice}
             </Text>
           )}
+          <OpenPricesStatus openPrices={priceSnapshot.openPrices} />
         </Stack>
       </Paper>
       {editing !== null && (

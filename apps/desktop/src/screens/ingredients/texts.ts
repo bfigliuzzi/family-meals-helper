@@ -1,4 +1,4 @@
-import { COST_DISCLAIMER } from "core";
+import { COST_DISCLAIMER, dayText } from "core";
 import type { PriceUnit } from "core";
 
 export const INGREDIENTS_TEXTS = {
@@ -38,7 +38,25 @@ export const INGREDIENTS_TEXTS = {
   priceCancel: "Annuler",
   priceRemove: "Retirer mon prix",
   priceWriteErrorTitle: "Prix non enregistré",
+  openPricesNone:
+    "Prix Open Prices pas encore téléchargés : les coûts utilisent votre table et l'INSEE.",
+  openPricesRefreshing: "Téléchargement des prix Open Prices en cours…",
 } as const;
+
+// « Prix Open Prices du 20/11/2026 (Open Food Facts, licence ODbL), mis à jour chaque semaine. »
+export const openPricesReadyText = (fetchedAt: string): string =>
+  `Prix Open Prices du ${dayText(fetchedAt)} (Open Food Facts, licence ODbL), mis à jour chaque semaine.`;
+
+// Le message du Rust ou de `core` finit déjà par un point : on le retire avant la phrase qui suit.
+const withoutFinalPoint = (message: string): string => message.replace(/[.\s]+$/, "");
+
+// Mise à jour échouée (téléchargement, calcul, garde de format, enregistrement) : un essai a eu lieu aujourd'hui.
+export const openPricesErrorText = (message: string): string =>
+  `Dernière mise à jour Open Prices impossible : ${withoutFinalPoint(message)}. Nouvel essai au prochain lancement, demain au plus tôt.`;
+
+// Lecture du résumé dans la base échouée : aucun téléchargement n'a eu lieu, un nouvel essai viendra au prochain lancement.
+export const openPricesReadErrorText = (message: string): string =>
+  `${withoutFinalPoint(message)}. Nouvel essai au prochain lancement.`;
 
 export const myPriceLabel = (name: string): string => `Modifier le prix : ${name}`;
 

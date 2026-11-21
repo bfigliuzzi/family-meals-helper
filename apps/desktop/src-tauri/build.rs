@@ -15,6 +15,10 @@ fn main() {
             "price_table_list",
             "price_table_set",
             "price_table_delete",
+            "open_prices_load",
+            "open_prices_download",
+            "open_prices_read",
+            "open_prices_save",
         ]),
     ))
     .expect("échec de tauri-build");

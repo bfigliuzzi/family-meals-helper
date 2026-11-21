@@ -16,7 +16,8 @@
     "pdf:fixture": "node src/node/pdf-fixture.ts",
     "smoke": "node src/node/smoke.ts",
     "season:import": "node src/node/season-import.ts",
-    "insee:import": "node src/node/insee-import.ts"
+    "insee:import": "node src/node/insee-import.ts",
+    "open-prices:report": "node src/node/open-prices-report.ts"
   },
   "devDependencies": {
     "@types/node": "24.19.2",

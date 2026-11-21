@@ -4,6 +4,9 @@ import type {
   HistoryStore,
   ManualPriceRow,
   Model,
+  OpenPricesFile,
+  OpenPricesStore,
+  OpenPricesSummary,
   PriceStore,
   SecretAdmin,
   SessionDeps,
@@ -122,6 +125,71 @@ export function fakePriceStore(initial: ManualPriceRow[] = []) {
     },
   };
   return { store, state, sets, deletes, held, heldLists, rows: () => [...rows.values()] };
+}
+
+// Faux magasin Open Prices en mémoire. `initial` : le jour du dernier essai et le résumé en service (un objet, écrit en
+// texte JSON, ou un texte brut pour un résumé illisible). `state.loadError`, `downloadError`, `saveError` : le message du
+// rejet, `null` pour réussir ; `state.holdDownload` retient `download` jusqu'à `releaseDownload()`. `files` : le contenu
+// compressé de chaque fichier, rendu par morceaux de `chunk` octets (`read`) ; `calls` garde les appels dans l'ordre.
+export function fakeOpenPricesStore(
+  initial: { attemptedAt?: string | null; summary?: OpenPricesSummary | string | null } = {},
+  files: Partial<Record<OpenPricesFile, Uint8Array<ArrayBuffer>>> = {},
+  chunk = 100,
+) {
+  const state = {
+    loadError: null as string | null,
+    downloadError: null as string | null,
+    saveError: null as string | null,
+    holdDownload: false,
+    stored: initial.summary ?? null,
+  };
+  const calls: string[] = [];
+  const saved: { today: string; summary: string }[] = [];
+  const releases: (() => void)[] = [];
+  const store: OpenPricesStore = {
+    load() {
+      calls.push("load");
+      if (state.loadError !== null) return Promise.reject(new Error(state.loadError));
+      const summary = state.stored;
+      return Promise.resolve({
+        attemptedAt: initial.attemptedAt ?? null,
+        summary:
+          summary === null || typeof summary === "string" ? summary : JSON.stringify(summary),
+      });
+    },
+    download(today) {
+      calls.push(`download:${today}`);
+      if (state.downloadError !== null) return Promise.reject(new Error(state.downloadError));
+      if (!state.holdDownload) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        releases.push(resolve);
+      });
+    },
+    read(file, offset) {
+      calls.push(`read:${file}:${String(offset)}`);
+      const bytes = files[file];
+      if (bytes === undefined) return Promise.reject(new Error("Fichier de prix absent."));
+      return Promise.resolve(bytes.slice(offset, offset + chunk));
+    },
+    save(today, summary) {
+      calls.push(`save:${today}`);
+      saved.push({ today, summary });
+      if (state.saveError !== null) return Promise.reject(new Error(state.saveError));
+      state.stored = summary;
+      return Promise.resolve();
+    },
+  };
+  return {
+    store,
+    state,
+    calls,
+    saved,
+    releaseDownload() {
+      const next = releases.shift();
+      if (next === undefined) throw new Error("aucun téléchargement retenu");
+      next();
+    },
+  };
 }
 
 // Faux trousseau en mémoire ; chaque opération peut échouer à la demande. Comme le vrai, il n'expose aucune
