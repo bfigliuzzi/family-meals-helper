@@ -16,7 +16,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 | 5 | App desktop : coquille, réglages, persistance | 4 | `livré` (2026-11-15, `63f2bc7`) |
 | 5 bis | Signature stable de l'app | 5 | `livré` (2026-11-16, `8bcf097`) |
 | 6 | App desktop : session, ingrédients, historique | 5 bis | `livré` (2026-11-17, `2319dc9`) ; démonstration payée faite le 2026-11-20, correctifs `e1c7e9e` et `6ac1331` |
-| 7 | Prix | 4 (affichage dans l'app : 6) | à faire |
+| 7 | Prix | 4 (affichage dans l'app : 6) | `livré` (2026-11-21, `823029b`, `03d37d2`, `f3e68db`, `0e2ee43` et `4a210d4`) ; **démonstration avec l'utilisateur pas encore faite** (voir « Reste à faire avec l'utilisateur », lot 7) |
 
 ---
 
@@ -141,12 +141,12 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 **Contenu** (conception §6.1, §6.2, §6.3, §6.6, §7)
 - Tables de conservation tirées de `docs/research/cuisine-addict-regles.md` (durée la plus courte en cas de conflit), aliments qui ne se congèlent pas, aliments qui ne se réchauffent pas.
 - Déduction du type d'un plat à partir des catégories de ses ingrédients.
-- Contrôles : conservation et ordre des jours, marquage « à congeler », équilibre mangerbouger (seuils revérifiés sur le site), poisson, fourchettes de quantités, plafond de budget en `warning` (reporté au lot 7, voir plus bas).
+- Contrôles : conservation et ordre des jours, marquage « à congeler », équilibre mangerbouger (seuils revérifiés sur le site), poisson, fourchettes de quantités, plafond de budget en `warning` (reporté au lot 7, voir plus bas ; **livré au lot 7**, 7.1 et 7.3).
 - Distinction `error` / `warning` dans le cycle de correction (§5.2 étape 3), et priorité de la demande explicite sur les règles souples (§5.1) (obtenue par le prompt seul, voir plus bas).
 - Le prompt système intègre les règles d'équilibre et de conservation.
 
 **Ce qui a changé en cours de lot** (décisions de l'utilisateur, 2026-11-13 ; le contenu ci-dessus est le contenu prévu)
-- **Budget reporté au lot 7** : aucun constat de budget au lot 2.
+- **Budget reporté au lot 7** : aucun constat de budget au lot 2. *Livré au lot 7 (2026-11-21) : constat `budget` en 7.1, champ « Budget max (€) » en 7.3.*
 - **Session le dimanche par défaut**, option `--session-day` (vendredi, samedi, dimanche, lundi). Les jours écoulés entre la session et chaque dîner (dimanche : lundi 1 … vendredi 5) décident de la conservation.
 - **Seuils par adulte** = quantité du menu divisée par 4 portions. Les seuils mangerbouger (500 g de viande hors volaille, 150 g de charcuterie) viennent des citations exactes que l'utilisateur a relues.
 - **Poisson seulement surgelé ou en conserve**, jamais frais (constat `error` de la règle `fish`), et **pas de constat « menu sans poisson »** : le foyer en mange peu. Écart voulu avec la conception §6.3 (note datée dans la conception). Le thon est accepté ; sardine et maquereau, que le foyer n'aime pas, passent par `--exclude`, pas par le code. Les poissons du référentiel (`saumon`, `maquereau`, `cabillaud`, `colin`) sont en forme par défaut `frozen`, rayon surgelés. *Les rayons ont été retirés du référentiel au lot 4 (2026-11-14) : seule la forme par défaut `frozen` reste.*
@@ -167,7 +167,7 @@ Le premier objectif d'usage est le **tracer** (un menu réel produit de bout en 
 
 **Ce que ça ne fera PAS (visible)**
 - Pas de planning ni de durée de session (lot 3). **Livré au lot 3 (2026-11-13)** : ne vaut plus.
-- Pas de plafond de budget : reporté au lot 7.
+- Pas de plafond de budget : reporté au lot 7. *Livré au lot 7 (2026-11-21).*
 - Pas de constat « menu sans poisson » ni de poisson gras demandé : décision de l'utilisateur.
 - Sardine et maquereau ne sont pas exclus par `core` : il faut `--exclude sardine --exclude maquereau` (réglages d'exclusions au lot 5).
 - Pas de contrôle de la durée de cuisson du poisson (« 15 minutes au plus ») : pas de durées avant le lot 3. Le prompt la demande. **Depuis le lot 3 (2026-11-13), il y a des durées de phases, mais ce contrôle n'existe toujours pas** (voir « Ce que ça ne fera PAS » du lot 3).
@@ -386,7 +386,7 @@ Contenu prévu à l'origine : recettes, conversion en unités d'achat, rayons, P
 - WebRTC et la préconnexion ne sont pas bloqués : ils n'ont aucun secret à emporter.
 - Le verrou des réglages n'arrête pas `sqlite3` ni un autre programme.
 - Pas de bouton « Tester la clé », pas d'adresse d'API réglable (la clé Mammouth demande `https://api.mammouth.ai`) : le fournisseur sera choisi avant le lot 6, voir « Questions ouvertes ». *Note du 2026-11-17 (lot 6.3) : fournisseur tranché, seul Mammouth est appelé ; toujours ni bouton ni adresse réglable.*
-- Pas d'ajout ni de suppression d'appareil, pas d'ustensiles. Pas de modification d'une exclusion (on la retire puis on l'ajoute de nouveau). Pas d'annulation, d'import ni d'export. Pas de table de prix (lot 7).
+- Pas d'ajout ni de suppression d'appareil, pas d'ustensiles. Pas de modification d'une exclusion (on la retire puis on l'ajoute de nouveau). Pas d'annulation, d'import ni d'export. Pas de table de prix (lot 7). *Livré au lot 7.2 (2026-11-21) : la table se modifie depuis l'écran Ingrédients (« Mon prix »), pas depuis Réglages.*
 - Un document de réglages abîmé à la main, une migration ratée ou un document d'une version future laissent l'écran en erreur, sans bouton pour repartir des valeurs par défaut.
 - Le mode clair ou sombre suit macOS, sans réglage. La fenêtre ne garde ni sa taille ni sa position. L'app n'est pas signée.
   > **Note du 2026-11-16 (lot 5 bis) :** le `.app` est signé depuis le lot 5 bis. Reste vrai pour `tauri dev` (signature ad hoc).
@@ -493,7 +493,7 @@ Contenu prévu à l'origine : recettes, conversion en unités d'achat, rayons, P
 **Livrable vérifiable** : tests de la modification du menu courant avec un faux client IA, dont un test où l'IA tente de retirer un plat épinglé ; dans l'app, l'utilisateur compose, modifie un plat, valide et obtient le PDF ; le menu apparaît dans l'historique.
 
 **Ce que ça ne fera PAS (visible)**
-- **Pas de prix** (lot 7).
+- **Pas de prix** (lot 7). *Livré au lot 7 (2026-11-21), voir plus bas.*
 - **Une clé Anthropic directe ne marche pas** : l'app n'appelle que `https://api.mammouth.ai/v1/messages`. Pas de réglage de fournisseur ni d'adresse, pas de bouton « Tester la clé », pas de proxy (l'app ignore ceux du système).
 - **Session perdue en quittant l'app** (conversation, menu non validé, épingles) ; « Recommencer » l'efface sans quitter. Pas d'annulation d'un appel en cours (4 min au plus par appel, jusqu'à 3 essais), pas d'affichage progressif. On peut changer d'écran pendant un appel : il continue et son résultat s'affiche au retour.
 - **Nombre de dîners** : il se fixe seulement par le champ de l'écran (5 par défaut) ; « 4 dîners » écrit dans la demande ne compte pas dans l'app (la CLI le lit). Changer le jour de session ou le nombre de dîners ne recalcule rien tout de suite : le menu affiché reste inchangé ; ces valeurs sont utilisées au message suivant et dès la prochaine validation.
@@ -503,26 +503,88 @@ Contenu prévu à l'origine : recettes, conversion en unités d'achat, rayons, P
 - **Historique** : 5 menus ; le sixième efface le plus ancien et sa fiche. Pas de suppression à la main, pas de reprise d'un ancien menu pour le modifier. Les plats des 5 derniers menus sont donnés à Claude ; pour en reprendre un, il faut le nommer.
 - **Fiche PDF** : elle s'ouvre dans Aperçu (une copie, réécrite à chaque ouverture : une annotation n'est pas gardée ; exporter d'abord). « Exporter » copie dans `~/Downloads/menu-batch-AAAA-MM-JJ.pdf`, puis `-2`, `-3`…, sans fenêtre « Enregistrer sous » ; macOS demande l'accès à Téléchargements au premier export. La fenêtre peut se figer une seconde pendant la préparation. Le bandeau « Ranger chaque préparation… » peut être coupé entre deux pages (déjà le cas au lot 4).
 - **Durée et appareils de la fiche** : recalculés à partir des étapes détaillées, ils peuvent différer de ceux du menu affiché (2 h 15 contre « environ 2 h 30 » sur l'exemple), et l'écran ne l'explique pas. Proposition pour un lot suivant : afficher « Durée recalculée d'après les étapes ».
-- **Version de l'app antérieure à 6.5** : elle refuse la base en version 2 (« Base créée par une version plus récente de l'app. »).
-- **Écran Ingrédients** : seulement le dernier menu validé, alphabétique, sans rayon ni coût ; une seule case pour tout le placard ; pas de « Tout décocher », pas d'ajout ni de retrait à la main, pas d'impression de la liste seule. Un nouveau menu validé remplace la liste, cases décochées. Si le dernier menu est illisible, l'écran le dit, sans liste. Les lignes cochées restent à leur place, barrées ; pas de bouton « Ouvrir la fiche » (elle s'ouvre depuis Historique).
+- **Version de l'app antérieure à 6.5** : elle refuse la base en version 2 (« Base créée par une version plus récente de l'app. »). *Depuis le lot 7.2 (2026-11-21), la base est en version 3 : une app du lot 6 ou antérieure, ou du lot 7.1, la refuse de la même façon. Le `.app` signé doit être reconstruit depuis `f3e68db` ou une version plus récente.*
+- **Écran Ingrédients** : seulement le dernier menu validé, alphabétique, sans rayon (le coût de chaque ligne est venu au lot 7.2) ; une seule case pour tout le placard ; pas de « Tout décocher », pas d'ajout ni de retrait à la main, pas d'impression de la liste seule. Un nouveau menu validé remplace la liste, cases décochées. Si le dernier menu est illisible, l'écran le dit, sans liste. Les lignes cochées restent à leur place, barrées ; pas de bouton « Ouvrir la fiche » (elle s'ouvre depuis Historique).
 - **Cases** : une coche non enregistrée est perdue en quittant l'app ; tant que l'app reste ouverte, elle reste affichée et « Réessayer » la renvoie. Après un échec d'enregistrement des cases qui n'est pas une purge, « Relire l'historique » ne change rien de visible. Une coche dont l'ingrédient a été renommé par une mise à jour du référentiel n'apparaît plus.
 - **CLI** (`compose`, `batch`) : elle ne lit pas les réglages de l'app ; elle garde l'équipement du code et `--exclude`.
 
 ## Lot 7 : prix
 
-**Objectif** : afficher un coût estimé par ligne et par menu.
+**Statut** : `livré` le 2026-11-21, en cinq commits sur `main` : `823029b` (7.0, formats réels), `03d37d2` (7.1, calcul dans `core`, règle `budget`, `--budget`), `f3e68db` (7.2, table manuelle, base en version 3), `0e2ee43` (7.3, coût dans le menu et la fiche, champ budget) et `4a210d4` (7.4, Open Prices). CI GitHub verte sur `03d37d2`, `f3e68db`, `0e2ee43` et `4a210d4`. **La démonstration avec l'utilisateur n'est pas encore faite** : voir « Reste à faire avec l'utilisateur » plus bas. Tant qu'elle manque, deux choses ne sont pas prouvées dans le vrai `.app` : le temps et la mémoire du calcul d'Open Prices dans WebKit, et le prix « Mon prix » qui survit à un redémarrage.
+
+**Objectif** : afficher un coût estimé par ligne de courses et par menu.
 
 **Contenu** (conception §8, `docs/research/sources-prix.md`)
 - `pricing/` : table manuelle, INSEE, résumé Open Prices (téléchargement hebdomadaire en tâche de fond, lecture en flux, médiane par ingrédient du référentiel), ordre de priorité, source affichée.
 - Le résumé Open Prices et la table de prix passent par des commandes Rust dédiées (comme les réglages), pas par un plugin SQL (décision du lot 5).
 - Affichage du coût dans le menu courant, la page Ingrédients (avec modification de la table manuelle) et le PDF ; mention de la licence ODbL.
-- **Plafond de budget** (reporté du lot 2, décision de l'utilisateur du 2026-11-13) : quand la demande fixe un plafond, un dépassement donne un constat `warning` (conception §6.6). Aucun constat de budget avant ce lot.
+- **Plafond de budget** (reporté du lot 2, décision de l'utilisateur du 2026-11-13) : quand l'utilisateur fixe un plafond, un dépassement donne un constat `warning` (conception §6.6). Aucun constat de budget avant ce lot. *Livré en 7.1 (le constat) et 7.3 (le champ).*
 
-**Livrable vérifiable** : tests de l'estimation sur un extrait de fichier Open Prices et un extrait du CSV INSEE ; un test du constat de budget (un menu qui dépasse le plafond, un qui le respecte) ; dans l'app, un menu affiche un coût total et la source de chaque prix ; l'app reste utilisable sans données Open Prices.
+**Décisions de l'utilisateur** (2026-11-20, avant le lot) : Open Prices sur 6 mois ; plafond par un champ facultatif « Budget max (€) » dans Nouvelle session et par `--budget` dans `compose` et `batch` ; constat `budget` affiché seulement, jamais renvoyé à l'IA (l'IA reçoit le plafond) ; coût recalculé à l'affichage, la fiche PDF gardant celui du jour de validation ; un prix ne s'applique que si l'unité correspond (g avec €/kg, ml avec €/L, pièce avec €/pièce ; pas de conversion ml en g ; seule exception, l'œuf à 50 g la pièce) ; le Rust télécharge les fichiers compressés, `core` les décompresse ; table INSEE générée par un script ; clé de la table manuelle `forme|nom canonique` ; placard hors du total ; démonstration payée à la fin, 2 à 4 appels.
 
-**Ce que ça ne fera PAS (visible)** : pas de prix d'un magasin précis ; pas de comparaison entre enseignes.
+**Notes de livraison, sous-lot 7.0** (2026-11-21, `823029b`)
+- Lecture complète des fichiers exportés d'Open Prices et du CSV INSEE, écrite dans `docs/research/sources-prix.md` (section « Formats réels des fichiers »), avec des extraits de test dans `packages/core/src/pricing/fixtures/`. Ce qui a changé par rapport à la première recherche : l'INSEE a 63 séries dont 44 produits alimentaires (pas « 62 produits ») ; une ligne de prix n'a ni pays ni poids du paquet, il faut donc aussi `locations.jsonl.gz` et `products.jsonl.gz`.
 
-**Depuis le lot 4 (2026-11-14)** : les pièces n'ont pas de poids moyen (abandonné au lot 4) et la liste de courses garde l'unité de la recette. L'estimation de prix devra utiliser l'unité de la recette (g, ml, pièce).
+**Notes de livraison, sous-lot 7.1** (2026-11-21, `03d37d2`)
+- `pricing/` dans `core` : `estimateCost` et `menuCost` donnent un coût par ligne de courses et un total. Une ligne n'a un prix que si chaque unité de sa somme en a un ; sinon elle est « prix inconnu » et le total devient « au moins X € ». Le placard n'est jamais compté. Les textes (`cost-text.ts`) sont partagés par la CLI, l'app et le PDF.
+- Table INSEE générée par `pnpm --filter core insee:import` dans `src/pricing/insee-table.ts` (données jusqu'à 2026-10), reliée à 19 ingrédients du référentiel par `insee-map.ts`. Les séries approximatives (veau, filet mignon de porc, jambon blanc, crevette) ne sont pas reliées : un « prix inconnu » vaut mieux qu'un faux prix présenté comme officiel.
+- Règle `budget` : `checkBudget` compare le coût au plafond en centimes arrondis, les mêmes que ceux affichés. Elle est calculée à part de `checkMenu` : le constat ne part jamais à l'IA et ne compte pas pour choisir le meilleur essai. Le plafond va dans le prompt utilisateur ; la consigne « évite les produits chers » est toujours dans le prompt système, avec ou sans plafond.
+- `--budget` dans `compose` et `batch`. La CLI affiche le coût, les prix inconnus, les sources et l'avertissement de budget ; la fiche de `batch` porte aussi le coût.
+- `ShoppingLine` gagne `category`, pour l'exception de l'œuf.
+
+**Notes de livraison, sous-lot 7.2** (2026-11-21, `f3e68db`)
+- Migration `0003_prices.sql` : la base passe en `user_version` 3, avec les tables `price_table` (la table manuelle) et `open_prices` (créée vide, remplie en 7.4). Les trois commandes `price_table_list`, `price_table_set` et `price_table_delete` (`src/price_table.rs`) ; au plus 1 000 prix.
+- `createPriceKeeper` (`pricing/price-keeper.ts`) tient la table manuelle : une seule file pour lire et écrire, donc une lecture ancienne ne peut pas réécrire une ligne périmée.
+- Écran Ingrédients : coût et source de chaque ligne, total en tête, mention « Placard non compris » et sources en pied. Le bouton « Mon prix » ouvre une fenêtre pour saisir le prix, dans l'unité de la ligne ; le prix passe avant Open Prices et l'INSEE, pour ce produit sous cette forme.
+
+**Notes de livraison, sous-lot 7.3** (2026-11-21, `0e2ee43`)
+- Menu courant : la ligne « Coût estimé », la mention des sources et l'avertissement de budget, recalculés tout de suite quand les prix ou le budget changent, sans appel à l'IA.
+- Nouvelle session : champ « Budget max (€) » (facultatif, de 0,01 à 10 000 €). Un montant invalide bloque l'envoi d'un message jusqu'à correction. Le champ est gardé quand on change d'écran et après « Recommencer ».
+- Fiche PDF : ligne « Coût estimé » et mention « Prix du JJ/MM/AAAA. Sources : … » (la date des prix, celle du clic sur « Valider ce menu ») (ODbL et Licence Ouverte citées quand ces sources servent). Le coût est calculé au clic sur « Valider ce menu », avec les prix du moment, puis gardé pour toutes les reprises. La validation attend la lecture de la table de prix.
+- **Interligne de la fiche passé de 1,08 à 1,05** (`defaultStyle.lineHeight` de `pdf/sheet.ts`) : la nouvelle ligne de coût, avec sa mention, prend trois lignes, et la fiche la plus chargée ne tenait plus en 2 pages avec la marge voulue.
+
+**Notes de livraison, sous-lot 7.4** (2026-11-21, `4a210d4`)
+- Rust (`src/open_prices.rs`) : quatre commandes `open_prices_load`, `open_prices_download`, `open_prices_read` et `open_prices_save`. Le téléchargement prend trois fichiers `.jsonl.gz` (`locations`, `prices`, `products`, environ 45 Mo en tout) sur `https://prices.openfoodfacts.org/data/`, hôte fixe, taille et délai bornés, dans le dossier `open-prices/` à côté de la base (fichiers `.part` pendant l'écriture). Un seul essai par jour : le jour est écrit en base avant le réseau, un essai qui échoue compte pour la journée.
+- `core` (`pricing/open-prices.ts`) : lecture en flux par `DecompressionStream`, dans la vue web, sur le fil principal, par morceaux de 512 Kio et en rendant la main toutes les 2 000 lignes. Filtres : lieux de France métropolitaine (hors codes postaux 97 et 98), relevés en euros, 6 mois, doublons écartés, prix sans promotion, paquets d'au moins 50 g ou 50 ml. Un prix demande au moins 3 relevés ; c'est la médiane. Le résumé tient en 512 Kio au plus. Une garde de format refuse un résumé qui a l'air d'une lecture ratée et garde celui de la semaine précédente.
+- Carte écrite à la main (`open-prices-map.ts`) : 16 entrées par étiquette de catégorie (13 fruits et légumes, l'œuf, le blanc et la cuisse de poulet) et 14 par produit à code-barres (lait, beurre, pâtes, riz, lentilles, crème, œuf, bœuf haché, blanc de poulet, emmental râpé…) ; au banc de mesure, 14 clés de chaque type ont eu assez de relevés (au moins 3). Elle est vérifiée sur les vrais fichiers par `open-prices-real.test.ts`, hors CI.
+- App : le téléchargement part au lancement s'il est dû (aucun résumé lisible, ou résumé de 7 jours ou plus, et pas d'essai aujourd'hui) ; il n'a pas lieu dans la version d'essai. L'écran Ingrédients dit quel résumé est en service (« Prix Open Prices du … »), ou que le téléchargement est en cours, ou pourquoi le dernier essai a échoué. L'app reste utilisable sans ces données : table manuelle et INSEE servent alors seuls.
+- Banc de mesure `pnpm --filter core open-prices:report --dir <dossier>` : 1,5 s sous Node, 144 Mio, résumé de 3 284 octets, 14 clés de catégorie et 14 clés de produit utilisables (détail dans `docs/research/sources-prix.md`, section C). **Mesure dans WebKit non faite** : écran verrouillé pendant l'essai `tauri dev`.
+
+**Livrable vérifiable** : tests de l'estimation sur des extraits de fichiers Open Prices et INSEE ; tests du constat de budget (un menu qui dépasse, un qui respecte) ; l'app reste utilisable sans données Open Prices (tests du propriétaire des prix et de `App.test.tsx`). Dans l'app : un menu affiche un coût total et la source de chaque prix. *La preuve dans le vrai `.app` signé reste à faire.*
+
+**Ce que ça ne fera PAS (visible)**
+- **Pas de prix d'un magasin précis, pas de comparaison d'enseignes** : Open Prices donne une médiane sur toute la France métropolitaine, sur 6 mois.
+- **Beaucoup de « prix inconnu »** en crèmerie, épicerie et viande : seuls les ingrédients de la carte ont un prix Open Prices, et il en faut 3 relevés. Yaourt, fromages (sauf l'emmental râpé, qui sert aussi de prix au fromage râpé), semoule et conserves restent sans prix. Le poulet entier n'a pas de prix Open Prices (l'étiquette `en:chickens` ramène nuggets et plats cuisinés). Pas de prix des œufs à la boîte : seulement les relevés à la pièce, ou au poids quand le paquet le donne.
+- **Le total est une borne basse** : il compte les prix connus, et dit « au moins X € » quand il en manque. Le placard n'est jamais compté. Le budget se compare à ce total.
+- **Le constat de budget n'est jamais renvoyé à l'IA** : elle reçoit seulement le plafond, au message suivant si on change le champ. Le budget n'est gardé ni dans l'historique ni entre deux lancements de l'app.
+- **Le coût change quand les prix changent**, dans Ingrédients et dans le menu courant ; la fiche PDF garde celui du jour de validation. Le coût du menu courant est un total, sans détail par ligne ni par plat : le détail est dans Ingrédients, après validation.
+- **Interligne de la fiche à 1,05** au lieu de 1,08, pour rester à 2 pages.
+- **« Mon prix »** : un seul prix par produit et par forme, dans une seule unité ; saisi ligne par ligne depuis Ingrédients ; pas de liste de tous vos prix, pas d'ajout d'un produit absent de la liste, pas de saisie pour le placard. La table n'est pas dans Réglages.
+- **Pas de bouton « Mettre à jour »** pour Open Prices : une mise à jour par semaine au plus, au lancement, et un essai par jour au plus. Le téléchargement fait environ 45 Mo. Fenêtre cachée, le calcul peut ralentir. Une semaine où le format d'Open Prices change, les prix restent ceux de la semaine précédente, et l'écran Ingrédients le dit.
+- **La CLI (`compose`, `batch`) n'emploie que l'INSEE** : environ 19 ingrédients ont un prix, le reste est « prix inconnu », et `--budget` ne compte que ceux-là. Elle ne lit ni la table manuelle ni Open Prices.
+- **Version de l'app** : une app du lot 7.1 ou antérieure refuse la base en version 3 (« Base créée par une version plus récente de l'app. »). Le `.app` signé doit être reconstruit.
+
+**Reliquats du lot 7** (dettes connues, non traitées)
+- `packages/core/src/node/season-import.ts` calcule son chemin avec `URL.pathname` : un chemin qui contient une espace casse (vu en relecture de 7.1, hors périmètre ; `insee-import.ts` ne l'a pas).
+- Écran Ingrédients : le nom accessible des cases à cocher est long (nom, quantité, répartition, coût et source dans le même libellé).
+- Le texte « Prix personnel indisponible pour ce produit (nom trop long ou illisible). » n'a pas de largeur maximale ; à regarder à la démonstration.
+- `open-prices-real.test.ts` n'est pas lancé par la CI (il lit les vrais fichiers, que l'on télécharge à la main). Il est sauté sans `FMH_OPEN_PRICES_DIR`. **À relancer avant tout commit qui touche la carte (`open-prices-map.ts`) ou `open-prices.ts`** : `FMH_OPEN_PRICES_DIR=<dossier des trois .jsonl.gz> pnpm --filter core exec vitest run src/pricing/open-prices-real.test.ts`. Il écrit `/tmp/fmh-open-prices-audit.md`, la liste des produits retenus à relire.
+
+**Reste à faire avec l'utilisateur** (démonstration, **pas encore faite**) : elle demande l'écran déverrouillé (l'essai réel d'Open Prices ouvre le `.app`) et fait 2 à 4 appels payés. Le `.app` signé doit d'abord être reconstruit depuis `4a210d4` (commande « Essayer l'app comme en production » du `CLAUDE.md`, compilation normale) ; la base réelle est déjà en version 3. Dans l'ordre :
+1. **Essai réel d'Open Prices, sans appel payé.** Au premier lancement du `.app` signé, lire la ligne de la console `Open Prices : résumé calculé en … s`, et suivre la mémoire du processus web (`ps -o rss=` toutes les 5 s). Seuils : moins de 2 minutes, moins de 1,5 Go, interface utilisable pendant le calcul. Vérifier ensuite : l'écran Ingrédients du dernier menu montre « Prix Open Prices du … » et des sources Open Prices ; un second lancement le même jour ne télécharge rien ; fenêtre réduite pendant le calcul ; réseau coupé (message clair, app utilisable). Si un seuil échoue, **ne pas décider seul** : le repli (abandonner les relevés à code-barres, donc plus de lait, beurre, riz, pâtes, crème, fromage râpé, bœuf haché ni poulet) change ce que l'utilisateur voit, et lui revient.
+2. **« Mon prix » survit à un redémarrage**, avant tout appel payé : dans Ingrédients, saisir « Mon prix » sur une ligne, quitter l'app, la relancer, retrouver le prix et la mention « votre prix du … ».
+3. **Parcours payé.** Nouvelle session, « Budget max (€) » à 40, demande « un bœuf bourguignon et deux plats de saison », dimanche, 3 dîners (1 à 3 appels). Constater : la ligne « Coût estimé », l'avertissement de budget si le coût dépasse 40 €, les sources.
+4. Changer le budget à 200 € : l'avertissement disparaît sans appel.
+5. **Si la composition a pris 1 appel**, valider (au plus 3 appels de plus, 4 en tout). Constater : la fiche porte « Coût estimé » et les sources (ODbL, Licence Ouverte) ; l'écran Ingrédients montre le coût par ligne ; saisir « Mon prix » sur une ligne inconnue change le total. **Si elle a pris 2 ou 3 appels**, ne pas valider en payant : prouver la fiche dans la version d'essai signée, sans appel. Limite de cette branche : la version d'essai ne charge pas Open Prices, donc sa fiche ne cite que votre table et l'INSEE ; la mention ODbL avec des prix Open Prices est alors prouvée par `App.test.tsx` (faux résumé) et par l'écran Ingrédients du `.app` normal (étape 1). Écrire cette limite ici.
+6. Noter dans cette section : le nombre d'appels, les durées, les jetons, les constats, la branche suivie à l'étape 5, et les mesures de l'étape 1. Passer alors la démonstration à « faite » dans le tableau du haut.
+- **Forcer un nouvel essai de téléchargement** (étape 1, ou pour tout essai). Un nouvel essai ne part que si le résumé est absent ou vieux d'au moins 7 jours, **et** si aucun essai n'a eu lieu le jour même : attendre le lendemain ne suffit donc pas après un téléchargement réussi. L'app lit toujours sa base à un chemin fixe, sans option pour une autre ; la procédure se fait sur la vraie base, avec une sauvegarde (les commandes sont dans `CLAUDE.md`, « Forcer un essai de téléchargement Open Prices ») :
+  1. Fermer l'app.
+  2. Sauvegarder la base avec `cp -p` dans un fichier horodaté de `/tmp`, et supprimer la ligne `open_prices` (`DELETE FROM open_prices;`) seulement si la copie a réussi.
+  3. Lancer l'app : sans résumé ni essai du jour, elle télécharge.
+  4. Pour revenir en arrière, app fermée, ne restaurer que la table `open_prices` depuis la sauvegarde (`ATTACH` dans `sqlite3`, en une transaction, après avoir vérifié que la sauvegarde existe), jamais toute la base : les prix, cases, réglages et menus enregistrés depuis la sauvegarde, notamment pendant la démonstration, seraient perdus.
+  Ne jamais toucher à la base pendant que l'app tourne.
+
+**Depuis le lot 4 (2026-11-14)** : les pièces n'ont pas de poids moyen (abandonné au lot 4) et la liste de courses garde l'unité de la recette. L'estimation de prix emploie donc l'unité de la recette (g, ml, pièce), sauf l'œuf (une pièce vaut 50 g, règle du code existant).
 
 ---
 

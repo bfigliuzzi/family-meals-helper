@@ -92,7 +92,7 @@ Une demande explicite l'emporte sur une règle souple. Un bourguignon demandé c
 
 > **Note du 13/11/2026 (lot 2, décision de l'utilisateur).** Cette priorité tient au **prompt seul**. Le code ne devine pas quel plat la demande nomme. Tout constat de plafond (`meat`, `cured-meat`) ou de `same-protein` est renvoyé une fois à l'IA, avec la phrase « Si la demande nomme un de ces plats, garde-le et ajuste les autres. ». Si l'IA retire quand même le plat demandé, rien ne le signale. La vraie garantie, épingler un plat dans l'app pour que l'IA ne puisse pas le retirer, est prévue au lot 6. *Note du 17/11/2026 (lot 6.2) : livré. Le retrait d'un plat effectivement épinglé est refusé. Claude peut épingler un nouveau plat via `requested` ; un plat déjà présent doit être épinglé manuellement.* La version précédente (« il n'est jamais retiré à cause de ce plafond ») se lisait comme une garantie du code ; elle ne vaut plus depuis cette date. Une première version avait un détecteur de plat demandé dans le code ; elle a été supprimée parce qu'elle produisait des régressions.
 >
-> Les plafonds de budget de la demande sont reportés au lot 7 (§6.6).
+> Les plafonds de budget de la demande étaient reportés au lot 7 (§6.6). *Note du 21/11/2026 (lot 7) : livrés, par un champ « Budget max (€) » de l'écran Nouvelle session et par `--budget` en ligne de commande. « 60 € » écrit dans la demande ne compte pas : seul le champ fixe le plafond.*
 
 ### 5.2 La composition
 1. L'IA propose un menu : les plats, le jour prévu pour chacun, les accompagnements préparés le soir même. Pour chaque plat, elle donne aussi ses grandes phases (préparation, cuisson) avec durée, appareil et présence de l'utilisateur requise ou non.
@@ -203,7 +203,7 @@ Deux consignes vont seulement dans le prompt : la viande en quantité moindre qu
 - Le code donne, par groupe de catégories, une fourchette de quantité plausible par portion adulte, en poids cru. Par exemple, 100 à 200 g de viande (bœuf, porc, volaille). Elle se calcule par plat : le total du groupe divisé par 4 portions. Une quantité hors fourchette donne un constat `warning`. Les ingrédients de placard (sel, huile, farine…) ne comptent pas.
 - Ces fourchettes sont des bornes de vraisemblance pour attraper une erreur de l'IA, pas des recommandations nutritionnelles. Elles sont dans `packages/core/src/rules/quantity-table.ts`, par groupe et non par ingrédient du référentiel.
 - La viande, la volaille, la charcuterie, le poisson et les fruits de mer doivent être donnés en grammes : sinon, constat `error` (règle `menu-shape`), car les plafonds ne se calculent pas sans grammes. Les œufs se comptent en pièces (une pièce vaut 50 g).
-- **Budget** : si la demande fixe un plafond, un dépassement donne un constat `warning`. **Reporté au lot 7** (décision de l'utilisateur, 2026-11-13) : le coût vient avec les prix (§8), et il n'existe aucun constat de budget avant. Le plafond de la demande n'est pas encore contrôlé.
+- **Budget** : si la demande fixe un plafond, un dépassement donne un constat `warning`. *Note du 21/11/2026 (lot 7) : livré. L'énoncé « reporté au lot 7 » (décision de l'utilisateur du 13/11/2026), selon lequel le plafond de la demande n'était pas contrôlé, ne vaut plus depuis cette date.* Le constat `budget` (`checkBudget`, `packages/core/src/pricing/budget.ts`) est un `warning` : « Coût estimé 72,40 € pour un budget de 60,00 € : 12,40 € de trop. », ou « Coût estimé au moins … (3 prix inconnus, non comptés). ». Il compare le coût au plafond **en centimes arrondis**, les mêmes que ceux affichés. Il porte sur les prix connus : un prix manquant n'est pas compté, donc le total est une borne basse. Il est calculé **à part** de `checkMenu` : il ne part jamais à l'IA et ne compte pas pour choisir le meilleur essai. L'IA reçoit le plafond dans le prompt utilisateur, et la consigne d'éviter les produits chers dans le prompt système (toujours, plafond ou non). Le plafond se donne par le champ « Budget max (€) » (de 0,01 à 10 000 €) ou par `--budget` ; il n'est gardé ni dans l'historique ni entre deux lancements de l'app.
 
 ## 7. Ingrédients et liste de courses
 
@@ -245,28 +245,38 @@ Deux consignes vont seulement dans le prompt : la viande en quantité moindre qu
 Il n'existe pas d'API publique de prix pour les enseignes françaises, et les CGU des drives interdisent l'extraction de leurs données. Le coût affiché est donc un **ordre de grandeur**, assez précis pour comparer deux menus. La recherche détaillée est dans `docs/research/sources-prix.md`.
 
 **D'où vient le prix d'un ingrédient** : de la première source qui en a un, dans cet ordre.
-1. **La table de prix manuelle** de l'utilisateur : produit, prix, unité, date. Elle se modifie depuis la page ingrédients.
+1. **La table de prix manuelle** de l'utilisateur : produit, prix, unité, date. Elle se modifie depuis la page ingrédients (bouton « Mon prix »).
 2. **Open Prices** (Open Food Facts) :
-   - `core` télécharge le fichier `prices.jsonl.gz` (22 Mo) au plus une fois par semaine, en tâche de fond, à travers les ports ;
-   - il le lit ligne par ligne et ne garde que les magasins français et les 6 derniers mois ;
+   - ~~`core` télécharge le fichier `prices.jsonl.gz` (22 Mo) au plus une fois par semaine, en tâche de fond, à travers les ports ;~~ *Note du 21/11/2026 (lot 7) : ne vaut plus depuis cette date. C'est le Rust de l'app (`open_prices_download`) qui télécharge, et `core` lit les fichiers en flux dans la vue web (voir plus bas).*
+   - il lit le fichier ligne par ligne et ne garde que les magasins français et les 6 derniers mois ;
    - il ne stocke qu'un prix médian par ingrédient du référentiel ;
-   - on passe par ce fichier parce que l'API ne filtre pas par pays ;
+   - on passe par un fichier parce que l'API ne filtre pas par pays ;
    - la licence ODbL impose de citer la source dans l'app.
-3. **L'INSEE**, prix moyens de vente au détail : un fichier CSV de 62 produits (fruits, légumes, viandes).
+3. **L'INSEE**, prix moyens de vente au détail : un fichier CSV. ~~« de 62 produits (fruits, légumes, viandes) »~~ *Note du 21/11/2026 (lot 7) : ne vaut plus. Le fichier a 63 séries, dont 44 produits alimentaires (14 légumes, 8 fruits, 12 viandes, 9 poissons, le pain baguette), et 19 ingrédients du référentiel y sont reliés. Une table générée par `pnpm --filter core insee:import` est gardée dans le code (`src/pricing/insee-table.ts`).*
 4. Sinon, « prix inconnu », signalé dans le total.
 
 **Comment le coût est utilisé** :
 - La source de chaque prix est affichée.
 - Le coût est calculé après chaque proposition, pour l'affichage. Il n'entre pas dans la composition.
-- L'IA reçoit seulement la consigne d'éviter les produits chers, et le plafond de budget s'il est donné. *Lot 7 : au lot 2, aucun contrôle de budget n'existe (§6.6).*
+- L'IA reçoit seulement la consigne d'éviter les produits chers, et le plafond de budget s'il est donné (livré au lot 7, voir §6.6).
 - L'app fonctionne aussi sans données Open Prices.
+
+> **Note du 21/11/2026 (lot 7) : ce qui est livré.**
+> - **Clé de prix** : `forme|nom canonique` (par exemple `fresh|carotte`), la même clé que les cases cochées. La forme distingue le maïs en conserve du maïs frais. Les trois sources emploient cette clé.
+> - **Règle d'unité** : un prix ne s'applique que si l'unité correspond (g avec €/kg, ml avec €/L, pièce avec €/pièce). Sinon la ligne est « prix inconnu », avec la mention « prix connu seulement en €/kg » si une autre unité a un prix. Pas de conversion ml en g. **Exception : l'œuf**, dont une pièce vaut 50 g (§6.6).
+> - **Ligne et total** : une ligne n'est connue que si chaque unité de sa somme a un prix. Le total ne compte que les lignes connues (« au moins X € » sinon). Le placard n'est jamais compté.
+> - **Open Prices** : le Rust télécharge trois fichiers, `locations`, `prices` et `products` (environ 45 Mo), parce qu'une ligne de prix n'a ni pays ni poids du paquet : le pays est dans les lieux, le poids dans les produits. Un seul essai par jour, au lancement, si aucun résumé lisible n'existe ou s'il a 7 jours ou plus. La vue web lit les fichiers en flux (`DecompressionStream`), sur le fil principal, par morceaux de 512 Kio. Sont gardés : lieux de France métropolitaine, relevés en euros, 6 mois, sans doublon, prix hors promotion, paquets d'au moins 50 g ou 50 ml. Il faut au moins 3 relevés pour un prix ; le prix est la médiane. La correspondance ingrédient vers étiquettes Open Prices est écrite à la main (`open-prices-map.ts`) : 16 entrées par catégorie (13 fruits et légumes, l'œuf, le blanc et la cuisse de poulet) et 14 par code-barres ; au banc de mesure, 14 clés de chaque type ont eu assez de relevés. Le résumé (512 Kio au plus) est gardé dans la table `open_prices`. Une **garde de format** refuse un résumé qui a l'air d'une lecture ratée (lignes illisibles, trop peu de clés, chute par rapport à la semaine précédente) : les prix de la semaine précédente restent, et l'écran Ingrédients le dit.
+> - **Ordre de grandeur** : seuls les ingrédients de la carte ont un prix Open Prices ; beaucoup de lignes restent « prix inconnu ». Le détail de ce qui n'est pas couvert est dans la roadmap (lot 7).
+> - **CLI** : `compose` et `batch` n'emploient que l'INSEE ; elles ne lisent ni la table manuelle ni Open Prices.
+> - **Licences** : la fiche PDF et l'écran citent les sources employées (ODbL pour Open Prices, Licence Ouverte 2.0 pour l'INSEE).
 
 ## 9. Ce que l'outil produit
 
 **L'interface** :
 - **Nouvelle session** : la conversation avec l'IA, et le menu courant affiché à côté, mis à jour à chaque modification.
-- **Ingrédients** : la liste de courses par rayon, avec des cases à cocher, les coûts estimés et le total. *Note du 14/11/2026 (lot 4) : les rayons sont retirés ; tranché au lot 6.6 : l'écran reste alphabétique, sans rayon.* *Note du 17/11/2026 (lot 6.6) : livré, preuve hors ligne faite dans le .app signé (la démonstration payée du lot reste à faire) ; sans rayon ni coût (le coût arrive au lot 7). L'écran montre la liste du dernier menu validé seulement, par ordre alphabétique : le nom d'abord, puis la quantité et la répartition entre plats. Une case par ligne et une seule pour tout le placard. Les cases cochées sont gardées avec le menu dans l'historique.*
-- **Réglages** : les ingrédients à éviter, l'équipement, la clé d'API, le modèle, la table de prix. *Note du 15/11/2026 (lot 5) : livrés, trois sections. « Connexion à Claude » (clé d'API et modèle), « Aliments à éviter » et « Équipement ». L'enregistrement est immédiat. La table de prix arrive avec le lot 7. L'interface utilise Mantine.*
+- **Ingrédients** : la liste de courses par rayon, avec des cases à cocher, les coûts estimés et le total. *Note du 14/11/2026 (lot 4) : les rayons sont retirés ; tranché au lot 6.6 : l'écran reste alphabétique, sans rayon.* *Note du 17/11/2026 (lot 6.6) : livré, preuve hors ligne faite dans le .app signé (la démonstration payée du lot a été faite le 20/11/2026) ; sans rayon ni coût (le coût est venu au lot 7, voir la note suivante). L'écran montre la liste du dernier menu validé seulement, par ordre alphabétique : le nom d'abord, puis la quantité et la répartition entre plats. Une case par ligne et une seule pour tout le placard. Les cases cochées sont gardées avec le menu dans l'historique.* *Note du 21/11/2026 (lot 7) : le coût est livré. Chaque ligne affiche `≈ prix · prix unitaire · source` ou « prix inconnu » ; le total est en tête (« Coût estimé : 41,20 € », ou « au moins … · 3 prix inconnus ») ; le pied dit « Placard non compris » et cite les sources. Un bouton « Mon prix » par ligne ouvre une fenêtre pour saisir son propre prix (de 0,01 à 1 000 €, dans l'unité de la ligne, retirable) : il passe avant Open Prices et l'INSEE, pour ce produit sous cette forme. Le placard n'a ni coût ni bouton. Sous la liste, l'écran dit quel résumé Open Prices est en service, ou qu'il est en cours de téléchargement, ou pourquoi le dernier essai a échoué.*
+- **Réglages** : les ingrédients à éviter, l'équipement, la clé d'API, le modèle, la table de prix. *Note du 15/11/2026 (lot 5) : livrés, trois sections. « Connexion à Claude » (clé d'API et modèle), « Aliments à éviter » et « Équipement ». L'enregistrement est immédiat. La table de prix arrive avec le lot 7. L'interface utilise Mantine.* *Note du 21/11/2026 (lot 7) : la table de prix n'est pas dans Réglages. Elle se modifie depuis l'écran Ingrédients, ligne par ligne (« Mon prix »). Cette ligne de la conception ne vaut plus pour la table de prix.*
+- **Nouvelle session et coût** *(note du 21/11/2026, lot 7)* : le menu courant affiche « Coût estimé » avec les sources, et l'avertissement `budget` s'il y a dépassement, recalculés sans appel à l'IA quand les prix ou le champ « Budget max (€) » changent. Un montant invalide dans le champ bloque l'envoi jusqu'à correction.
 - **Historique** : les 5 derniers menus, avec leur PDF. *Note du 16/11/2026 (lot 6.5) : livré. Chaque entrée montre la date, la demande, les plats et un badge d'avertissement ; « Ouvrir la fiche » (Aperçu) et « Exporter dans Téléchargements ». Les plats des 5 derniers menus sont donnés à l'IA pour qu'elle ne les reprenne pas.*
 - L'utilisateur veut une app soignée : une interface propre et sobre.
 
@@ -288,6 +298,8 @@ Il n'existe pas d'API publique de prix pour les enseignes françaises, et les CG
 > - « Dans la semaine ».
 >
 > Plus de liste par rayon ni de boîtes de conservation (partie 3 de la liste ci-dessus : seulement les appareils).
+>
+> **Note du 21/11/2026 (lot 7).** La fiche gagne une ligne « Coût estimé : 41,20 € (placard non compris) » (ou « au moins … », ou « inconnu »), suivie de « Prix du 20/11/2026. Sources : … » avec les licences des sources employées (ODbL, Licence Ouverte 2.0). Le coût est calculé au clic sur « Valider ce menu », avec les prix du moment, et la fiche le garde : elle ne change plus ensuite, alors que l'écran Ingrédients recalcule. L'interligne de la fiche passe de 1,08 à 1,05 pour tenir en 2 pages.
 
 ## 10. Architecture
 
@@ -307,9 +319,11 @@ Il n'existe pas d'API publique de prix pour les enseignes françaises, et les CG
   > La raison : les plugins SQL et HTTP n'ont pas de portée assez fine. Le plugin SQL accepte n'importe quel chemin de base, et le plugin HTTP installe un proxy choisi par la vue web ; ils auraient laissé la vue web écrire dans n'importe quelle base ou envoyer la clé n'importe où. Aucun plugin SQL ni HTTP n'est installé.
   >
   > **Note du 16/11/2026 (lot 5 bis) :** le `.app` est signé par une identité Apple Development, passée par `APPLE_SIGNING_IDENTITY` à `tauri build` (le certificat auto-signé a été écarté). Constaté sur macOS 26.7.3, avec un certificat d'une Personal Team : A enregistre une clé ; B, de `CDHash` différent et de même exigence désignée, la lit deux fois sans demande d'accès, puis la supprime. `tauri dev` et un `.app` construit sans identité restent signés ad hoc : chaque recompilation y redemande l'accès, et une version ad hoc ne peut pas supprimer la clé d'une autre. La marche à suivre est dans `CLAUDE.md`.
+  >
+  > **Note du 21/11/2026 (lot 7) : le Rust gagne les commandes de prix.** `price_table_list`, `price_table_set` et `price_table_delete` (`price_table.rs`) pour la table manuelle ; `open_prices_load`, `open_prices_download`, `open_prices_read` et `open_prices_save` (`open_prices.rs`) pour Open Prices. Le téléchargement vient du Rust, vers l'hôte fixe `prices.openfoodfacts.org` (adresses, tailles et délais en constantes, jamais reçus de la vue web) ; il écrit les trois `.jsonl.gz` dans un dossier `open-prices/` à côté de la base, puis `open_prices_read` les rend par morceaux à la vue web, qui décompresse et calcule (`core`). Le Rust transmet les octets compressés sans les décompresser ni analyser le JSON. Pas de plugin SQL ni HTTP : même raison qu'au lot 5.
 - **React + Vite** pour l'interface. *Note du 15/11/2026 (lot 5) : Mantine pour les composants.*
 - **L'API Claude**, avec le SDK TypeScript officiel d'Anthropic. Les sorties de l'IA sont structurées et validées par des schémas **Zod**. Le modèle est configurable, `claude-sonnet-5-5` par défaut.
-- **SQLite** stocke les réglages, les exclusions, l'équipement, l'historique, la table de prix et le résumé Open Prices. La même interface pourra plus tard s'appuyer sur PostgreSQL. *Note du 15/11/2026 (lot 5) : les réglages sont un document JSON versionné (`version: 1`) dans une seule ligne, validé par `core`. Les autres tables arrivent avec les lots 6 et 7, par des commandes Rust.*
+- **SQLite** stocke les réglages, les exclusions, l'équipement, l'historique, la table de prix et le résumé Open Prices. La même interface pourra plus tard s'appuyer sur PostgreSQL. *Note du 15/11/2026 (lot 5) : les réglages sont un document JSON versionné (`version: 1`) dans une seule ligne, validé par `core`. Les autres tables arrivent avec les lots 6 et 7, par des commandes Rust.* *Note du 21/11/2026 (lot 7) : livrées. La base est en `user_version` 3 : `history` (lot 6.5a, version 2), puis `price_table` (un prix par clé `forme|nom canonique`, en centimes, avec une unité et une date) et `open_prices` (une seule ligne : jour du dernier essai de téléchargement, et résumé en JSON versionné, validé par `core`) au lot 7.2. Une app plus ancienne refuse cette base.*
 - **Vitest** pour les tests, concentrés sur `core`. *Note du 15/11/2026 (lot 5) : l'app a aussi ses tests Vitest (jsdom), et le Rust ses tests `cargo test`.*
 
 **Clé d'API et appels à Claude** :
@@ -331,16 +345,16 @@ packages/core/src/
   scheduling/    construction et vérification du planning
   ingredients/   référentiel, normalisation
   shopping/      liste de courses (ajouté au lot 4, note du 14/11/2026)
-  pricing/       sources de prix et estimation
+  pricing/       sources de prix et estimation : coût d'une liste de courses (`cost.ts`), règle `budget`, textes partagés (`cost-text.ts`), table INSEE générée (`insee-table.ts`, `insee-map.ts`), table manuelle (`manual.ts`), résumé Open Prices (`open-prices.ts`, `open-prices-map.ts`) et propriétaire des prix (`price-keeper.ts`) (lot 7, note du 21/11/2026)
   pdf/           description de la fiche PDF d'un menu validé (la fiche, sans effet de bord) ; le rendu en octets est dans `node/` pour la CLI et dans `apps/desktop/src/platform/pdf-renderer.ts` pour l'app (notes du 14/11 et du 17/11/2026)
   session/       conversation, menu courant, épingles et validation (lot 6.4 et 6.5b, note du 17/11/2026)
   history/       entrées de l'historique, cases cochées de l'écran Ingrédients (lot 6.5a et 6.6, note du 17/11/2026)
   settings/      document de réglages (schéma, validation, versions) et son propriétaire, `createSettingsKeeper` (ajouté au lot 5, note du 15/11/2026)
-  ports/         interfaces : stockage, HTTP, horloge, secrets (`SettingsStore` ; `SecretStore`, lecture réservée à l'appel à l'API ; `SecretAdmin`, présence, écriture et suppression sans lecture)
+  ports/         interfaces : stockage, HTTP, horloge, secrets (`SettingsStore` ; `SecretStore`, lecture réservée à l'appel à l'API ; `SecretAdmin`, présence, écriture et suppression sans lecture ; `PriceStore` et `OpenPricesStore`, lot 7)
   node/          implémentations Node des ports et commandes de développement (seul dossier, avec les tests, où Node est permis)
 apps/desktop/    Tauri + React : écrans et implémentations des ports
   src/platform/  implémentations des ports qui appellent les commandes Rust, et rendu PDF (lots 5 et 6)
-  src-tauri/src/ commandes Rust : réglages, trousseau, garde de navigation (lot 5), transport vers Claude `ai_send` (6.3), historique (6.5 et 6.6)
+  src-tauri/src/ commandes Rust : réglages, trousseau, garde de navigation (lot 5), transport vers Claude `ai_send` (6.3), historique (6.5 et 6.6), table de prix et Open Prices (lot 7)
 docs/research/   sources des règles (cuisine-addict, mangerbouger, prix)
 ```
 Les règles d'écriture de `core` (frontière du code pur, globales permises, heure par le port `Clock`) sont dans `docs/conventions-core.md`. Chaque module de `core` se teste seul. Les identifiants de code sont en anglais ; les textes affichés, le PDF et les docs sont en français.

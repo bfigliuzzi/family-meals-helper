@@ -3,7 +3,7 @@
 > **Rôle** : origine des choix de prix (§8 de la conception), qui fixe l'ordre des sources. Ce fichier donne les URL, les formats et les limites constatées de chaque source.
 > **Règle de lecture** : les marqueurs [TESTÉ], [LU] et [NON VÉRIFIÉ] indiquent le niveau de confiance ; revérifier un point [NON VÉRIFIÉ] avant de s'appuyer dessus.
 
-Date de la recherche : 12 novembre 2026. Mise à jour du 20 novembre 2026 (lot 7.0) : lecture complète du dump Open Prices et du CSV INSEE, section « Formats réels des fichiers » ; là où elle contredit le reste du fichier, elle l'emporte. Usage visé : un seul utilisateur, quelques requêtes par semaine, estimer le coût d'une liste de courses (fruits, légumes, viande, crèmerie, épicerie).
+Date de la recherche : 12 novembre 2026. Mise à jour du 20 novembre 2026 (lot 7.0) : lecture complète du dump Open Prices et du CSV INSEE, section « Formats réels des fichiers » ; là où elle contredit le reste du fichier, elle l'emporte. Mise à jour du 21 novembre 2026 (lot 7 livré) : import INSEE du 21 novembre, mesures du banc Open Prices (section C) et note sur ce que l'app a retenu (section « Recommandation »). Usage visé : un seul utilisateur, quelques requêtes par semaine, estimer le coût d'une liste de courses (fruits, légumes, viande, crèmerie, épicerie).
 
 ## Légende de vérification
 
@@ -340,6 +340,12 @@ Peu de relevés (moins de 3, donc sans prix) : artichaut, chou-fleur et cuisse d
 ## Recommandation
 
 ### MVP : trois niveaux, dans cet ordre
+
+> **Note du 21/11/2026 (lot 7 livré) : ce que l'app a retenu.** Les trois niveaux sont livrés, avec ces écarts par rapport au texte ci-dessous.
+> - **Niveau 1** : la table locale n'est pas un fichier YAML ou CSV mais la table `price_table` de la base de l'app, une ligne par clé `forme|nom canonique`, modifiée depuis l'écran Ingrédients (« Mon prix »). Elle ne contient que ce que l'utilisateur saisit : pas de prix de départ.
+> - **Niveau 2** : pas de requête par ingrédient. L'app télécharge chaque semaine les trois fichiers exportés (`locations`, `prices`, `products`, environ 45 Mo) et en tire un résumé local. Fruits et légumes passent par l'étiquette de catégorie ; les autres produits par le code-barres, joint à `products.jsonl.gz` pour le poids du paquet. La carte retenue est écrite dans `packages/core/src/pricing/open-prices-map.ts` (16 entrées par catégorie : 13 fruits et légumes, l'œuf, le blanc et la cuisse de poulet ; 14 par code-barres. Les « 14 clés utilisables » de la section C sont un résultat du banc de mesure, pas la taille de la carte) ; ce fichier fait foi, pas la liste de la section C, qui date du banc de mesure.
+> - **Niveau 3** : l'INSEE est une table générée dans le code (`packages/core/src/pricing/insee-table.ts`, par `pnpm --filter core insee:import`), reliée à 19 ingrédients du référentiel par `insee-map.ts`. **Import du 21/11/2026, données jusqu'à 2026-10** (fichier INSEE du 9 novembre). Elle se régénère à la main : l'app ne télécharge pas l'INSEE. Les séries approximatives (veau, filet mignon de porc, jambon blanc, crevette) ne sont pas reliées.
+> - Le pays se lit dans `locations.jsonl.gz` (la ligne de prix n'a pas de champ pays) ; un prix demande au moins 3 relevés.
 
 1. **Prix de référence local** (fichier YAML ou CSV, quelques dizaines de lignes). Fait la liste de courses même si le réseau est coupé, et couvre l'épicerie, les œufs, le lait, les pâtes, le riz, où ni l'INSEE ni les catégories d'Open Prices ne suffisent.
 2. **Open Prices** pour la mise à jour. Une requête par ingrédient, filtrée sur les lieux français et les 6 derniers mois (décision de l'utilisateur du 2026-11-20, à la place des 90 jours de la première recherche), en prenant la **médiane** des prix pour éviter qu'un relevé isolé fausse l'estimation. Pour fruits et légumes frais : `category_tag` (`en:carrots`...). Pour viande, crèmerie, épicerie : `product__categories_tags__contains` ou le code-barres. Garder le dernier prix et sa date, et afficher le nombre de relevés.
