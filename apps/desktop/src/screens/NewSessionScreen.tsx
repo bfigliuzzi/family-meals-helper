@@ -10,7 +10,7 @@ import {
   Title,
 } from "@mantine/core";
 import { SESSION_DAYS, SESSION_DAY_LABELS, isSessionBusy, monthName } from "core";
-import type { HistoryStore, Session, SettingsKeeper } from "core";
+import type { HistoryStore, PriceKeeper, Session, SettingsKeeper } from "core";
 import { useEffect, useId, useRef, useState } from "react";
 import { useSessionSnapshot } from "../useSessionSnapshot.ts";
 import { useSettingsSnapshot } from "../useSettingsSnapshot.ts";
@@ -33,11 +33,13 @@ export function NewSessionScreen({
   session,
   settings,
   history,
+  prices,
   onOpenSettings,
 }: {
   session: Session;
   settings: SettingsKeeper;
   history: HistoryStore;
+  prices: PriceKeeper;
   onOpenSettings: () => void;
 }) {
   const snapshot = useSessionSnapshot(session);
@@ -52,6 +54,12 @@ export function NewSessionScreen({
     setShownDinners(snapshot.dinners);
     setDinners(snapshot.dinners);
   }
+
+  // Champ « Budget max (€) » : le brouillon et son refus (`budgetInvalid`) vivent dans la session, qui survit au
+  // changement d'écran. L'écran ne garde que « l'erreur est-elle déjà montrée » : après une perte de focus ou un envoi
+  // refusé ; un retour sur l'écran avec un brouillon illisible la montre tout de suite.
+  const [budgetTouched, setBudgetTouched] = useState(snapshot.budgetInvalid);
+  const budgetField = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     settings.load();
@@ -190,6 +198,27 @@ export function NewSessionScreen({
                 <Text size="sm">{TEXTS.dinnersChanged}</Text>
               )}
             </Stack>
+            <NumberInput
+              ref={budgetField}
+              label={TEXTS.budgetLabel}
+              description={TEXTS.budgetHint}
+              decimalScale={2}
+              decimalSeparator=","
+              allowNegative={false}
+              hideControls
+              clampBehavior="none"
+              w={180}
+              disabled={busy}
+              value={snapshot.budgetDraft}
+              error={budgetTouched && snapshot.budgetInvalid ? TEXTS.budgetError : undefined}
+              onChange={(value) => {
+                session.setBudgetDraft(value);
+                if (!session.snapshot().budgetInvalid) setBudgetTouched(false);
+              }}
+              onBlur={() => {
+                setBudgetTouched(true);
+              }}
+            />
             <Text size="sm">Saison : {monthName(snapshot.month)}</Text>
           </Group>
           <Grid type="container" breakpoints={BREAKPOINTS}>
@@ -200,6 +229,10 @@ export function NewSessionScreen({
                   snapshot={snapshot}
                   settings={settingsSnapshot}
                   field={field}
+                  onBudgetBlocked={() => {
+                    setBudgetTouched(true);
+                    budgetField.current?.focus();
+                  }}
                   onOpenSettings={onOpenSettings}
                 />
                 <ExchangeList exchanges={snapshot.exchanges} />
@@ -210,6 +243,7 @@ export function NewSessionScreen({
                 snapshot={snapshot}
                 session={session}
                 settings={settings}
+                prices={prices}
                 field={field}
                 onOpenSettings={onOpenSettings}
               />

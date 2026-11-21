@@ -8,6 +8,7 @@ import type { Feature, Model } from "../ai/model.ts";
 import { renderBatchResult } from "../ai/render.ts";
 import { DetailSchema } from "../domain/detail.ts";
 import { HOUSEHOLD_EQUIPMENT } from "../equipment/household.ts";
+import { localDateText } from "../history/history.ts";
 import { buildIngredientIndex } from "../ingredients/index-lookup.ts";
 import { REFERENTIAL } from "../ingredients/referential.ts";
 import { unknownExclusionTerms } from "../rules/check-exclusions.ts";
@@ -117,7 +118,10 @@ export async function runBatchCommand(argv: readonly string[], io: BatchIo): Pro
     io.stderr(`${args.error}\n`);
     return 2;
   }
-  const month = args.month ?? monthOf(io.now());
+  // L'heure est lue une seule fois : le mois, le nom du fichier, le jour des prix de la fiche et la date de création
+  // du PDF sont ceux du même instant, même si la commande passe minuit.
+  const now = io.now();
+  const month = args.month ?? monthOf(now);
   const input = {
     request: args.request,
     exclusions: args.exclusions,
@@ -178,7 +182,7 @@ export async function runBatchCommand(argv: readonly string[], io: BatchIo): Pro
     io.stderr(`Police du PDF introuvable : ${describeError(error)}\n`);
     return 2;
   }
-  const target = io.resolveOutputTarget(args.out, io.now());
+  const target = io.resolveOutputTarget(args.out, now);
   const destinationError = await io.checkTarget(target);
   if (destinationError !== null) {
     io.stderr(`${destinationError}\n`);
@@ -203,6 +207,7 @@ export async function runBatchCommand(argv: readonly string[], io: BatchIo): Pro
     refs: REFERENTIAL,
     seasonTable: SEASON_TABLE,
     equipment: HOUSEHOLD_EQUIPMENT,
+    today: localDateText(now),
     onAttempt: (stage, number) => {
       io.stderr(
         `${stage === "compose" ? "Composition" : "Détail"}, essai ${number} sur ${input.maxAttempts} : vérification…\n`,
@@ -214,7 +219,7 @@ export async function runBatchCommand(argv: readonly string[], io: BatchIo): Pro
   let written: string | null = null;
   if (result.sheet !== null) {
     try {
-      const bytes = await renderPdf(result.sheet, fonts, io.now());
+      const bytes = await renderPdf(result.sheet, fonts, now);
       try {
         written = await io.writePdf(target, bytes);
       } catch (error) {

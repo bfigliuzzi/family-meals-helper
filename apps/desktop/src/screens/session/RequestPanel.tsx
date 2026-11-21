@@ -42,6 +42,7 @@ export function RequestPanel({
   snapshot,
   settings,
   field,
+  onBudgetBlocked,
   onOpenSettings,
 }: {
   session: Session;
@@ -49,6 +50,9 @@ export function RequestPanel({
   settings: SettingsSnapshot;
   // Le champ de la demande : l'écran le crée pour y rendre le focus après « Effacer ».
   field: RefObject<HTMLTextAreaElement | null>;
+  // La session refuse d'envoyer (`reason: "budget"` : le brouillon du budget est illisible) : l'écran montre l'erreur
+  // du champ et lui donne le focus.
+  onBudgetBlocked: () => void;
   onOpenSettings: () => void;
 }) {
   const [error, setError] = useState<string | undefined>(undefined);
@@ -59,6 +63,10 @@ export function RequestPanel({
   async function submit(event: SyntheticEvent) {
     event.preventDefault();
     const outcome = await session.send();
+    if (!outcome.ok && outcome.reason === "budget") {
+      onBudgetBlocked();
+      return;
+    }
     if (!outcome.ok && outcome.reason === "empty") {
       setError(revision ? TEXTS.reviseEmpty : TEXTS.requestEmpty);
     } else if (!outcome.ok && outcome.reason === "too-long") {

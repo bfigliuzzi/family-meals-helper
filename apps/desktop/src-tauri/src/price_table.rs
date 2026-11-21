@@ -11,7 +11,6 @@ use crate::settings_db::SettingsDb;
 const MAX_KEY_BYTES: usize = 200;
 const MAX_PRICE_CENTS: i64 = 100_000;
 const MAX_ROWS: i64 = 1000;
-const MIN_KEY_BYTES: usize = 3;
 const UNITS: [&str; 3] = ["kg", "l", "piece"];
 const FORMS: [&str; 4] = ["fresh", "canned", "frozen", "dry"];
 
@@ -29,10 +28,10 @@ pub struct ManualPriceRow {
     date: String,
 }
 
-// « forme|nom » : 3 à 200 octets, aucun caractère de contrôle ; la partie avant le premier `|` est une forme
+// « forme|nom » : 200 octets au plus, aucun caractère de contrôle ; la partie avant le premier `|` est une forme
 // connue, celle d'après n'est pas vide. Les mêmes règles qu'en core (pricing/manual.ts, `isValidManualKey`).
 fn check_key(key: &str) -> bool {
-    if !(MIN_KEY_BYTES..=MAX_KEY_BYTES).contains(&key.len()) || key.chars().any(char::is_control) {
+    if key.len() > MAX_KEY_BYTES || key.chars().any(char::is_control) {
         return false;
     }
     match key.split_once('|') {

@@ -1,6 +1,9 @@
 import { HOUSEHOLD_EQUIPMENT } from "../equipment/household.ts";
 import { buildIngredientIndex } from "../ingredients/index-lookup.ts";
 import { REFERENTIAL } from "../ingredients/referential.ts";
+import { menuCost } from "../pricing/cost.ts";
+import { inseeLookup } from "../pricing/insee.ts";
+import { INSEE_TABLE } from "../pricing/insee-table.ts";
 import { checkMenu } from "../rules/check-menu.ts";
 import { autumnDetail } from "../rules/fixtures/detail.ts";
 import { asReply, autumnMenu } from "../rules/fixtures/menus.ts";
@@ -29,6 +32,8 @@ export function fixtureSheetInput(mode: "detail" | "phases"): SheetInput {
     keeping: checked.keeping,
     index,
     equipment: HOUSEHOLD_EQUIPMENT,
+    // Date fixe : la fiche d'exemple reste la même d'un jour à l'autre.
+    cost: { cost: menuCost(menu, index, [inseeLookup(INSEE_TABLE)]), pricedOn: "2026-11-16" },
   } as const;
   if (mode === "phases") {
     if (checked.session === null) throw new Error("Le menu d'exemple n'a pas de planning.");

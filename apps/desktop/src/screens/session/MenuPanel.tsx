@@ -19,28 +19,47 @@ import {
   MAX_SESSION_MINUTES,
   RULE_LABELS,
   SESSION_DAY_LABELS,
+  MENU_COST_HINT,
+  REFERENTIAL,
   THAW_INSTRUCTION_FR,
+  budgetRespectedText,
+  buildIngredientIndex,
+  checkBudget,
   dishKey,
   dishLetter,
   durationText,
   isSessionBusy,
+  menuCost,
   monthName,
   printable,
+  sourcesNotice,
+  totalText,
 } from "core";
 import type {
   CurrentMenu,
   Dish,
   DishKeeping,
   Finding,
+  IngredientIndex,
   MenuIngredient,
+  PriceKeeper,
   Session,
   SessionSnapshot,
   SettingsKeeper,
 } from "core";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
+import { usePriceSnapshot } from "../../usePriceSnapshot.ts";
+import { INGREDIENTS_TEXTS } from "../ingredients/texts.ts";
 import { AvoidIngredient } from "./AvoidIngredient.tsx";
 import { plural, TEXTS, VALIDATE_TEXTS } from "./texts.ts";
+
+// Le référentiel ne change pas pendant que l'app tourne : l'index est construit une fois, au premier menu affiché.
+let referentialIndex: IngredientIndex | null = null;
+function indexOf(): IngredientIndex {
+  referentialIndex ??= buildIngredientIndex(REFERENTIAL);
+  return referentialIndex;
+}
 
 function capitalized(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
@@ -160,8 +179,13 @@ function DishCard({
   );
 }
 
-function FindingList({ current }: { current: CurrentMenu }) {
-  const { findings } = current.check;
+function FindingList({
+  current,
+  findings,
+}: {
+  current: CurrentMenu;
+  findings: readonly Finding[];
+}) {
   const sorted = [
     ...findings.filter((finding) => finding.level === "error"),
     ...findings.filter((finding) => finding.level !== "error"),
@@ -219,12 +243,14 @@ function ValidateBlock({
   snapshot,
   current,
   session,
+  prices,
   field,
   onOpenSettings,
 }: {
   snapshot: SessionSnapshot;
   current: CurrentMenu;
   session: Session;
+  prices: PriceKeeper;
   field: RefObject<HTMLTextAreaElement | null>;
   onOpenSettings: () => void;
 }) {
@@ -233,6 +259,8 @@ function ValidateBlock({
   const [notice, setNotice] = useState<string | null>(null);
   const busy = isSessionBusy(snapshot);
   const { blocked } = snapshot;
+  // La fiche garde le coût du clic : la validation attend la première lecture de la table de prix de l'utilisateur.
+  const pricesLoading = usePriceSnapshot(prices).manual.status === "loading";
 
   async function validate() {
     if (validating.current) return;
@@ -241,6 +269,7 @@ function ValidateBlock({
     try {
       const outcome = await session.validate();
       if (!outcome.ok && outcome.reason === "settings") setNotice(VALIDATE_TEXTS.settingsNotReady);
+      if (!outcome.ok && outcome.reason === "prices") setNotice(VALIDATE_TEXTS.pricesNotReady);
     } finally {
       validating.current = false;
     }
@@ -296,7 +325,7 @@ function ValidateBlock({
       <Box>
         <Button
           variant="filled"
-          disabled={busy}
+          disabled={busy || pricesLoading}
           onClick={(event) => {
             // Le second clic d'un double clic ne relance pas la validation.
             if (event.detail > 1) return;
@@ -306,6 +335,11 @@ function ValidateBlock({
           {VALIDATE_TEXTS.button}
         </Button>
       </Box>
+      {pricesLoading && (
+        <Text size="xs" c="dimmed">
+          {VALIDATE_TEXTS.pricesReading}
+        </Text>
+      )}
       <Text size="xs" c="dimmed">
         {VALIDATE_TEXTS.help}
       </Text>
@@ -319,6 +353,7 @@ function CurrentMenuView({
   current,
   session,
   settings,
+  prices,
   field,
   onOpenSettings,
 }: {
@@ -326,11 +361,25 @@ function CurrentMenuView({
   current: CurrentMenu;
   session: Session;
   settings: SettingsKeeper;
+  prices: PriceKeeper;
   field: RefObject<HTMLTextAreaElement | null>;
   onOpenSettings: () => void;
 }) {
   const [avoided, setAvoided] = useState<string | null>(null);
   const { check } = current;
+  const priceSnapshot = usePriceSnapshot(prices);
+  // Le coût suit les prix et le budget tout de suite, sans appel. Le constat `budget` est calculé ici, à part : il
+  // s'affiche mais n'entre jamais dans `check.findings`, qui part à l'IA à la modification suivante.
+  const cost = useMemo(
+    () => menuCost(current.menu, indexOf(), priceSnapshot.lookups),
+    [current.menu, priceSnapshot.lookups],
+  );
+  // Un brouillon illisible (`20000`) n'est pas un plafond : ni « respecté » ni constat tant qu'il n'est pas corrigé.
+  const shownBudget = snapshot.budgetInvalid ? null : snapshot.budget;
+  const budgetFinding = checkBudget(cost, shownBudget);
+  const shownFindings =
+    budgetFinding === null ? check.findings : [...check.findings, budgetFinding];
+  const sources = sourcesNotice(cost);
   const errors = countOf(check.findings, "error");
   const interrupted =
     current.stop === "technical-error" ||
@@ -340,12 +389,45 @@ function CurrentMenuView({
     <>
       <Group justify="space-between">
         <Title order={3}>{TEXTS.menuTitle}</Title>
-        <CountBadge findings={check.findings} />
+        <CountBadge findings={shownFindings} />
       </Group>
       <Text size="sm">
         Session le {SESSION_DAY_LABELS[current.sessionDay]} · saison : {monthName(current.month)}
       </Text>
       <Text size="sm">{sessionLine(current)}</Text>
+      <Text size="sm">
+        {totalText(cost)}
+        {budgetRespectedText(cost, shownBudget)}
+      </Text>
+      {priceSnapshot.manual.status === "error" && (
+        <Alert color="yellow" variant="light">
+          <Stack gap="xs" align="flex-start">
+            <Text size="sm">
+              {INGREDIENTS_TEXTS.manualUnreadable}
+              {priceSnapshot.manual.error === null
+                ? ""
+                : ` ${printable(priceSnapshot.manual.error)}`}
+            </Text>
+            <Button
+              variant="light"
+              size="xs"
+              onClick={() => {
+                void prices.load();
+              }}
+            >
+              {INGREDIENTS_TEXTS.retry}
+            </Button>
+          </Stack>
+        </Alert>
+      )}
+      <Text size="xs" c="dimmed">
+        {MENU_COST_HINT}
+      </Text>
+      {sources !== "" && (
+        <Text size="xs" c="dimmed">
+          {sources}
+        </Text>
+      )}
       {errors > 0 && (
         <Alert color="red" variant="light">
           Des erreurs restent après {current.attempts} {plural(current.attempts, "essai", "essais")}{" "}
@@ -388,7 +470,7 @@ function CurrentMenuView({
           ))}
         </Stack>
       )}
-      <FindingList current={current} />
+      <FindingList current={current} findings={shownFindings} />
       {check.seasonUnchecked.length > 0 && (
         <Text size="xs" c="dimmed">
           Saison non vérifiée pour : {check.seasonUnchecked.map(printable).join(", ")}.
@@ -407,6 +489,7 @@ function CurrentMenuView({
         snapshot={snapshot}
         current={current}
         session={session}
+        prices={prices}
         field={field}
         onOpenSettings={onOpenSettings}
       />
@@ -418,12 +501,14 @@ export function MenuPanel({
   snapshot,
   session,
   settings,
+  prices,
   field,
   onOpenSettings,
 }: {
   snapshot: SessionSnapshot;
   session: Session;
   settings: SettingsKeeper;
+  prices: PriceKeeper;
   // Le champ de la demande, pour « Écrire une modification ».
   field: RefObject<HTMLTextAreaElement | null>;
   onOpenSettings: () => void;
@@ -454,6 +539,7 @@ export function MenuPanel({
             current={current}
             session={session}
             settings={settings}
+            prices={prices}
             field={field}
             onOpenSettings={onOpenSettings}
           />

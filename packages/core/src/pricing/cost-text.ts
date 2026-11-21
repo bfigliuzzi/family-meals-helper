@@ -22,7 +22,7 @@ export function unitPriceText(unit: PriceUnit, euros: number): string {
 }
 
 // AAAA-MM-JJ → JJ/MM/AAAA.
-function dayText(day: string): string {
+export function dayText(day: string): string {
   const [year, month, date] = day.split("-");
   return `${date}/${month}/${year}`;
 }
@@ -75,6 +75,14 @@ export function totalText(cost: MenuCost): string {
   return `Coût estimé : au moins ${euroText(cost.total)} · ${unknownText(cost.unknown)}`;
 }
 
+// Le coût sur la fiche PDF, à la suite du mot « Coût estimé » : « : 41,20 € (placard non compris) », « : au moins
+// 41,20 € (3 prix inconnus, placard non compris) », « : inconnu (placard non compris) ».
+export function sheetCostText(cost: MenuCost): string {
+  if (cost.unknown === 0) return ` : ${euroText(cost.total)} (placard non compris)`;
+  if (cost.unknown === cost.lines.length) return " : inconnu (placard non compris)";
+  return ` : au moins ${euroText(cost.total)} (${unknownText(cost.unknown)}, placard non compris)`;
+}
+
 // Mention commune sous un total.
 export const COST_DISCLAIMER =
   "Placard non compris. Ordre de grandeur : moyennes de relevés en magasin, pas le prix de votre drive.";
@@ -90,6 +98,18 @@ export function sourcesNotice(cost: MenuCost): string {
   if (cost.sources.length === 0) return "";
   return `Sources : ${cost.sources.map((source) => SOURCE_NOTICES[source]).join(" · ")}.`;
 }
+
+// « Prix du 20/11/2026. Sources : … » sous le coût de la fiche ; sans source employée, la date seule.
+export function sheetPricesNotice(cost: MenuCost, pricedOn: string): string {
+  const notice = sourcesNotice(cost);
+  return notice === ""
+    ? `Prix du ${dayText(pricedOn)}.`
+    : `Prix du ${dayText(pricedOn)}. ${notice}`;
+}
+
+// Sous le coût du menu courant (avant validation).
+export const MENU_COST_HINT =
+  "Placard non compris. Le détail des prix par ligne est dans Ingrédients, après validation.";
 
 // Ligne du prompt utilisateur quand un plafond est donné. Appelée seulement avec un budget valide (`composeMenu` l'a
 // vérifié).

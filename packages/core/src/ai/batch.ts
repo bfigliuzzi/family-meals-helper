@@ -9,6 +9,9 @@ import { isAdmissible } from "../scheduling/check-detail.ts";
 import type { SessionPlan } from "../scheduling/plan-session.ts";
 import type { SeasonRow } from "../season/months.ts";
 import { buildSheetDocument } from "../pdf/sheet.ts";
+import { menuCost } from "../pricing/cost.ts";
+import { inseeLookup } from "../pricing/insee.ts";
+import { INSEE_TABLE } from "../pricing/insee-table.ts";
 import type { SheetSteps } from "../pdf/sheet.ts";
 import { composeMenu } from "./compose.ts";
 import type { ComposeInput, ComposeResult } from "./compose.ts";
@@ -133,6 +136,8 @@ export async function batchMenu(
     refs: readonly IngredientRef[];
     seasonTable: Readonly<Record<string, SeasonRow>>;
     equipment: Equipment;
+    // `AAAA-MM-JJ` : le jour des prix de la fiche (l'horloge est celle de l'appelant).
+    today: string;
     onAttempt?: (stage: "compose" | "detail", number: number) => void;
   },
 ): Promise<BatchResult> {
@@ -196,6 +201,11 @@ export async function batchMenu(
     steps,
     index,
     equipment: deps.equipment,
+    // La CLI n'a que la table INSEE (elle ne lit ni la base de l'app ni Open Prices).
+    cost: {
+      cost: menuCost(best.menu, index, [inseeLookup(INSEE_TABLE)]),
+      pricedOn: deps.today,
+    },
   });
   return { compose, detail, sheet, stoppedBecause: null, fallback, fallbackReason: reason };
 }

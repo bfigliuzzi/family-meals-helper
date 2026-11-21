@@ -1,6 +1,20 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createCheckKeeper, createPriceKeeper, createSession, createSettingsKeeper } from "core";
+import {
+  INSEE_TABLE,
+  MenuSchema,
+  REFERENTIAL,
+  buildIngredientIndex,
+  createCheckKeeper,
+  createPriceKeeper,
+  createSession,
+  createSettingsKeeper,
+  inseeLookup,
+  manualLookup,
+  menuCost,
+  sheetCostText,
+} from "core";
+import type { ManualPriceRow } from "core";
 import { describe, expect, it } from "vitest";
 import { App } from "./App.tsx";
 import { createKeychainSecretAdmin } from "./platform/keychain-secret-admin.ts";
@@ -20,13 +34,21 @@ import detailReply from "./test/fixtures/detail-reply.json";
 import menuReply from "./test/fixtures/menu-reply.json";
 import { renderWithMantine } from "./test/render.tsx";
 
-function setup(replies: string[] = [], detailReplies: string[] = []) {
+function setup(
+  replies: string[] = [],
+  detailReplies: string[] = [],
+  manualPrices: ManualPriceRow[] = [],
+  preparePrices: (prices: ReturnType<typeof fakePriceStore>) => void = () => undefined,
+) {
   const settings = fakeSettingsStore();
   const secrets = fakeSecretAdmin();
   const keeper = createSettingsKeeper(settings.store);
   const model = fakeMenuModel(replies, [], detailReplies);
   const history = fakeHistoryStore();
   const render = fakeRenderPdf();
+  const priceStore = fakePriceStore(manualPrices);
+  preparePrices(priceStore);
+  const prices = createPriceKeeper(priceStore.store, { clock: fixedClock });
   const session = createSession({
     settings: keeper,
     clock: fixedClock,
@@ -34,6 +56,10 @@ function setup(replies: string[] = [], detailReplies: string[] = []) {
     createModel: model.createModel,
     renderPdf: render.renderPdf,
     newToken: fakeNewToken(),
+    priceLookups: () => {
+      const snapshot = prices.snapshot();
+      return snapshot.manual.status === "loading" ? null : snapshot.lookups;
+    },
   });
   const services = {
     settings: keeper,
@@ -41,10 +67,11 @@ function setup(replies: string[] = [], detailReplies: string[] = []) {
     session,
     history: history.store,
     checks: createCheckKeeper(history.store),
-    prices: createPriceKeeper(fakePriceStore().store, { clock: fixedClock }),
+    prices,
   };
   const { unmount } = renderWithMantine(<App services={services} />);
   return {
+    priceStore,
     settings,
     secrets,
     model,
@@ -283,6 +310,8 @@ describe("aller-retour d'écran pendant une écriture", () => {
       return Promise.resolve((stored.value !== null) as T);
     };
     const history = fakeHistoryStore().store;
+    const priceStore = fakePriceStore();
+    const prices = createPriceKeeper(priceStore.store, { clock: fixedClock });
     const session = createSession({
       settings: keeper,
       clock: fixedClock,
@@ -290,6 +319,10 @@ describe("aller-retour d'écran pendant une écriture", () => {
       createModel: fakeMenuModel([]).createModel,
       renderPdf: fakeRenderPdf().renderPdf,
       newToken: fakeNewToken(),
+      priceLookups: () => {
+        const snapshot = prices.snapshot();
+        return snapshot.manual.status === "loading" ? null : snapshot.lookups;
+      },
     });
     renderWithMantine(
       <App
@@ -299,7 +332,7 @@ describe("aller-retour d'écran pendant une écriture", () => {
           session,
           history,
           checks: createCheckKeeper(history),
-          prices: createPriceKeeper(fakePriceStore().store, { clock: fixedClock }),
+          prices,
         }}
       />,
     );
@@ -555,5 +588,98 @@ describe("validation pendant un changement d'écran", () => {
   it("le badge « Version d'essai » est absent par défaut", () => {
     setup();
     expect(screen.queryByText(/Version d'essai/)).toBeNull();
+  });
+});
+
+describe("coût de la fiche", () => {
+  it("une validation complète produit un PDF dont la ligne « Coût estimé » emploie le prix de la table de l'utilisateur", async () => {
+    const manual: ManualPriceRow = {
+      key: "fresh|carotte",
+      unit: "kg",
+      cents: 300,
+      date: "2026-11-10",
+    };
+    const { user, render, history } = setup([MENU], [JSON.stringify(detailReply)], [manual]);
+    await screen.findByRole("button", { name: "Composer le menu" });
+    await user.type(screen.getByRole("textbox", { name: "Demande" }), "un bœuf bourguignon");
+    await user.click(screen.getByRole("button", { name: "Composer le menu" }));
+    await user.click(await screen.findByRole("button", { name: "Valider ce menu" }));
+    expect(await screen.findByRole("heading", { name: "Menu validé" })).toBeTruthy();
+    expect(history.added).toHaveLength(1);
+    expect(render.calls).toHaveLength(1);
+    const text = JSON.stringify(render.calls[0]!.doc.content);
+    const expected = sheetCostText(
+      menuCost(MenuSchema.parse(menuReply), buildIngredientIndex(REFERENTIAL), [
+        manualLookup([manual]),
+        inseeLookup(INSEE_TABLE),
+      ]),
+    );
+    expect(text).toContain("Coût estimé");
+    expect(text).toContain(expected);
+    expect(text).toContain("Prix du 16/11/2026. Sources : votre table de prix · INSEE");
+  });
+});
+
+describe("budget et table de prix à travers les écrans", () => {
+  const BUDGET_ERROR = "Entrez un montant supérieur à 0 et au plus 10 000 €, ou laissez vide.";
+  const budgetField = () => screen.getByRole<HTMLInputElement>("textbox", { name: /^Budget max/ });
+
+  it("20000 tapé caractère par caractère, Historique puis retour : le champ montre 20000 et l'erreur ; l'envoi est refusé ; corrigé en 200, il part", async () => {
+    const { user, model } = setup([MENU]);
+    await screen.findByRole("button", { name: "Composer le menu" });
+    await user.type(budgetField(), "20000");
+    await user.type(screen.getByRole("textbox", { name: "Demande" }), "un bœuf bourguignon");
+    await user.click(nav("Historique"));
+    await user.click(nav("Nouvelle session"));
+    expect(budgetField().value).toBe("20000");
+    expect(screen.getByText(BUDGET_ERROR)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Composer le menu" }));
+    expect(model.calls).toHaveLength(0);
+    expect(screen.getByText(BUDGET_ERROR)).toBeTruthy();
+    expect(document.activeElement).toBe(budgetField());
+    await user.clear(budgetField());
+    await user.type(budgetField(), "200");
+    expect(screen.queryByText(BUDGET_ERROR)).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Composer le menu" }));
+    await screen.findByRole("button", { name: "Valider ce menu" });
+    expect(model.calls).toHaveLength(1);
+    expect(model.calls[0]?.user).toContain("Budget maximum : 200,00 €");
+  });
+
+  it("lecture de la table de prix différée : « Valider ce menu » est désactivé, puis actif ; la fiche cite « votre table de prix »", async () => {
+    const manual: ManualPriceRow = {
+      key: "fresh|carotte",
+      unit: "kg",
+      cents: 300,
+      date: "2026-11-10",
+    };
+    const { user, render, priceStore } = setup(
+      [MENU],
+      [JSON.stringify(detailReply)],
+      [manual],
+      (store) => {
+        store.state.holdList = true;
+      },
+    );
+    await screen.findByRole("button", { name: "Composer le menu" });
+    await user.type(screen.getByRole("textbox", { name: "Demande" }), "un bœuf bourguignon");
+    await user.click(screen.getByRole("button", { name: "Composer le menu" }));
+    const validate = await screen.findByRole<HTMLButtonElement>("button", {
+      name: "Valider ce menu",
+    });
+    expect(validate.disabled).toBe(true);
+    expect(screen.getByText("Lecture de votre table de prix…")).toBeTruthy();
+    await waitFor(() => {
+      expect(priceStore.heldLists).toHaveLength(1);
+    });
+    priceStore.heldLists[0]!();
+    await waitFor(() => {
+      expect(
+        screen.getByRole<HTMLButtonElement>("button", { name: "Valider ce menu" }).disabled,
+      ).toBe(false);
+    });
+    await user.click(screen.getByRole("button", { name: "Valider ce menu" }));
+    expect(await screen.findByRole("heading", { name: "Menu validé" })).toBeTruthy();
+    expect(JSON.stringify(render.calls[0]!.doc.content)).toContain("votre table de prix");
   });
 });

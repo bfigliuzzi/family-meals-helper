@@ -2,6 +2,9 @@ import { HOUSEHOLD_EQUIPMENT } from "../equipment/household.ts";
 import { describe, expect, it } from "vitest";
 import type { Equipment } from "../equipment/household.ts";
 import { buildIngredientIndex } from "../ingredients/index-lookup.ts";
+import { menuCost } from "../pricing/cost.ts";
+import { inseeLookup } from "../pricing/insee.ts";
+import { INSEE_TABLE } from "../pricing/insee-table.ts";
 import { REFERENTIAL } from "../ingredients/referential.ts";
 import { autumnCyclicDetail, autumnDetail, autumnDetailLasting } from "../rules/fixtures/detail.ts";
 import { asReply, autumnMenu } from "../rules/fixtures/menus.ts";
@@ -14,6 +17,8 @@ import { renderBatchResult } from "./render.ts";
 import type { BatchResult } from "./batch.ts";
 import type { ComposeInput } from "./compose.ts";
 import type { Model, ModelReply, TokenUsage } from "./model.ts";
+
+const TODAY = "2026-11-20";
 
 const usage: TokenUsage = { input: 100, output: 50, cacheRead: 0, cacheWrite: 0 };
 
@@ -61,6 +66,7 @@ function run(
     refs: REFERENTIAL,
     seasonTable: SEASON_TABLE,
     equipment,
+    today: TODAY,
     onAttempt: (stage, number) => stages.push(`${stage}${number}`),
   });
   return { result, composeFake, detailFake, stages };
@@ -100,6 +106,16 @@ describe("batchMenu : de bout en bout", () => {
     expect(text).toContain("1. Lancer les cuissons longues");
     expect(text).toContain("600 g de poireau");
     expect(text).not.toContain("Attention");
+  });
+
+  it("la fiche porte le coût estimé avec la table INSEE seule, et le jour donné par `today`", async () => {
+    const { result: pending } = run([menuReply()], [detailReply()]);
+    const text = textOf(await pending);
+    expect(text).toContain("Coût estimé");
+    expect(text).toMatch(/Coût estimé\s+: (au moins )?\d+,\d{2} € \(/);
+    expect(text).toContain("Prix du 20/11/2026. Sources : INSEE, prix moyens de vente au détail");
+    expect(text).not.toContain("votre table");
+    expect(text).not.toContain("ODbL");
   });
 
   it("garde le menu composé tel quel, quel que soit le détail", async () => {
@@ -253,6 +269,7 @@ describe("batchMenu : pas de PDF", () => {
         refs: REFERENTIAL,
         seasonTable: SEASON_TABLE,
         equipment: HOUSEHOLD_EQUIPMENT,
+        today: TODAY,
       },
     );
     // Les exclusions sont données au prompt du détail.
@@ -322,6 +339,7 @@ describe("batchMenu : le même index", () => {
       refs,
       seasonTable: SEASON_TABLE,
       equipment: HOUSEHOLD_EQUIPMENT,
+      today: TODAY,
     });
     expect(result.detail?.best?.findings).toEqual([]);
     expect(result.detail?.stop).toBe("valid");
@@ -345,6 +363,10 @@ describe("batchMenu : le même index", () => {
       },
       index: buildIngredientIndex(refs),
       equipment: HOUSEHOLD_EQUIPMENT,
+      cost: {
+        cost: menuCost(best.menu!, buildIngredientIndex(refs), [inseeLookup(INSEE_TABLE)]),
+        pricedOn: TODAY,
+      },
     });
     expect(allText(rebuilt.content)).toBe(text);
   });

@@ -13,6 +13,7 @@ import { checkDetail } from "../scheduling/check-detail.ts";
 import { SEASON_TABLE } from "../season/season-table.ts";
 import { buildSheetDocument } from "./sheet.ts";
 import type { SheetInput } from "./sheet.ts";
+import type { LineCost, MenuCost } from "../pricing/cost.ts";
 
 const index = buildIngredientIndex(REFERENTIAL);
 const ctx: CheckContext = {
@@ -40,6 +41,7 @@ function detailInput(menu: Menu, detail: Detail): SheetInput {
     steps: { kind: "detail", detail, plan: check.plan, findings: check.findings },
     index,
     equipment: HOUSEHOLD_EQUIPMENT,
+    cost: null,
   };
 }
 
@@ -57,6 +59,7 @@ function phasesInput(menu: Menu): SheetInput {
     },
     index,
     equipment: HOUSEHOLD_EQUIPMENT,
+    cost: null,
   };
 }
 
@@ -216,6 +219,55 @@ describe("buildSheetDocument : ingrédients", () => {
     expect(text).toContain("Cookeo (appoint)");
     expect(text).toContain("100 g de pintade (b) · à confirmer");
     expect(text).toContain("à confirmer : absent du référentiel");
+  });
+});
+
+describe("buildSheetDocument : coût estimé", () => {
+  const unknownLines = (count: number): LineCost[] =>
+    Array.from({ length: count }, (_, at) => ({
+      key: `fresh|x${String(at)}`,
+      parts: [],
+      euros: null,
+      otherUnits: [],
+    }));
+  const withCost = (cost: MenuCost): string =>
+    textOf({ ...detailInput(menu, detail), cost: { cost, pricedOn: "2026-11-20" } });
+
+  it("n'imprime rien sans coût", () => {
+    expect(full).not.toContain("Coût estimé");
+    expect(full).not.toContain("Prix du");
+  });
+  it("imprime la ligne de coût après « Appareils » et la date des prix avec les sources employées", () => {
+    const text = withCost({ lines: [], total: 41.2, unknown: 0, sources: ["insee"] });
+    expect(text).toContain("Coût estimé\n : 41,20 € (placard non compris)");
+    expect(text).toContain(
+      "Prix du 20/11/2026. Sources : INSEE, prix moyens de vente au détail, Licence Ouverte 2.0.",
+    );
+    expect(text.indexOf("Appareils")).toBeLessThan(text.indexOf("Coût estimé"));
+  });
+  it("une fiche INSEE seule ne cite ni ODbL ni « votre table » ; sans inconnu, pas de « au moins »", () => {
+    const text = withCost({ lines: [], total: 41.2, unknown: 0, sources: ["insee"] });
+    expect(text).not.toContain("ODbL");
+    expect(text).not.toContain("votre table");
+    expect(text).not.toContain("au moins");
+  });
+  it("cite les trois sources et « au moins » quand il y a des prix inconnus", () => {
+    const text = withCost({
+      lines: unknownLines(8),
+      total: 12.5,
+      unknown: 3,
+      sources: ["manual", "open-prices", "insee"],
+    });
+    expect(text).toContain(" : au moins 12,50 € (3 prix inconnus, placard non compris)");
+    expect(text).toContain(
+      "Sources : votre table de prix · Open Prices (Open Food Facts), licence ODbL · INSEE, prix moyens de vente au détail, Licence Ouverte 2.0.",
+    );
+  });
+  it("sans source employée, la date des prix seule", () => {
+    const text = withCost({ lines: unknownLines(2), total: 0, unknown: 2, sources: [] });
+    expect(text).toContain(" : inconnu (placard non compris)");
+    expect(text).toContain("Prix du 20/11/2026.");
+    expect(text).not.toContain("Sources :");
   });
 });
 

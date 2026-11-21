@@ -60,6 +60,7 @@ function listOnly(list: () => Promise<HistoryRow[]>): HistoryStore {
 const unusedValidation = {
   renderPdf: () => Promise.reject(new Error("jamais appelé")),
   newToken: () => "jamais-appele",
+  priceLookups: () => [],
 };
 
 const emptyHistory = listOnly(() => Promise.resolve([]));
@@ -660,6 +661,124 @@ describe("champs", () => {
     expect(snapshotOf(h).dinners).toBe(3);
   });
 
+  it("`setBudgetDraft(60)` : la ligne de budget part dans le prompt ; vide : budget `null`, aucune ligne", async () => {
+    const h = await harness([valid()]);
+    expect(snapshotOf(h).budget).toBeNull();
+    expect(snapshotOf(h).budgetDraft).toBe("");
+    expect(snapshotOf(h).budgetInvalid).toBe(false);
+    h.session.setBudgetDraft(60);
+    expect(snapshotOf(h).budget).toBe(60);
+    expect(snapshotOf(h).budgetDraft).toBe(60);
+    await h.say(FIRST);
+    expect(h.calls[0]?.user).toContain(
+      "Budget maximum : 60,00 € pour toute la liste de courses (placard non compris).",
+    );
+    h.session.setBudgetDraft("");
+    expect(snapshotOf(h).budget).toBeNull();
+    expect(snapshotOf(h).budgetInvalid).toBe(false);
+    await h.say("sans le navet");
+    expect(h.calls[1]?.user).not.toContain("Budget maximum");
+  });
+
+  it("`setBudgetDraft` lit « 45, » comme 45 et « 45,5 » comme 45,5, en gardant le texte tel quel", async () => {
+    const h = await harness([valid()]);
+    h.session.setBudgetDraft("45,");
+    expect(snapshotOf(h)).toMatchObject({ budget: 45, budgetDraft: "45,", budgetInvalid: false });
+    h.session.setBudgetDraft("45,5");
+    expect(snapshotOf(h)).toMatchObject({
+      budget: 45.5,
+      budgetDraft: "45,5",
+      budgetInvalid: false,
+    });
+  });
+
+  it("un brouillon illisible garde la dernière valeur lisible et refuse l'envoi : 2000 puis 20000", async () => {
+    const h = await harness([valid()]);
+    for (const text of ["2", "20", "200", "2000", "20000"]) h.session.setBudgetDraft(text);
+    expect(snapshotOf(h)).toMatchObject({
+      budget: 2000,
+      budgetDraft: "20000",
+      budgetInvalid: true,
+    });
+    h.session.setDraft(FIRST);
+    const before = snapshotOf(h);
+    expect(await h.session.send()).toEqual({ ok: false, reason: "budget" });
+    expect(snapshotOf(h)).toBe(before);
+    expect(h.created()).toBe(0);
+    expect(h.calls).toHaveLength(0);
+    h.session.setBudgetDraft("200");
+    expect(snapshotOf(h)).toMatchObject({ budget: 200, budgetInvalid: false });
+    expect(await h.session.send()).toEqual({ ok: true });
+    expect(h.calls[0]?.user).toContain("Budget maximum : 200,00 €");
+  });
+
+  it("`setBudgetDraft` : 0, -1, NaN, l'infini et 10000,01 sont illisibles ; 0,01 et 10000 passent", async () => {
+    const h = await harness([valid()]);
+    h.session.setBudgetDraft(60);
+    for (const value of [
+      0,
+      -1,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      10000.01,
+      0.004,
+      "abc",
+      "0",
+    ]) {
+      h.session.setBudgetDraft(value);
+      expect(snapshotOf(h)).toMatchObject({ budget: 60, budgetInvalid: true });
+    }
+    h.session.setBudgetDraft(0.01);
+    expect(snapshotOf(h)).toMatchObject({ budget: 0.01, budgetInvalid: false });
+    h.session.setBudgetDraft(10000);
+    expect(snapshotOf(h)).toMatchObject({ budget: 10000, budgetInvalid: false });
+  });
+
+  it("`setBudgetDraft` est ignoré pendant un appel ; un même brouillon ne republie pas", async () => {
+    const h = await harness([valid()], { hold: true });
+    h.session.setBudgetDraft(60);
+    const same = snapshotOf(h);
+    h.session.setBudgetDraft(60);
+    expect(snapshotOf(h)).toBe(same);
+    h.session.setDraft(FIRST);
+    const sending = h.session.send();
+    h.session.setBudgetDraft(80);
+    h.session.setBudgetDraft("20000");
+    expect(snapshotOf(h)).toMatchObject({ budget: 60, budgetDraft: 60, budgetInvalid: false });
+    await vi.waitFor(() => {
+      expect(h.calls).toHaveLength(1);
+    });
+    h.release(0);
+    await sending;
+    h.session.setBudgetDraft(80);
+    expect(snapshotOf(h).budget).toBe(80);
+  });
+
+  it("le budget de la composition est celui du clic, pas celui d'un changement fait pendant l'appel", async () => {
+    const h = await harness([valid()], { hold: true });
+    h.session.setBudgetDraft(60);
+    h.session.setDraft(FIRST);
+    const sending = h.session.send();
+    h.session.setBudgetDraft(500);
+    await vi.waitFor(() => {
+      expect(h.calls).toHaveLength(1);
+    });
+    h.release(0);
+    await sending;
+    expect(h.calls[0]?.user).toContain("Budget maximum : 60,00 €");
+    expect(h.calls[0]?.user).not.toContain("500,00");
+  });
+
+  it("le constat « budget » ne rejoint jamais `check.findings` du menu courant, même avec un budget dépassé", async () => {
+    const h = await harness([valid()]);
+    h.session.setBudgetDraft(0.01);
+    await h.say(FIRST);
+    await h.say("sans le navet");
+    expect(snapshotOf(h).current?.check.findings.some((finding) => finding.rule === "budget")).toBe(
+      false,
+    );
+  });
+
   it("le mois est lu sur l'horloge au moment du clic ; le jour de session part dans le prompt", async () => {
     let date = new Date(2026, 9, 3);
     const h = await harness([valid()], { clock: { now: () => date } });
@@ -673,10 +792,25 @@ describe("champs", () => {
     expect(snapshotOf(h).current?.sessionDay).toBe("sat");
   });
 
+  it("`reset` garde aussi un brouillon de budget illisible : l'envoi reste refusé", async () => {
+    const h = await harness([valid()]);
+    h.session.setBudgetDraft("2000");
+    h.session.setBudgetDraft("20000");
+    h.session.reset();
+    expect(snapshotOf(h)).toMatchObject({
+      budget: 2000,
+      budgetDraft: "20000",
+      budgetInvalid: true,
+    });
+    h.session.setDraft(FIRST);
+    expect(await h.session.send()).toEqual({ ok: false, reason: "budget" });
+  });
+
   it("`reset` efface la conversation, le menu et les épingles ; garde le jour, les dîners et `outcomes`", async () => {
     const h = await harness([valid({ requested: [B] })]);
     h.session.setSessionDay("fri");
     h.session.setDinners(3);
+    h.session.setBudgetDraft("45,5");
     await h.say(FIRST);
     h.session.setDraft("brouillon");
     h.session.reset();
@@ -688,6 +822,7 @@ describe("champs", () => {
     expect(snap.failure).toBeNull();
     expect(snap.sessionDay).toBe("fri");
     expect(snap.dinners).toBe(3);
+    expect(snap).toMatchObject({ budget: 45.5, budgetDraft: "45,5", budgetInvalid: false });
     expect(snap.outcomes).toBe(1);
   });
 });

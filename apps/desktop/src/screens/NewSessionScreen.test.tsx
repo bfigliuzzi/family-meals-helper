@@ -3,7 +3,21 @@
 // par un script jetable.
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MenuReplySchema, createSession, createSettingsKeeper } from "core";
+import {
+  INSEE_TABLE,
+  MenuReplySchema,
+  MenuSchema,
+  REFERENTIAL,
+  buildIngredientIndex,
+  checkBudget,
+  createPriceKeeper,
+  createSession,
+  createSettingsKeeper,
+  inseeLookup,
+  menuCost,
+  sourcesNotice,
+  totalText,
+} from "core";
 import type { Model, SessionDeps, Settings } from "core";
 import { StrictMode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -12,6 +26,7 @@ import {
   fakeHistoryStore,
   fakeMenuModel,
   fakeNewToken,
+  fakePriceStore,
   fakeRenderPdf,
   fakeSettingsStore,
   fixedClock,
@@ -40,6 +55,7 @@ interface Options {
   stopReasons?: (string | null)[];
   detailReplies?: string[];
   strict?: boolean;
+  preparePrices?: (prices: ReturnType<typeof fakePriceStore>) => void;
 }
 
 function setup(replies: string[], options: Options = {}) {
@@ -49,6 +65,11 @@ function setup(replies: string[], options: Options = {}) {
   const model = fakeMenuModel(replies, options.stopReasons, options.detailReplies);
   const history = fakeHistoryStore();
   const render = fakeRenderPdf();
+  const priceStore = fakePriceStore();
+  options.preparePrices?.(priceStore);
+  const prices = createPriceKeeper(priceStore.store, { clock: fixedClock });
+  // Comme `App` au montage : sans lecture de la table de prix, « Valider ce menu » reste désactivé.
+  void prices.load();
   const session = createSession({
     settings: keeper,
     clock: fixedClock,
@@ -56,6 +77,7 @@ function setup(replies: string[], options: Options = {}) {
     createModel: options.createModel ?? model.createModel,
     renderPdf: render.renderPdf,
     newToken: fakeNewToken(),
+    priceLookups: () => prices.snapshot().lookups,
   });
   const onOpenSettings = vi.fn();
   const screenElement = (
@@ -63,6 +85,7 @@ function setup(replies: string[], options: Options = {}) {
       session={session}
       settings={keeper}
       history={history.store}
+      prices={prices}
       onOpenSettings={onOpenSettings}
     />
   );
@@ -72,6 +95,8 @@ function setup(replies: string[], options: Options = {}) {
   return {
     settings,
     keeper,
+    priceStore,
+    prices,
     model,
     history,
     render,
@@ -617,5 +642,277 @@ describe("refus d'un doublon", () => {
     const message = await screen.findByText(/est déjà dans la liste/);
     expect(message.textContent).toContain("poireau");
     expect(message.textContent).not.toMatch(/[\u202e\u200b]/);
+  });
+});
+
+const BUDGET_ERROR = "Entrez un montant supérieur à 0 et au plus 10 000 €, ou laissez vide.";
+const budgetField = () => screen.getByRole<HTMLInputElement>("textbox", { name: /^Budget max/ });
+// Le coût du menu d'exemple, avec la seule table INSEE : la table de l'utilisateur n'est pas lue dans ces tests.
+const MENU_COST = menuCost(MenuSchema.parse(menuReply), buildIngredientIndex(REFERENTIAL), [
+  inseeLookup(INSEE_TABLE),
+]);
+
+describe("menu courant : coût et budget", () => {
+  it("affiche la ligne de coût exacte, la mention et les sources, sans budget", async () => {
+    const { user } = setup([MENU]);
+    await ready();
+    await say(user, "un menu");
+    expect(screen.getByText(totalText(MENU_COST))).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Placard non compris. Le détail des prix par ligne est dans Ingrédients, après validation.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText(sourcesNotice(MENU_COST))).toBeTruthy();
+    expect(screen.queryByText(/budget de/)).toBeNull();
+    expect(screen.getByText("Aucun constat détecté")).toBeTruthy();
+  });
+
+  it("budget de 1 € et menu plus cher : 1 avertissement, le constat exact, « Valider ce menu » reste actif", async () => {
+    const { user, session } = setup([MENU]);
+    await ready();
+    await user.type(budgetField(), "1");
+    await say(user, "un menu");
+    const finding = checkBudget(MENU_COST, 1);
+    expect(finding).not.toBeNull();
+    expect(screen.getByText("1 avertissement")).toBeTruthy();
+    expect(screen.getByText((content) => content === `budget : ${finding!.message}`)).toBeTruthy();
+    expect(finding!.message).toMatch(
+      /^Coût estimé (au moins )?[\d,]+ € pour un budget de 1,00 € : /,
+    );
+    expect(
+      screen.getByRole<HTMLButtonElement>("button", { name: "Valider ce menu" }).disabled,
+    ).toBe(false);
+    expect(session.snapshot().current?.check.findings.some((f) => f.rule === "budget")).toBe(false);
+  });
+
+  it("budget de 1 000 € : « respecté sur les prix connus », aucun constat", async () => {
+    const { user } = setup([MENU]);
+    await ready();
+    await user.type(budgetField(), "1000");
+    await say(user, "un menu");
+    expect(MENU_COST.unknown).toBeGreaterThan(0);
+    expect(
+      screen.getByText(
+        `${totalText(MENU_COST)} · budget de 1000,00 € respecté sur les prix connus`,
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText("Aucun constat détecté")).toBeTruthy();
+  });
+
+  it("changer le budget met le constat à jour tout de suite, sans appel au modèle", async () => {
+    const { user, model } = setup([MENU]);
+    await ready();
+    await say(user, "un menu");
+    expect(model.calls).toHaveLength(1);
+    await user.type(budgetField(), "1");
+    expect(screen.getByText("1 avertissement")).toBeTruthy();
+    await user.clear(budgetField());
+    await user.type(budgetField(), "1000");
+    expect(screen.queryByText("1 avertissement")).toBeNull();
+    expect(screen.getByText(/budget de 1000,00 € respecté/)).toBeTruthy();
+    await user.clear(budgetField());
+    expect(screen.queryByText(/budget de/)).toBeNull();
+    expect(model.calls).toHaveLength(1);
+  });
+
+  it("un budget dépassé s'affiche sans entrer dans `check.findings`, et le prompt de modification ne donne que le plafond", async () => {
+    const { user, model, session } = setup([MENU]);
+    await ready();
+    await user.type(budgetField(), "1");
+    await say(user, "un menu");
+    expect(screen.getByText("1 avertissement")).toBeTruthy();
+    expect(session.snapshot().current?.check.findings.some((f) => f.rule === "budget")).toBe(false);
+    await say(user, "sans navet");
+    expect(session.snapshot().current?.check.findings.some((f) => f.rule === "budget")).toBe(false);
+    expect(model.calls[1]?.user).toContain("Budget maximum : 1,00 €");
+    expect(model.calls[1]?.user).not.toContain("de trop");
+  });
+
+  it("un brouillon illisible (20000, session à 2000) : ni « respecté » ni constat ; corrigé en 20, le constat revient", async () => {
+    const { user, session } = setup([MENU]);
+    await ready();
+    await say(user, "un menu");
+    // 2000 € : « respecté » ; puis le brouillon devient 20000, illisible, et la session garde 2000.
+    await user.type(budgetField(), "2000");
+    expect(screen.getByText(/budget de 2000,00 € respecté/)).toBeTruthy();
+    await user.type(budgetField(), "0");
+    expect(session.snapshot()).toMatchObject({ budget: 2000, budgetInvalid: true });
+    expect(screen.queryByText(/respecté/)).toBeNull();
+    expect(screen.queryByText("1 avertissement")).toBeNull();
+    // On corrige en 1 € : le brouillon redevient lisible, le constat revient.
+    await user.clear(budgetField());
+    await user.type(budgetField(), "1");
+    expect(session.snapshot()).toMatchObject({ budget: 1, budgetInvalid: false });
+    expect(screen.getByText("1 avertissement")).toBeTruthy();
+  });
+});
+
+describe("champ « Budget max (€) »", () => {
+  it("taper 20000 puis envoyer : aucun appel, l'erreur du champ, le focus sur le champ ; corriger en 200 puis envoyer", async () => {
+    const { user, model } = setup([MENU]);
+    await ready();
+    await user.type(budgetField(), "20000");
+    await type(user, "un menu");
+    await user.click(sendButton());
+    expect(model.calls).toHaveLength(0);
+    expect(model.created()).toBe(0);
+    expect(screen.getByText(BUDGET_ERROR)).toBeTruthy();
+    expect(document.activeElement).toBe(budgetField());
+    await user.clear(budgetField());
+    await user.type(budgetField(), "200");
+    expect(screen.queryByText(BUDGET_ERROR)).toBeNull();
+    await user.click(sendButton());
+    await waitFor(() => {
+      expect(model.calls).toHaveLength(1);
+    });
+    expect(model.calls[0]?.user).toContain("Budget maximum : 200,00 €");
+  });
+
+  it("effacer puis taper 0, puis Entrée sur le bouton d'envoi : aucun appel ; contrôle positif avec 60", async () => {
+    const { user, model } = setup([MENU]);
+    await ready();
+    await type(user, "un menu");
+    await user.type(budgetField(), "0");
+    sendButton().focus();
+    await user.keyboard("{Enter}");
+    expect(model.calls).toHaveLength(0);
+    expect(screen.getByText(BUDGET_ERROR)).toBeTruthy();
+    await user.clear(budgetField());
+    await user.type(budgetField(), "60");
+    sendButton().focus();
+    await user.keyboard("{Enter}");
+    await waitFor(() => {
+      expect(model.calls).toHaveLength(1);
+    });
+    expect(model.calls[0]?.user).toContain("Budget maximum : 60,00 €");
+  });
+
+  it("vider le champ puis envoyer : aucune ligne de budget", async () => {
+    const { user, model } = setup([MENU]);
+    await ready();
+    await user.type(budgetField(), "60");
+    await user.clear(budgetField());
+    await say(user, "un menu");
+    expect(model.calls[0]?.user).not.toContain("Budget maximum");
+  });
+
+  it.each([
+    ["0", "0"],
+    ["20000", "20000"],
+  ])("%s puis Tab : l'erreur exacte, le champ garde la saisie", async (typed, shown) => {
+    const { user, session } = setup([MENU]);
+    await ready();
+    await user.type(budgetField(), typed);
+    expect(screen.queryByText(BUDGET_ERROR)).toBeNull();
+    await user.tab();
+    expect(screen.getByText(BUDGET_ERROR)).toBeTruthy();
+    expect(budgetField().value).toBe(shown);
+    expect(session.snapshot().budgetInvalid).toBe(true);
+    if (typed === "0") expect(session.snapshot().budget).toBeNull();
+  });
+
+  it("champ vide : budget null ; 45,5 : budget 45,5", async () => {
+    const { user, session } = setup([MENU]);
+    await ready();
+    await user.type(budgetField(), "60");
+    await user.clear(budgetField());
+    expect(session.snapshot()).toMatchObject({
+      budget: null,
+      budgetDraft: "",
+      budgetInvalid: false,
+    });
+    await user.type(budgetField(), "45,5");
+    expect(session.snapshot().budget).toBe(45.5);
+    expect(budgetField().value).toBe("45,5");
+  });
+
+  it("la frappe de 45, publie 45 (le séparateur final est lisible), puis 45,5 publie 45,5", async () => {
+    const { user, session } = setup([MENU]);
+    await ready();
+    await user.type(budgetField(), "45,");
+    expect(session.snapshot().budget).toBe(45);
+    expect(budgetField().value).toBe("45,");
+    await user.type(budgetField(), "5");
+    expect(session.snapshot().budget).toBe(45.5);
+    expect(budgetField().value).toBe("45,5");
+    expect(screen.queryByText(BUDGET_ERROR)).toBeNull();
+  });
+
+  it("le champ est désactivé pendant un appel", async () => {
+    const { user, model } = setup([MENU]);
+    await ready();
+    model.state.hold = true;
+    await type(user, "un menu");
+    await user.click(sendButton());
+    await waitFor(() => {
+      expect(model.calls).toHaveLength(1);
+    });
+    expect(budgetField().disabled).toBe(true);
+    model.release(0);
+    await screen.findByText(FIRST_DISH);
+    expect(budgetField().disabled).toBe(false);
+  });
+
+  it("« Recommencer » garde le budget, et le champ aussi", async () => {
+    const { user } = setup([MENU]);
+    await ready();
+    await user.type(budgetField(), "60");
+    await say(user, "un menu");
+    await user.click(screen.getByRole("button", { name: "Recommencer" }));
+    await user.click(screen.getByRole("button", { name: "Effacer" }));
+    expect(budgetField().value).toBe("60");
+  });
+});
+
+describe("table de prix de l'utilisateur dans le menu courant", () => {
+  const UNREADABLE =
+    "Votre table de prix ne peut pas être lue : les coûts utilisent seulement les autres sources.";
+
+  it("table illisible : l'alerte avec le message dans le menu courant ; « Réessayer » relit ; une lecture réussie la retire", async () => {
+    const { user, priceStore, prices } = setup([MENU], {
+      preparePrices: (store) => {
+        store.state.listError = "Lecture de la table de prix impossible.";
+      },
+    });
+    await ready();
+    await say(user, "un menu");
+    const alert = await screen.findByText(new RegExp(`^${UNREADABLE}`));
+    expect(alert.textContent).toContain("Lecture de la table de prix impossible.");
+    // Le coût de l'INSEE reste affiché, et la validation reste permise.
+    expect(screen.getByText(totalText(MENU_COST))).toBeTruthy();
+    expect(
+      screen.getByRole<HTMLButtonElement>("button", { name: "Valider ce menu" }).disabled,
+    ).toBe(false);
+    expect(priceStore.state.lists).toBe(1);
+    priceStore.state.listError = null;
+    await user.click(screen.getByRole("button", { name: "Réessayer" }));
+    await waitFor(() => {
+      expect(screen.queryByText(new RegExp(`^${UNREADABLE}`))).toBeNull();
+    });
+    expect(priceStore.state.lists).toBe(2);
+    expect(prices.snapshot().manual.status).toBe("ready");
+  });
+
+  it("table en cours de lecture : « Valider ce menu » est désactivé avec la phrase, puis actif à la fin de la lecture", async () => {
+    const { user, priceStore } = setup([MENU], {
+      preparePrices: (store) => {
+        store.state.holdList = true;
+      },
+    });
+    await ready();
+    await say(user, "un menu");
+    const validate = () =>
+      screen.getByRole<HTMLButtonElement>("button", { name: "Valider ce menu" });
+    expect(validate().disabled).toBe(true);
+    expect(screen.getByText("Lecture de votre table de prix…")).toBeTruthy();
+    await waitFor(() => {
+      expect(priceStore.heldLists).toHaveLength(1);
+    });
+    priceStore.heldLists[0]!();
+    await waitFor(() => {
+      expect(validate().disabled).toBe(false);
+    });
+    expect(screen.queryByText("Lecture de votre table de prix…")).toBeNull();
   });
 });

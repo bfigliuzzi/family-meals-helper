@@ -26,7 +26,7 @@ export const INGREDIENTS_TEXTS = {
   toConfirmLegend: "à confirmer : ingrédient inconnu de l'app, vérifiez-le avant de commander.",
   costDisclaimer: COST_DISCLAIMER,
   myPrice: "Mon prix",
-  myPriceUnavailable: "Prix personnel indisponible pour ce produit (nom trop long).",
+  myPriceUnavailable: "Prix personnel indisponible pour ce produit (nom trop long ou illisible).",
   manualUnreadable:
     "Votre table de prix ne peut pas être lue : les coûts utilisent seulement les autres sources.",
   priceModalIntro:

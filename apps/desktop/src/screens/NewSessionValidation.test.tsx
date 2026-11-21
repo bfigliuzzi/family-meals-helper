@@ -3,13 +3,14 @@
 // script jetable.
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createSession, createSettingsKeeper } from "core";
+import { createPriceKeeper, createSession, createSettingsKeeper } from "core";
 import type { SessionDeps } from "core";
 import { describe, expect, it, vi } from "vitest";
 import {
   fakeHistoryStore,
   fakeMenuModel,
   fakeNewToken,
+  fakePriceStore,
   fakeRenderPdf,
   fakeSettingsStore,
   fixedClock,
@@ -41,6 +42,10 @@ function setup(options: Options = {}) {
   const model = fakeMenuModel([MENU], [], options.detailReplies ?? [DETAIL]);
   const history = fakeHistoryStore();
   const render = fakeRenderPdf();
+  const priceStore = fakePriceStore();
+  const prices = createPriceKeeper(priceStore.store, { clock: fixedClock });
+  // Comme `App` au montage : sans lecture de la table de prix, « Valider ce menu » reste désactivé.
+  void prices.load();
   const session = createSession({
     settings: keeper,
     clock: fixedClock,
@@ -48,12 +53,14 @@ function setup(options: Options = {}) {
     createModel: options.createModel ?? model.createModel,
     renderPdf: render.renderPdf,
     newToken: fakeNewToken(),
+    priceLookups: () => prices.snapshot().lookups,
   });
   renderWithMantine(
     <NewSessionScreen
       session={session}
       settings={keeper}
       history={history.store}
+      prices={prices}
       onOpenSettings={() => undefined}
     />,
   );
@@ -425,6 +432,11 @@ describe("textes injectés", () => {
     const keeper = createSettingsKeeper(settings.store);
     const model = fakeMenuModel([JSON.stringify(menu)], [], [DETAIL]);
     const history = fakeHistoryStore();
+    const priceStore = fakePriceStore();
+    const prices = createPriceKeeper(priceStore.store, { clock: fixedClock });
+    void prices.load();
+    // Comme `App` au montage : sans lecture de la table de prix, « Valider ce menu » reste désactivé.
+    void prices.load();
     const session = createSession({
       settings: keeper,
       clock: fixedClock,
@@ -432,12 +444,14 @@ describe("textes injectés", () => {
       createModel: model.createModel,
       renderPdf: fakeRenderPdf().renderPdf,
       newToken: fakeNewToken(),
+      priceLookups: () => prices.snapshot().lookups,
     });
     renderWithMantine(
       <NewSessionScreen
         session={session}
         settings={keeper}
         history={history.store}
+        prices={prices}
         onOpenSettings={() => undefined}
       />,
     );

@@ -5,6 +5,9 @@ import {
   euroCents,
   euroText,
   lineCostText,
+  MENU_COST_HINT,
+  sheetCostText,
+  sheetPricesNotice,
   sourceText,
   sourcesNotice,
   totalText,
@@ -153,5 +156,57 @@ describe("sourcesNotice et budgetPromptLine", () => {
       "Budget maximum : 60,00 € pour toute la liste de courses (placard non compris). Reste en dessous en choisissant des produits bon marché.",
     );
     expect(budgetPromptLine(45.5)).toContain("45,50 €");
+  });
+});
+
+describe("sheetCostText", () => {
+  const lines = (count: number): LineCost[] =>
+    Array.from({ length: count }, (_, at) => ({
+      key: `fresh|x${String(at)}`,
+      parts: [],
+      euros: null,
+      otherUnits: [],
+    }));
+  it("sans prix inconnu : le total et « placard non compris »", () => {
+    expect(sheetCostText(costOf({ lines: lines(4), total: 41.2 }))).toBe(
+      " : 41,20 € (placard non compris)",
+    );
+  });
+  it("avec des prix inconnus : « au moins », le compte (singulier ou pluriel)", () => {
+    expect(sheetCostText(costOf({ lines: lines(8), total: 41.2, unknown: 3 }))).toBe(
+      " : au moins 41,20 € (3 prix inconnus, placard non compris)",
+    );
+    expect(sheetCostText(costOf({ lines: lines(8), total: 41.2, unknown: 1 }))).toBe(
+      " : au moins 41,20 € (1 prix inconnu, placard non compris)",
+    );
+  });
+  it("aucune ligne connue : « inconnu »", () => {
+    expect(sheetCostText(costOf({ lines: lines(5), unknown: 5 }))).toBe(
+      " : inconnu (placard non compris)",
+    );
+  });
+});
+
+describe("sheetPricesNotice", () => {
+  it("donne la date puis les sources employées, dans l'ordre", () => {
+    expect(
+      sheetPricesNotice(costOf({ sources: ["manual", "open-prices", "insee"] }), "2026-11-20"),
+    ).toBe(
+      "Prix du 20/11/2026. Sources : votre table de prix · Open Prices (Open Food Facts), licence ODbL · INSEE, prix moyens de vente au détail, Licence Ouverte 2.0.",
+    );
+    expect(sheetPricesNotice(costOf({ sources: ["insee"] }), "2026-11-20")).toBe(
+      "Prix du 20/11/2026. Sources : INSEE, prix moyens de vente au détail, Licence Ouverte 2.0.",
+    );
+  });
+  it("sans source employée : la date seule", () => {
+    expect(sheetPricesNotice(costOf({}), "2026-01-05")).toBe("Prix du 05/01/2026.");
+  });
+});
+
+describe("MENU_COST_HINT", () => {
+  it("renvoie au détail de l'écran Ingrédients", () => {
+    expect(MENU_COST_HINT).toBe(
+      "Placard non compris. Le détail des prix par ligne est dans Ingrédients, après validation.",
+    );
   });
 });

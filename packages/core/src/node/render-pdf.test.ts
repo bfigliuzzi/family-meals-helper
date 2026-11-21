@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { TDocumentDefinitions } from "pdfmake/interfaces.js";
 import { fixtureSheetInput } from "../pdf/fixture.ts";
 import type { SheetInput } from "../pdf/sheet.ts";
+import type { MenuCost } from "../pricing/cost.ts";
 import type { Detail, DetailStep } from "../domain/detail.ts";
 import type { Dish, Menu, MenuIngredient } from "../domain/menu.ts";
 import { HOUSEHOLD_EQUIPMENT } from "../equipment/household.ts";
@@ -36,6 +37,8 @@ describe("renderPdf", () => {
       at,
     );
     expect(asText(bytes).startsWith("%PDF-")).toBe(true);
+    // Marge restante : environ 12 pt. Aucune ligne ne s'ajoute à la fiche sans mesure.
+    expect(pageCount(bytes)).toBe(1);
   });
 
   it("rend les quatre styles de la police avec les accents et « œ »", async () => {
@@ -136,6 +139,19 @@ const CLAUSE = "en cubes de 2 cm, feu moyen, remuer souvent jusqu'à tendre";
 const EVENING =
   "Réchauffer à feu doux 10 min en remuant, avec un peu d'eau si la sauce a réduit, puis servir avec du pain et une salade verte de saison bien assaisonnée.";
 
+// Le coût qui donne la mention la plus longue : des prix inconnus et les trois sources.
+const LONGEST_COST: MenuCost = {
+  lines: Array.from({ length: 12 }, (_, i) => ({
+    key: `fresh|produit-${String(i)}`,
+    parts: [],
+    euros: null,
+    otherUnits: [],
+  })),
+  total: 41.2,
+  unknown: 3,
+  sources: ["manual", "open-prices", "insee"],
+};
+
 function nominalInput(phases: (index: number) => string): SheetInput {
   const index = fixtureSheetInput("detail").index;
   const dishes = NAMES.map((names, i): Dish => ({
@@ -191,6 +207,7 @@ function nominalInput(phases: (index: number) => string): SheetInput {
     index,
     steps: { kind: "detail", detail, plan: check.plan, findings: check.findings },
     equipment: HOUSEHOLD_EQUIPMENT,
+    cost: { cost: LONGEST_COST, pricedOn: "2026-11-20" },
   };
 }
 

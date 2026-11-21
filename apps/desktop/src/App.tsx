@@ -9,7 +9,7 @@ import {
   VisuallyHidden,
 } from "@mantine/core";
 import { isSessionBusy } from "core";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Services } from "./platform/services.ts";
 import { SaveFailure, SaveSuccess } from "./SaveStatus.tsx";
 import { HistoryScreen } from "./screens/HistoryScreen.tsx";
@@ -38,6 +38,10 @@ export function App({
   // Pas de routeur : pas d'URL, pas de lien profond, pas de retour arrière. Seul l'écran actif est monté.
   const [screen, setScreen] = useState<ScreenId>("new-session");
   const session = useSessionSnapshot(services.session);
+  // Le menu courant a besoin de la table de prix de l'utilisateur ; l'écran Ingrédients la relit à chaque affichage.
+  useEffect(() => {
+    void services.prices.load();
+  }, [services.prices]);
   // Opérations terminées déjà vues : un clic de navigation qui quitte « Nouvelle session » ou y arrive les compte
   // toutes comme vues.
   const [seen, setSeen] = useState(0);
@@ -107,6 +111,7 @@ export function App({
                 session={services.session}
                 settings={services.settings}
                 history={services.history}
+                prices={services.prices}
                 onOpenSettings={() => {
                   go("settings");
                 }}

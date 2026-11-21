@@ -59,3 +59,12 @@ export function readEuroInput(value: number | string, max: number): number | nul
   }
   return Number.isFinite(euros) && euros >= 0.01 && euros <= max ? euros : "invalid";
 }
+
+// Le complément de la ligne de coût quand le plafond est tenu : « · budget de 60,00 € respecté », avec « sur les prix
+// connus » quand des prix manquent. Vide sans budget valide, quand `checkBudget` signale un dépassement (même
+// comparaison en centimes), ou quand aucune ligne n'a de prix : « respecté sur les prix connus » ne dirait rien.
+export function budgetRespectedText(cost: MenuCost, budget: number | null): string {
+  if (budget === null || !isValidBudget(budget) || checkBudget(cost, budget) !== null) return "";
+  if (cost.unknown === cost.lines.length) return "";
+  return ` · budget de ${euroText(budget)} respecté${cost.unknown > 0 ? " sur les prix connus" : ""}`;
+}

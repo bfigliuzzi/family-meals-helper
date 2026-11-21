@@ -11,9 +11,7 @@ export const MAX_MANUAL_PRICES = 1000;
 // Le plus grand prix saisissable, en euros.
 export const MAX_MANUAL_EUROS = MAX_PRICE_CENTS / 100;
 
-const MIN_KEY_BYTES = 3;
-
-// Une clé acceptée par la table : « forme|nom », 3 à 200 octets UTF-8, sans caractère de contrôle ; la partie avant le
+// Une clé acceptée par la table : « forme|nom », 200 octets UTF-8 au plus, sans caractère de contrôle ; la partie avant le
 // premier `|` est une forme connue, la partie après n'est pas vide. Les mêmes règles qu'en Rust (`check_key`).
 export function isValidManualKey(key: string): boolean {
   const bar = key.indexOf("|");
@@ -24,7 +22,6 @@ export function isValidManualKey(key: string): boolean {
   const bytes = new TextEncoder().encode(key).length;
   // Aucun caractère de contrôle (C0, DEL, C1), comme `char::is_control` en Rust.
   return (
-    bytes >= MIN_KEY_BYTES &&
     bytes <= MAX_MANUAL_KEY_BYTES &&
     // eslint-disable-next-line no-control-regex
     !/[\u0000-\u001f\u007f-\u009f]/.test(key)

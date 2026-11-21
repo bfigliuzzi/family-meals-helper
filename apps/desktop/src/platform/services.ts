@@ -32,6 +32,12 @@ export function createServices(): Services {
   });
   const history = createTauriHistoryStore(invoke);
   const clock = { now: () => new Date() };
+  const prices = createPriceKeeper(createTauriPriceStore(invoke), {
+    clock,
+    onListenerError: (error) => {
+      console.error("Abonné des prix en erreur", error);
+    },
+  });
   return {
     settings,
     secretAdmin: createKeychainSecretAdmin(invoke),
@@ -41,12 +47,7 @@ export function createServices(): Services {
         console.error("Abonné des cases en erreur", error);
       },
     }),
-    prices: createPriceKeeper(createTauriPriceStore(invoke), {
-      clock,
-      onListenerError: (error) => {
-        console.error("Abonné des prix en erreur", error);
-      },
-    }),
+    prices,
     session: createSession({
       settings,
       clock,
@@ -65,6 +66,12 @@ export function createServices(): Services {
       // pdfmake et ses polices sont chargés au premier rendu, dans des morceaux à part.
       renderPdf: async (doc, at) => (await import("./pdf-renderer.ts")).renderSheetPdf(doc, at),
       newToken: () => crypto.randomUUID(),
+      // Lu une seule fois, au clic « Valider ce menu » : le coût de la fiche vient de cet instant. `null` tant que la
+      // table de prix de l'utilisateur n'est pas lue (une table illisible n'empêche pas la validation).
+      priceLookups: () => {
+        const snapshot = prices.snapshot();
+        return snapshot.manual.status === "loading" ? null : snapshot.lookups;
+      },
       onListenerError: (error) => {
         console.error("Abonné de la session en erreur", error);
       },

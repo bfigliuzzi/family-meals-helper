@@ -282,6 +282,29 @@ describe("runBatchCommand : chemin du PDF", () => {
     ]);
   });
 
+  it("lit l'heure une seule fois : mois, destination, jour des prix de la fiche et date du PDF viennent du premier appel", async () => {
+    const targets: OutputTarget[] = [];
+    let calls = 0;
+    const h = harness({
+      now: () => {
+        calls += 1;
+        return new Date(2026, 10, 12 + calls, 23, 59);
+      },
+    });
+    const io: BatchIo = {
+      ...h.io,
+      writePdf: (target) => {
+        targets.push(target);
+        return Promise.resolve("/chemin/rendu.pdf");
+      },
+    };
+    expect(await runBatchCommand([request], io)).toBe(0);
+    expect(calls).toBe(1);
+    expect(targets).toEqual([
+      { kind: "new", folder: join(folder, "home", "Downloads"), stem: "menu-batch-2026-11-13" },
+    ]);
+  });
+
   it("affiche le chemin rendu par writePdf, pas celui qui était prévu", async () => {
     const h = harness();
     const io: BatchIo = {

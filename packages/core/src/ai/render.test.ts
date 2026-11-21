@@ -553,6 +553,7 @@ describe("renderBatchResult", () => {
       refs: REFERENTIAL,
       seasonTable: SEASON_TABLE,
       equipment: HOUSEHOLD_EQUIPMENT,
+      today: "2026-11-20",
     });
   }
 
@@ -615,6 +616,7 @@ describe("renderBatchResult", () => {
       refs: REFERENTIAL,
       seasonTable: SEASON_TABLE,
       equipment: HOUSEHOLD_EQUIPMENT,
+      today: "2026-11-20",
     });
     const text = renderBatchResult(result, batchInput);
     expect(text).toContain(
@@ -641,6 +643,7 @@ describe("renderBatchResult", () => {
         refs: REFERENTIAL,
         seasonTable: SEASON_TABLE,
         equipment: HOUSEHOLD_EQUIPMENT,
+        today: "2026-11-20",
       },
     );
     const text = renderBatchResult(result, batchInput);

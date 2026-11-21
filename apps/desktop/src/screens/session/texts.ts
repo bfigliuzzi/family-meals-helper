@@ -76,6 +76,9 @@ export const TEXTS = {
   dinnersLabel: "Nombre de dîners",
   dinnersHint:
     "Seul ce champ fixe le nombre de dîners (1 à 5) ; un nombre écrit dans la demande ne compte pas.",
+  budgetLabel: "Budget max (€)",
+  budgetHint: "Facultatif. Vide : pas de plafond.",
+  budgetError: "Entrez un montant supérieur à 0 et au plus 10 000 €, ou laissez vide.",
   dinnersChanged: "Nombre changé : pris en compte au prochain message et à la validation.",
   settingsUnavailable: "Réglages indisponibles",
   settingsNeeded: "La composition a besoin des réglages (modèle, aliments à éviter, équipement).",
@@ -128,6 +131,8 @@ export const VALIDATE_TEXTS = {
     "Si vous avez changé le jour, le nombre de dîners ou les Réglages, remettez-les comme pour ce menu et validez à nouveau, sans appel à Claude. Sinon, demandez une modification.",
   writeChange: "Écrire une modification",
   settingsNotReady: "Les réglages ne sont pas encore chargés : réessayez dans un instant.",
+  pricesReading: "Lecture de votre table de prix…",
+  pricesNotReady: "Votre table de prix est en cours de lecture : réessayez dans un instant.",
   titles: {
     detail: "Validation en cours",
     tooLong: "Session de plus de 3 h",

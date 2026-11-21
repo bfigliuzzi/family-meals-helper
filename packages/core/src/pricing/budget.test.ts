@@ -1,10 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { checkBudget, isValidBudget, parseBudget, readEuroInput } from "./budget.ts";
+import {
+  budgetRespectedText,
+  checkBudget,
+  isValidBudget,
+  parseBudget,
+  readEuroInput,
+} from "./budget.ts";
 import { totalText } from "./cost-text.ts";
 import type { MenuCost } from "./cost.ts";
 
+// Un coût de `unknown + 3` lignes dont `unknown` sont sans prix : au moins trois lignes ont un prix.
 function cost(total: number, unknown = 0): MenuCost {
-  return { lines: [], total, unknown, sources: ["insee"] };
+  const lines = Array.from({ length: unknown + 3 }, (_, at) => ({
+    key: `fresh|x${String(at)}`,
+    parts: [],
+    euros: null,
+    otherUnits: [],
+  }));
+  return { lines, total, unknown, sources: ["insee"] };
 }
 
 describe("checkBudget", () => {
@@ -111,5 +124,39 @@ describe("readEuroInput", () => {
     for (const text of ["0", "0,00", "1500", "1,234", "abc", "-3", "1e3", "4 5", "1234567"]) {
       expect(readEuroInput(text, 1000)).toBe("invalid");
     }
+  });
+});
+
+describe("budgetRespectedText", () => {
+  it("dit que le budget est respecté, avec « sur les prix connus » quand des prix manquent", () => {
+    expect(budgetRespectedText(cost(48.1), 60)).toBe(" · budget de 60,00 € respecté");
+    expect(budgetRespectedText(cost(48.1, 2), 60)).toBe(
+      " · budget de 60,00 € respecté sur les prix connus",
+    );
+  });
+  it("compare en centimes arrondis, comme checkBudget : 59,995 € respecte 60 €, 60,005 € non", () => {
+    expect(budgetRespectedText(cost(59.995), 60)).toBe(" · budget de 60,00 € respecté");
+    expect(budgetRespectedText(cost(60.005), 60)).toBe("");
+  });
+  it("rend vide quand aucune ligne n'a de prix : le texte du total dit seul « inconnu »", () => {
+    const none: MenuCost = {
+      lines: Array.from({ length: 5 }, (_, at) => ({
+        key: `fresh|x${String(at)}`,
+        parts: [],
+        euros: null,
+        otherUnits: [],
+      })),
+      total: 0,
+      unknown: 5,
+      sources: [],
+    };
+    expect(budgetRespectedText(none, 60)).toBe("");
+    expect(totalText(none)).toBe("Coût estimé : inconnu (5 prix inconnus)");
+  });
+  it("rend vide sans budget, avec un budget invalide, ou en cas de dépassement", () => {
+    expect(budgetRespectedText(cost(10), null)).toBe("");
+    expect(budgetRespectedText(cost(10), 0)).toBe("");
+    expect(budgetRespectedText(cost(10), 20000)).toBe("");
+    expect(budgetRespectedText(cost(72.4), 60)).toBe("");
   });
 });

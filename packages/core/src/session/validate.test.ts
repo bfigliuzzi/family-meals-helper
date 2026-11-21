@@ -7,6 +7,11 @@ import { DetailSchema } from "../domain/detail.ts";
 import { readHistory } from "../history/history.ts";
 import type { HistoryRow, HistoryStore } from "../ports/history-store.ts";
 import type { SettingsStore } from "../ports/settings-store.ts";
+import { sheetCostText } from "../pricing/cost-text.ts";
+import { menuCost } from "../pricing/cost.ts";
+import type { PriceLookup } from "../pricing/price.ts";
+import { buildIngredientIndex } from "../ingredients/index-lookup.ts";
+import { REFERENTIAL } from "../ingredients/referential.ts";
 import { asReply, balancedMenu } from "../rules/fixtures/menus.ts";
 import { balancedDetail, balancedDetailLasting } from "../rules/fixtures/detail.ts";
 import { createSettingsKeeper } from "../settings/settings-keeper.ts";
@@ -114,6 +119,7 @@ interface Options {
   clock?: { now: () => Date };
   history?: ReturnType<typeof fakeHistory>;
   newToken?: () => string;
+  priceLookups?: () => readonly PriceLookup[] | null;
 }
 
 async function harness(options: Options = {}) {
@@ -180,6 +186,7 @@ async function harness(options: Options = {}) {
       tokenCalls.count += 1;
       return newToken();
     },
+    priceLookups: options.priceLookups ?? (() => []),
   };
   const session = createSession(deps);
   async function showMenu(): Promise<void> {
@@ -269,6 +276,133 @@ describe("contrôle au clic", () => {
     await h.showMenu();
     vi.spyOn(h.keeper, "snapshot").mockImplementation(() => ({ status: "loading" }) as never);
     expect(await h.session.validate()).toEqual({ ok: false, reason: "settings" });
+  });
+});
+
+// Un faux prix de la carotte, modifiable pendant le test : le coût de la fiche doit venir de l'instant du clic.
+function carrotPrice(euros: number) {
+  const state = { euros };
+  const lookups = (): readonly PriceLookup[] => [
+    {
+      find: (key, unit) =>
+        key === "fresh|carotte" && unit === "kg"
+          ? { unit, euros: state.euros, source: { kind: "manual", date: "2026-11-16" } }
+          : null,
+    },
+  ];
+  return { state, lookups };
+}
+const costTextAt = (euros: number): string =>
+  sheetCostText(
+    menuCost(balancedMenu(), buildIngredientIndex(REFERENTIAL), carrotPrice(euros).lookups()),
+  );
+const sheetText = (h: Harness, at = 0): string => JSON.stringify(h.render.calls[at]!.doc.content);
+
+describe("coût de la fiche : celui du clic", () => {
+  it("la fiche porte « Coût estimé » calculé avec les prix du moment, et la date du clic", async () => {
+    const prices = carrotPrice(2);
+    const h = await harness({ priceLookups: prices.lookups });
+    await h.showMenu();
+    await h.session.validate();
+    const text = sheetText(h);
+    expect(text).toContain("Coût estimé");
+    expect(text).toContain(costTextAt(2));
+    expect(text).not.toContain(costTextAt(5));
+    expect(text).toContain("Prix du 16/11/2026. Sources : votre table de prix");
+  });
+
+  it("un prix qui change pendant le détail, avant le premier rendu : la fiche garde le prix du clic", async () => {
+    const prices = carrotPrice(2);
+    const h = await harness({ priceLookups: prices.lookups });
+    await h.showMenu();
+    h.detailGate.state.hold = true;
+    const promise = h.session.validate();
+    await vi.waitFor(() => {
+      expect(h.detailCalls).toHaveLength(1);
+    });
+    prices.state.euros = 5;
+    h.detailGate.release(0);
+    await promise;
+    const text = sheetText(h);
+    expect(text).toContain(costTextAt(2));
+    expect(text).not.toContain(costTextAt(5));
+  });
+
+  it("« Garder la fiche » : un prix qui change pendant l'attente de la décision n'atteint pas la fiche", async () => {
+    const prices = carrotPrice(2);
+    const h = await harness({
+      detailReplies: [detailText(200), detailText(210), detailText(220)],
+      priceLookups: prices.lookups,
+    });
+    await h.showMenu();
+    await h.session.validate();
+    expect(h.validation()).toMatchObject({ step: "decide" });
+    prices.state.euros = 5;
+    await h.session.keepSheet();
+    const text = sheetText(h);
+    expect(text).toContain(costTextAt(2));
+    expect(text).not.toContain(costTextAt(5));
+  });
+
+  it("`retrySave` réutilise le coût du clic, même après un changement de prix", async () => {
+    const prices = carrotPrice(2);
+    const h = await harness({ priceLookups: prices.lookups });
+    await h.showMenu();
+    h.render.failures.push("mémoire");
+    await h.session.validate();
+    prices.state.euros = 5;
+    await h.session.retrySave();
+    expect(h.render.calls).toHaveLength(2);
+    expect(sheetText(h, 1)).toContain(costTextAt(2));
+    expect(sheetText(h, 1)).not.toContain(costTextAt(5));
+  });
+
+  it("la validation passe minuit : « Prix du » montre la date du clic, la même que l'entrée d'historique", async () => {
+    const date = { now: new Date(2026, 10, 16, 23, 59) };
+    const h = await harness({
+      clock: { now: () => date.now },
+      priceLookups: carrotPrice(2).lookups,
+    });
+    await h.showMenu();
+    h.detailGate.state.hold = true;
+    const promise = h.session.validate();
+    await vi.waitFor(() => {
+      expect(h.detailCalls).toHaveLength(1);
+    });
+    date.now = new Date(2026, 10, 17, 0, 5);
+    h.detailGate.release(0);
+    await promise;
+    expect(sheetText(h)).toContain("Prix du 16/11/2026.");
+    expect(sheetText(h)).not.toContain("Prix du 17/11/2026.");
+    expect(entryOf(h).date).toBe("2026-11-16");
+  });
+
+  it("sans source de prix, la fiche porte quand même la ligne « Coût estimé : inconnu »", async () => {
+    const h = await harness();
+    await h.showMenu();
+    await h.session.validate();
+    expect(sheetText(h)).toContain("Coût estimé");
+    expect(sheetText(h)).toContain("Prix du 16/11/2026.");
+  });
+});
+
+describe("table de prix pas encore lue", () => {
+  it("`priceLookups` rend `null` : `prices`, rien publié, rien gelé, aucun appel ; puis un lookup : la validation part", async () => {
+    const state = { lookups: null as readonly PriceLookup[] | null };
+    const h = await harness({ priceLookups: () => state.lookups });
+    await h.showMenu();
+    const before = h.snapshot();
+    const created = { ...h.created };
+    expect(await h.session.validate()).toEqual({ ok: false, reason: "prices" });
+    expect(h.snapshot()).toBe(before);
+    expect(h.validation()).toBeNull();
+    expect(h.created).toEqual(created);
+    expect(h.tokenCalls.count).toBe(0);
+    expect(h.render.calls).toHaveLength(0);
+    state.lookups = carrotPrice(2).lookups();
+    expect(await h.session.validate()).toEqual({ ok: true });
+    expect(h.validation()?.step).toBe("saved");
+    expect(sheetText(h)).toContain(costTextAt(2));
   });
 });
 

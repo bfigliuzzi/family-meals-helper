@@ -64,7 +64,8 @@ export function fakeSettingsStore(initial: string | null = null) {
 
 // Fausse table de prix en mémoire. Chaque opération peut échouer à la demande (`state.listError`, `setError`,
 // `deleteError` : le message du rejet, `null` pour réussir) ; `sets` et `deletes` gardent les appels reçus. Avec
-// `state.holdSet`, chaque `setManual` attend que le test le règle par `held[n].resolve()` ou `held[n].reject(message)`.
+// `state.holdSet`, chaque `setManual` attend que le test le règle par `held[n].resolve()` ou `held[n].reject(message)` ;
+// avec `state.holdList`, chaque `listManual` attend `heldLists[n]()`.
 export function fakePriceStore(initial: ManualPriceRow[] = []) {
   const rows = new Map(initial.map((row) => [row.key, row]));
   const state = {
@@ -72,16 +73,27 @@ export function fakePriceStore(initial: ManualPriceRow[] = []) {
     setError: null as string | null,
     deleteError: null as string | null,
     holdSet: false,
+    holdList: false,
     lists: 0,
   };
   const sets: ManualPriceRow[] = [];
   const held: { resolve(): void; reject(message: string): void }[] = [];
+  const heldLists: (() => void)[] = [];
   const deletes: string[] = [];
   const store: PriceStore = {
     listManual() {
       state.lists += 1;
       if (state.listError !== null) return Promise.reject(new Error(state.listError));
-      return Promise.resolve([...rows.values()].sort((a, b) => a.key.localeCompare(b.key)));
+      const sorted = (): ManualPriceRow[] =>
+        [...rows.values()].sort((a, b) => a.key.localeCompare(b.key));
+      if (state.holdList) {
+        return new Promise<ManualPriceRow[]>((resolve) => {
+          heldLists.push(() => {
+            resolve(sorted());
+          });
+        });
+      }
+      return Promise.resolve(sorted());
     },
     setManual(row) {
       sets.push({ ...row });
@@ -109,7 +121,7 @@ export function fakePriceStore(initial: ManualPriceRow[] = []) {
       return Promise.resolve();
     },
   };
-  return { store, state, sets, deletes, held, rows: () => [...rows.values()] };
+  return { store, state, sets, deletes, held, heldLists, rows: () => [...rows.values()] };
 }
 
 // Faux trousseau en mémoire ; chaque opération peut échouer à la demande. Comme le vrai, il n'expose aucune

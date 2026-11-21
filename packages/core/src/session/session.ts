@@ -29,6 +29,10 @@ import { buildSheetDocument, sessionTooLong } from "../pdf/sheet.ts";
 import type { SheetSteps } from "../pdf/sheet.ts";
 import type { Clock } from "../ports/clock.ts";
 import type { HistoryStore } from "../ports/history-store.ts";
+import { MAX_BUDGET_EUROS, isValidBudget, readEuroInput } from "../pricing/budget.ts";
+import { menuCost } from "../pricing/cost.ts";
+import type { MenuCost } from "../pricing/cost.ts";
+import type { PriceLookup } from "../pricing/price.ts";
 import { dishKey } from "../rules/check-pinned.ts";
 import { checkMenu } from "../rules/check-menu.ts";
 import type { MenuCheck } from "../rules/check-menu.ts";
@@ -59,6 +63,11 @@ export interface SessionDeps {
   // Jeton de validation, tiré une fois par validation et gardé pour toutes ses reprises : le magasin le range avec
   // l'entrée, et un jeton déjà connu rend l'identifiant déjà enregistré. Aléatoire (jamais l'heure ni un compteur).
   newToken: () => string;
+  // Les sources de prix du moment, ou `null` tant que la table de prix de l'utilisateur n'est pas lue : la validation
+  // attend (`reason: "prices"`), sinon un prix personnel manquerait pour toujours dans la fiche. Lu une seule fois, au
+  // clic « Valider ce menu », en même temps que la date : le coût de la fiche vient de cet instant, quoi qu'il
+  // arrive ensuite (reprises, minuit, mise à jour des prix).
+  priceLookups: () => readonly PriceLookup[] | null;
   onListenerError?: (error: unknown) => void;
 }
 
@@ -134,6 +143,13 @@ export interface SessionSnapshot {
   readonly sessionDay: SessionDay;
   // 1 à 5, 5 au départ ; seul `setDinners` le change.
   readonly dinners: number;
+  // Plafond de budget en euros, ou `null` (aucun plafond) : la dernière valeur lisible du brouillon.
+  readonly budget: number | null;
+  // Le texte du champ budget, tel que l'utilisateur l'a tapé (`""` au départ). Il vit ici et non dans l'écran :
+  // changer d'écran puis revenir ne change ni le brouillon ni le refus d'envoyer.
+  readonly budgetDraft: number | string;
+  // Le brouillon n'est pas lisible (`0`, `20000`) : `budget` garde sa dernière valeur lisible, et `send` refuse.
+  readonly budgetInvalid: boolean;
   readonly draft: string;
   // Messages appliqués, du plus ancien au plus récent.
   readonly exchanges: readonly Exchange[];
@@ -161,10 +177,15 @@ export function isSessionBusy(snapshot: SessionSnapshot): boolean {
 }
 
 export type SendOutcome =
-  { ok: true } | { ok: false; reason: "busy" | "empty" | "too-long" | "settings" | "failed" };
+  | { ok: true }
+  | { ok: false; reason: "busy" | "empty" | "too-long" | "settings" | "budget" | "failed" };
 
 export type ValidateOutcome =
-  { ok: true } | { ok: false; reason: "busy" | "no-menu" | "settings" | "blocked" | "failed" };
+  | { ok: true }
+  | {
+      ok: false;
+      reason: "busy" | "no-menu" | "settings" | "prices" | "blocked" | "failed";
+    };
 
 export interface Session {
   // Même objet tant que rien ne change (useSyncExternalStore).
@@ -176,14 +197,20 @@ export interface Session {
   setSessionDay(day: SessionDay): void;
   // Ignoré pendant un appel, ou hors des entiers 1 à 5.
   setDinners(dinners: number): void;
+  // Ignoré pendant un appel. Garde le texte tel quel ; s'il est lisible (`readEuroInput` : vide ou de 0,01 à 10000 €)
+  // il devient le budget (vide : aucun plafond), sinon `budget` garde sa dernière valeur et `budgetInvalid` passe à
+  // vrai.
+  setBudgetDraft(value: number | string): void;
   // Ignoré pendant un appel, ou si aucun plat du menu courant n'a cette clé (`dishKey`).
   togglePin(name: string): void;
-  // Ignoré pendant un appel ; garde le jour, le nombre de dîners et `outcomes`.
+  // Ignoré pendant un appel ; garde le jour, le nombre de dîners, le budget (et son brouillon) et `outcomes`.
   reset(): void;
   // Ne rejette jamais.
+  // Rend `reason: "budget"` sans rien publier ni appeler tant que le brouillon du budget est illisible.
   send(): Promise<SendOutcome>;
   // Contrôle le menu affiché avec les réglages, le jour et le nombre de dîners du moment, puis fait rédiger le
   // détail, rend la fiche et l'enregistre. Ne rejette jamais.
+  // Rend `reason: "prices"` sans rien publier ni geler tant que la table de prix n'est pas lue.
   validate(): Promise<ValidateOutcome>;
   // Seulement en `decide` : garde la fiche telle quelle (avertissement ou grandes phases). Aucun appel à l'IA.
   keepSheet(): Promise<void>;
@@ -245,6 +272,8 @@ interface Frozen {
   readonly request: string;
   // La date du clic : date de l'entrée et `CreationDate` du PDF.
   readonly at: Date;
+  // Le coût de la fiche, calculé au clic avec les prix du moment et réutilisé par toutes les reprises.
+  readonly priced: { readonly cost: MenuCost; readonly pricedOn: string };
   readonly token: string;
 }
 
@@ -271,6 +300,9 @@ export function createSession(deps: SessionDeps): Session {
     month: monthOf(deps.clock.now()),
     sessionDay: "sun",
     dinners: MAX_DINNERS,
+    budget: null,
+    budgetDraft: "",
+    budgetInvalid: false,
     draft: "",
     exchanges: [],
     current: null,
@@ -343,8 +375,16 @@ export function createSession(deps: SessionDeps): Session {
     if (snapshot.status !== "ready") return { ok: false, reason: "settings" };
     const { equipment, exclusions } = compositionSettings(snapshot.settings);
     const month = monthOf(deps.clock.now());
-    const { sessionDay, dinners, exchanges, pinned } = current;
-    const common = { exclusions, month, sessionDay, maxAttempts: 3, history: [], dinners } as const;
+    const { sessionDay, dinners, budget, exchanges, pinned } = current;
+    const common = {
+      exclusions,
+      month,
+      sessionDay,
+      maxAttempts: 3,
+      history: [],
+      dinners,
+      ...(budget === null ? {} : { budget }),
+    } as const;
     const menu = current.current?.menu;
     const input: ComposeInput | ReviseInput =
       menu === undefined || exchanges[0] === undefined
@@ -460,6 +500,7 @@ export function createSession(deps: SessionDeps): Session {
           steps: keep.steps,
           index: (index ??= buildIngredientIndex(REFERENTIAL)),
           equipment: fixed.equipment,
+          cost: fixed.priced,
         });
         keep.bytes = await deps.renderPdf(keep.doc, fixed.at);
       }
@@ -548,15 +589,18 @@ export function createSession(deps: SessionDeps): Session {
     try {
       const snapshot = deps.settings.snapshot();
       if (snapshot.status !== "ready") return Promise.resolve({ ok: false, reason: "settings" });
+      const lookups = deps.priceLookups();
+      if (lookups === null) return Promise.resolve({ ok: false, reason: "prices" });
       const { equipment, exclusions } = compositionSettings(snapshot.settings);
       const at = deps.clock.now();
+      const ingredientIndex = (index ??= buildIngredientIndex(REFERENTIAL));
       const check = checkMenu(menu, {
         request: first.message,
         exclusions,
         month: monthOf(at),
         sessionDay: current.sessionDay,
         dinners: current.dinners,
-        index: (index ??= buildIngredientIndex(REFERENTIAL)),
+        index: ingredientIndex,
         seasonTable: SEASON_TABLE,
         equipment,
       });
@@ -575,6 +619,10 @@ export function createSession(deps: SessionDeps): Session {
         exclusions,
         request: first.message,
         at,
+        priced: {
+          cost: menuCost(menu, ingredientIndex, lookups),
+          pricedOn: localDateText(at),
+        },
         token: deps.newToken(),
       };
       frozen = fixed;
@@ -742,6 +790,19 @@ export function createSession(deps: SessionDeps): Session {
       }
       publish({ dinners });
     },
+    setBudgetDraft(value) {
+      if (isSessionBusy(current)) return;
+      const read = readEuroInput(value, MAX_BUDGET_EUROS);
+      // `isValidBudget` : dernière garde sur la valeur publiée.
+      if (read === "invalid" || (read !== null && !isValidBudget(read))) {
+        if (value === current.budgetDraft && current.budgetInvalid) return;
+        publish({ budgetDraft: value, budgetInvalid: true });
+        return;
+      }
+      if (value === current.budgetDraft && !current.budgetInvalid && read === current.budget)
+        return;
+      publish({ budgetDraft: value, budgetInvalid: false, budget: read });
+    },
     togglePin(name) {
       if (isSessionBusy(current) || current.validation !== null || current.current === null) return;
       const key = dishKey(name);
@@ -773,6 +834,7 @@ export function createSession(deps: SessionDeps): Session {
       if (isSessionBusy(current) || current.validation !== null) {
         return Promise.resolve({ ok: false, reason: "busy" });
       }
+      if (current.budgetInvalid) return Promise.resolve({ ok: false, reason: "budget" });
       let prepared: ReturnType<typeof prepare>;
       try {
         prepared = prepare();

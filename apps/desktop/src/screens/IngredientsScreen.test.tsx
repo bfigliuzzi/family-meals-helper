@@ -724,7 +724,9 @@ describe("IngredientsScreen : produit sans prix personnel possible", () => {
     setup([rowOf(1, { menu: MenuSchema.parse({ ...menuReply, dishes }) })]);
     await screen.findByRole("heading", { name: "Liste de courses" });
     expect(
-      screen.getAllByText("Prix personnel indisponible pour ce produit (nom trop long)."),
+      screen.getAllByText(
+        "Prix personnel indisponible pour ce produit (nom trop long ou illisible).",
+      ),
     ).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: /^Modifier le prix : / })).toHaveLength(10);
     expect(screen.queryByRole("button", { name: /Modifier le prix : Z{5}/ })).toBeNull();
@@ -908,6 +910,8 @@ function appSetup(rows: HistoryRow[]) {
   const keeper = createSettingsKeeper(settings.store);
   const history = fakeHistoryStore(rows);
   const invoke: Invoke = () => Promise.reject(new Error("jamais appelé"));
+  const priceStore = fakePriceStore();
+  const prices = createPriceKeeper(priceStore.store, { clock: fixedClock });
   const session = createSession({
     settings: keeper,
     clock: fixedClock,
@@ -915,6 +919,7 @@ function appSetup(rows: HistoryRow[]) {
     createModel: fakeMenuModel([]).createModel,
     renderPdf: fakeRenderPdf().renderPdf,
     newToken: fakeNewToken(),
+    priceLookups: () => prices.snapshot().lookups,
   });
   const services = {
     settings: keeper,
@@ -922,7 +927,7 @@ function appSetup(rows: HistoryRow[]) {
     session,
     history: history.store,
     checks: createCheckKeeper(history.store),
-    prices: createPriceKeeper(fakePriceStore().store, { clock: fixedClock }),
+    prices,
   };
   renderWithMantine(<App services={services} />);
   return { history, user: userEvent.setup() };

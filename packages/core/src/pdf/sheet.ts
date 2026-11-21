@@ -13,6 +13,8 @@ import type { ApplianceId, Dish, Menu, SessionDay } from "../domain/menu.ts";
 import { APPLIANCE_LABELS, phaseUseText } from "../equipment/household.ts";
 import type { Equipment } from "../equipment/household.ts";
 import type { IngredientIndex } from "../ingredients/index-lookup.ts";
+import { sheetCostText, sheetPricesNotice } from "../pricing/cost-text.ts";
+import type { MenuCost } from "../pricing/cost.ts";
 import { ADULT_PORTIONS } from "../rules/balance-table.ts";
 import type { DishKeeping } from "../rules/check-conservation.ts";
 import { SAFETY_NOTE_FR } from "../rules/conservation-table.ts";
@@ -36,6 +38,8 @@ export interface SheetInput {
   steps: SheetSteps;
   index: IngredientIndex;
   equipment: Equipment;
+  // Le coût estimé, avec le jour où les prix ont été lus ; `null` : pas de ligne de coût.
+  cost: { cost: MenuCost; pricedOn: string } | null;
 }
 
 // Fiche A4 portrait, une colonne, à la densité des fiches cuisine-addict (9 pt, marges de 10 mm, titres en
@@ -476,6 +480,15 @@ function ingredientsPart(input: SheetInput): Content[] {
       margin: [0, 1, 0, 0],
     },
   ];
+  if (input.cost !== null) {
+    content.push(
+      {
+        text: [{ text: "Coût estimé", bold: true }, sheetCostText(input.cost.cost)],
+        margin: [0, 1, 0, 0],
+      },
+      { text: sheetPricesNotice(input.cost.cost, input.cost.pricedOn), style: "small" },
+    );
+  }
   if ([...list.lines, ...list.pantry].some((line) => line.toConfirm)) {
     content.push({
       text: "à confirmer : absent du référentiel, à vérifier avant de commander.",
@@ -566,7 +579,9 @@ export function buildSheetDocument(input: SheetInput): TDocumentDefinitions {
     pageSize: "A4",
     pageOrientation: "portrait",
     pageMargins: [MARGIN, MARGIN, MARGIN, MARGIN],
-    defaultStyle: { font: "Roboto", fontSize: 9, lineHeight: 1.08 },
+    // 1,05 et non 1,08 depuis la ligne « Coût estimé » (lot 7.3) : la fiche nominale la plus chargée ne laissait pas
+    // 4 pt de marge sur 2 pages, et le coût avec sa mention de sources prend trois lignes.
+    defaultStyle: { font: "Roboto", fontSize: 9, lineHeight: 1.05 },
     styles: {
       title: { fontSize: 13, bold: true, margin: [0, 0, 0, 1] },
       subtitle: { fontSize: 7.5, color: GREY, margin: [0, 0, 0, 2] },
